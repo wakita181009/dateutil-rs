@@ -1202,6 +1202,10 @@ def test_gettz_weakref():
     assert tz.gettz("America/New_York") is not NYC_ref()
 
 
+@pytest.mark.skipif(
+    zoneinfo.get_zonefile_instance().zones == {},
+    reason="dateutil-zoneinfo.tar.gz not installed",
+)
 class ZoneInfoGettzTest(GettzTest):
     def gettz(self, name):
         zoneinfo_file = zoneinfo.get_zonefile_instance()
@@ -2575,6 +2579,10 @@ class TzPickleTest(PicklableMixin, unittest.TestCase):
     def testPickleTzGettz(self):
         self.assertPicklable(tz.gettz("America/New_York"))
 
+    @pytest.mark.skipif(
+        zoneinfo.get_zonefile_instance().zones == {},
+        reason="dateutil-zoneinfo.tar.gz not installed",
+    )
     def testPickleZoneFileGettz(self):
         zoneinfo_file = zoneinfo.get_zonefile_instance()
         tzi = zoneinfo_file.get("America/New_York")

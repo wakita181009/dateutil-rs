@@ -20,8 +20,7 @@ class tzfile(_tzfile):
 def getzoneinfofile_stream():
     try:
         return BytesIO(get_data(__name__, ZONEFILENAME))
-    except OSError as e:  # TODO  switch to FileNotFoundError?
-        warnings.warn(f"I/O error({e.errno}): {e.strerror}")
+    except OSError:
         return None
 
 

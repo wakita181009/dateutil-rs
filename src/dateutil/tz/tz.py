@@ -16,6 +16,7 @@ import sys
 import time
 import weakref
 from collections import OrderedDict
+from zoneinfo import ZoneInfo
 
 from ._common import (
     _tzinfo,
@@ -1699,9 +1700,10 @@ def __get_gettz():
                                 tz = None
 
                         if not tz:
-                            from dateutil.zoneinfo import get_zonefile_instance
-
-                            tz = get_zonefile_instance().get(name)
+                            try:
+                                tz = ZoneInfo(name)
+                            except KeyError:
+                                pass
 
                         if not tz:
                             for c in name:
