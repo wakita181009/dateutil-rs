@@ -1,5 +1,6 @@
 pub mod common;
 pub mod easter;
+pub mod parser;
 pub mod relativedelta;
 pub mod utils;
 
@@ -34,6 +35,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Utils function
     m.add_function(wrap_pyfunction!(utils::within_delta_py, m)?)?;
+
+    // Parser functions and classes
+    parser::python::register(m)?;
 
     Ok(())
 }

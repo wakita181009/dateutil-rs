@@ -46,6 +46,7 @@ filterwarnings = [
     "error",
     "error::DeprecationWarning",
     "error::PendingDeprecationWarning",
+    "ignore::pytest_benchmark.logger.PytestBenchmarkWarning",
 ]
 markers = [
     "gettz",

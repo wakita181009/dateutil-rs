@@ -89,6 +89,7 @@ def _import_rust():
     """Import dateutil_rs and wrap it in a namespace matching the dateutil API."""
     try:
         import dateutil_rs.easter
+        import dateutil_rs.parser
         import dateutil_rs.relativedelta
         import dateutil_rs.utils
     except ImportError:
@@ -96,7 +97,7 @@ def _import_rust():
 
     return SimpleNamespace(
         easter=dateutil_rs.easter,
-        parser=None,
+        parser=dateutil_rs.parser,
         relativedelta=dateutil_rs.relativedelta,
         rrule=None,
         tz=None,
@@ -117,4 +118,12 @@ def du(request):
     else:
         if _rust is None:
             pytest.skip("dateutil_rs not installed (run: maturin develop)")
+
+        # Skip benchmarks for modules not yet implemented in Rust
+        test_path = request.node.nodeid
+        if "bench_rrule" in test_path and _rust.rrule is None:
+            pytest.skip("dateutil_rs.rrule not yet implemented")
+        if "bench_tz" in test_path and _rust.tz is None:
+            pytest.skip("dateutil_rs.tz not yet implemented")
+
         return _rust
