@@ -1,0 +1,38 @@
+name: Publish package
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: uv run pytest tests/ -x -q
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        if: github.event_name == 'release'
+        run: uv publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_UPLOAD_TOKEN }}
+
+      - name: Publish to Test PyPI
+        if: github.event_name == 'workflow_dispatch'
+        run: uv publish --index-url https://test.pypi.org/legacy/
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_UPLOAD_TOKEN }}

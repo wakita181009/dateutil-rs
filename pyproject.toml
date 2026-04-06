@@ -1,0 +1,46 @@
+[project]
+name = "dateutil-rs"
+version = "0.1.0"
+description = "A Rust-backed port of python-dateutil (Python-only phase)"
+license = "Apache-2.0 OR BSD-3-Clause"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0",
+    "pytest-cov>=7.1",
+    "freezegun>=1.5",
+    "hypothesis>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dateutil"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+xfail_strict = true
+filterwarnings = [
+    "error",
+    "error::DeprecationWarning",
+    "error::PendingDeprecationWarning",
+]
+markers = [
+    "gettz",
+    "import_star",
+    "isoparser",
+    "parserinfo",
+    "rrule",
+    "rruleset",
+    "rrulestr",
+    "smoke",
+    "tz_resolve_imaginary",
+    "tzfile",
+    "tzlocal",
+    "tzoffset",
+    "tzstr",
+]
