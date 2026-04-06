@@ -68,7 +68,7 @@ impl Weekday {
 
     fn __call__(&self, n: Option<i32>) -> Self {
         if n == self.n {
-            self.clone()
+            *self
         } else {
             Self { weekday: self.weekday, n }
         }
