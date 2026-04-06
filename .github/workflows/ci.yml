@@ -7,6 +7,18 @@ on:
     branches: [ main ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.13
+      - run: uv sync --python 3.13
+      - name: Ruff check
+        run: uv run ruff check src/ tests/
+      - name: Ruff format
+        run: uv run ruff format --check src/ tests/
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:

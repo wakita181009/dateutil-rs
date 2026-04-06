@@ -14,10 +14,13 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install 3.13
 
       - name: Install dependencies
         run: uv sync --extra dev
+
+      - name: Ruff check
+        run: uv run ruff check src/ tests/
 
       - name: Run tests
         run: uv run pytest tests/ -x -q
