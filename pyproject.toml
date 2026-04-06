@@ -2,6 +2,7 @@
 name = "python-dateutil-rs"
 version = "0.0.2"
 description = "A Rust-backed port of python-dateutil"
+readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 classifiers = [
