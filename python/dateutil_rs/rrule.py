@@ -3,42 +3,5 @@
 Delegates to python-dateutil until Rust implementation is ready.
 """
 
-from dateutil.rrule import (
-    DAILY,
-    FR,
-    HOURLY,
-    MINUTELY,
-    MO,
-    MONTHLY,
-    SA,
-    SECONDLY,
-    SU,
-    TH,
-    TU,
-    WE,
-    WEEKLY,
-    YEARLY,
-    rrule,
-    rruleset,
-    rrulestr,
-)
-
-__all__ = [
-    "DAILY",
-    "FR",
-    "HOURLY",
-    "MINUTELY",
-    "MO",
-    "MONTHLY",
-    "SA",
-    "SECONDLY",
-    "SU",
-    "TH",
-    "TU",
-    "WE",
-    "WEEKLY",
-    "YEARLY",
-    "rrule",
-    "rruleset",
-    "rrulestr",
-]
+from dateutil.rrule import *
+from dateutil.rrule import __all__

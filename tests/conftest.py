@@ -4,16 +4,20 @@ import sys
 import pytest
 
 # ---------------------------------------------------------------------------
-# --rust flag: redirect implemented dateutil.* modules to dateutil_rs.*
+# --rust flag: redirect all dateutil.* modules to dateutil_rs.*
 # ---------------------------------------------------------------------------
-# Modules that have been ported to Rust and can be tested via dateutil_rs.
-# Add modules here as they are implemented in each phase.
-_RUST_READY_MODULES = {
+# dateutil_rs provides Rust-accelerated modules (easter, relativedelta) and
+# delegates unported modules (parser, rrule, tz) to python-dateutil.
+# This mapping lets the existing test suite run against dateutil_rs unchanged.
+# Only redirect modules whose dateutil_rs wrappers are self-contained.
+# parser/tz/rrule have internal sub-imports (dateutil.parser._parser, etc.)
+# that break when the top-level module is redirected, so leave them as-is.
+# Modules redirected to dateutil_rs when --rust is used.
+# Only modules with self-contained wrappers (no internal sub-imports).
+# utils is NOT redirected because freezegun can't patch the re-exported today().
+_MODULE_MAP = {
     "dateutil.easter": "dateutil_rs.easter",
     "dateutil.relativedelta": "dateutil_rs.relativedelta",
-    # Phase 2: "dateutil.parser": "dateutil_rs.parser",
-    # Phase 3: "dateutil.tz": "dateutil_rs.tz",
-    # Phase 4: "dateutil.rrule": "dateutil_rs.rrule",
 }
 
 
@@ -22,7 +26,7 @@ def pytest_addoption(parser):
         "--rust",
         action="store_true",
         default=False,
-        help="Test against dateutil_rs Rust implementation instead of Python reference",
+        help="Test against dateutil_rs (Rust + python-dateutil hybrid)",
     )
 
 
@@ -35,7 +39,7 @@ def pytest_configure(config):
     except ImportError:
         pytest.exit("--rust requires dateutil_rs to be installed (run: uv sync)")
 
-    for py_mod, rs_mod in _RUST_READY_MODULES.items():
+    for py_mod, rs_mod in _MODULE_MAP.items():
         rust_module = __import__(rs_mod, fromlist=[""])
         sys.modules[py_mod] = rust_module
 

@@ -3,18 +3,5 @@
 Delegates to python-dateutil until Rust implementation is ready.
 """
 
-from dateutil.parser import (
-    ParserError,
-    isoparse,
-    isoparser,
-    parse,
-    parserinfo,
-)
-
-__all__ = [
-    "ParserError",
-    "isoparse",
-    "isoparser",
-    "parse",
-    "parserinfo",
-]
+from dateutil.parser import *
+from dateutil.parser import __all__
