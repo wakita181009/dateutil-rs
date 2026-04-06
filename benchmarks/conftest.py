@@ -78,14 +78,40 @@ def _import_dateutil(use_local: bool):
     return ns
 
 
-# Pre-load both versions once at collection time
+# Pre-load both Python versions once at collection time
 _original = _import_dateutil(use_local=False)
 _local = _import_dateutil(use_local=True)
 
 
-@pytest.fixture(params=["original", "local"])
+def _import_rust():
+    """Import dateutil_rs and wrap it in a namespace matching the dateutil API."""
+    try:
+        import dateutil_rs.easter
+        import dateutil_rs.utils
+    except ImportError:
+        return None
+
+    return SimpleNamespace(
+        easter=dateutil_rs.easter,
+        parser=None,
+        relativedelta=None,
+        rrule=None,
+        tz=None,
+        utils=dateutil_rs.utils,
+    )
+
+
+_rust = _import_rust()
+
+
+@pytest.fixture(params=["original", "local", "rust"])
 def du(request):
-    """Fixture providing dateutil modules — parametrized for both versions."""
+    """Fixture providing dateutil modules — parametrized for all versions."""
     if request.param == "original":
         return _original
-    return _local
+    elif request.param == "local":
+        return _local
+    else:
+        if _rust is None:
+            pytest.skip("dateutil_rs not installed (run: maturin develop)")
+        return _rust

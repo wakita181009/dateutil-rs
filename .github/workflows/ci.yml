@@ -7,6 +7,22 @@ on:
     branches: [ main ]
 
 jobs:
+  rust:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Cargo clippy
+        run: cargo clippy --manifest-path crates/dateutil-rs/Cargo.toml -- -D warnings
+      - name: Cargo test
+        run: cargo test --manifest-path crates/dateutil-rs/Cargo.toml
+
   lint:
     runs-on: ubuntu-latest
     steps:

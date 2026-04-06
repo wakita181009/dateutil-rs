@@ -1,7 +1,7 @@
 [project]
 name = "python-dateutil-rs"
 version = "0.0.1"
-description = "A Rust-backed port of python-dateutil (Python-only phase)"
+description = "A Rust-backed port of python-dateutil"
 license = "MIT"
 requires-python = ">=3.10"
 classifiers = [
@@ -23,11 +23,14 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.0"]
+build-backend = "maturin"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/dateutil"]
+[tool.maturin]
+manifest-path = "crates/dateutil-rs/Cargo.toml"
+features = ["python"]
+python-source = "python"
+module-name = "dateutil_rs._native"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

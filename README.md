@@ -84,7 +84,19 @@ uv run ruff format --check src/ tests/
 
 ### Benchmarks
 
-Benchmarks compare the original `python-dateutil` (from PyPI) against the local implementation side-by-side using pytest-benchmark.
+Benchmarks compare three implementations: the original `python-dateutil` (PyPI), the local Python port, and the Rust extension (`dateutil_rs`) using pytest-benchmark.
+
+#### Easter module (Rust implemented)
+
+| Benchmark | python-dateutil | dateutil-rs (Rust) | Speedup |
+|-----------|----------------:|-------------------:|--------:|
+| single call (Western) | 0.49 µs | 0.11 µs | **4.4x** |
+| single call (Orthodox) | 0.39 µs | 0.11 µs | **3.7x** |
+| single call (Julian) | 0.29 µs | 0.06 µs | **4.9x** |
+| 1000 years (Western) | 423.92 µs | 68.32 µs | **6.2x** |
+| 500 years × 3 methods | 558.51 µs | 107.97 µs | **5.2x** |
+
+> Measured on Apple Silicon (M-series), Python 3.13. Full results: [benchmarks/RESULTS.md](benchmarks/RESULTS.md)
 
 ```bash
 # Install the original python-dateutil for comparison

@@ -1,0 +1,18 @@
+[package]
+name = "dateutil-rs"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Rust port of python-dateutil"
+
+[lib]
+name = "dateutil_rs"
+crate-type = ["rlib"]
+
+[dependencies]
+chrono = "0.4"
+pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
+
+[features]
+default = []
+python = ["pyo3"]
