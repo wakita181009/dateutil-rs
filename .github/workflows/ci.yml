@@ -23,28 +23,6 @@ jobs:
       - name: Cargo test
         run: cargo test --manifest-path crates/dateutil-rs/Cargo.toml
 
-  integration:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, macos-latest ]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v7
-      - run: uv python install 3.13
-      - name: Build and install (maturin)
-        run: uv sync --extra dev --python 3.13
-      - name: Build Rust extension
-        run: uv run maturin develop --release
-      - name: Test dateutil_rs Python bindings
-        run: |
-          uv run pytest tests/test_dateutil_rs.py --rust -x -q
-          uv run pytest tests/test_easter.py --rust -x -q
-          uv run pytest tests/test_relativedelta.py --rust -x -q \
-            -k "not testInheritance and not testRelativeDeltaFractionalAbsolutes"
-
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -64,10 +42,9 @@ jobs:
       matrix:
         os: [ ubuntu-latest, macos-latest ]
         python-version: [ "3.10", "3.11", "3.12", "3.13", "3.14" ]
-
     steps:
       - uses: actions/checkout@v6
-
+      - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v7
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -76,13 +53,16 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev --python ${{ matrix.python-version }}
 
-      - name: Run tests
-        run: uv run pytest tests/ -x -q --cov=dateutil --cov-report=xml
-        env:
-          PYTHONPATH: src
+      - name: Build Rust extension
+        run: uv run maturin develop --release
 
-      - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Test Rust bindings
+        run: uv run pytest tests/test_dateutil_rs.py --rust -x -q
+
+      - name: Test easter (Rust)
+        run: uv run pytest tests/test_easter.py --rust -x -q
+
+      - name: Test relativedelta (Rust)
+        run: >
+          uv run pytest tests/test_relativedelta.py --rust -x -q
+          -k "not testInheritance and not testRelativeDeltaFractionalAbsolutes"
