@@ -4,17 +4,11 @@ import sys
 import pytest
 
 # ---------------------------------------------------------------------------
-# --rust flag: redirect all dateutil.* modules to dateutil_rs.*
+# --rust flag: redirect dateutil.* → dateutil_rs.* for Rust-ported modules
 # ---------------------------------------------------------------------------
-# dateutil_rs provides Rust-accelerated modules (easter, relativedelta) and
-# delegates unported modules (parser, rrule, tz) to python-dateutil.
-# This mapping lets the existing test suite run against dateutil_rs unchanged.
-# Only redirect modules whose dateutil_rs wrappers are self-contained.
-# parser/tz/rrule have internal sub-imports (dateutil.parser._parser, etc.)
-# that break when the top-level module is redirected, so leave them as-is.
-# Modules redirected to dateutil_rs when --rust is used.
-# Only modules with self-contained wrappers (no internal sub-imports).
-# utils is NOT redirected because freezegun can't patch the re-exported today().
+# Only self-contained modules are redirected here. Modules with internal
+# sub-imports (parser._parser, tz.tz, etc.) or freezegun incompatibilities
+# (utils.today) are left as-is — they still use python-dateutil directly.
 _MODULE_MAP = {
     "dateutil.easter": "dateutil_rs.easter",
     "dateutil.relativedelta": "dateutil_rs.relativedelta",

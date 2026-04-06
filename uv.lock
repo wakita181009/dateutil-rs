@@ -296,6 +296,9 @@ wheels = [
 name = "python-dateutil-rs"
 version = "0.0.1"
 source = { editable = "." }
+dependencies = [
+    { name = "python-dateutil" },
+]
 
 [package.optional-dependencies]
 dev = [
@@ -320,6 +323,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0" },
     { name = "pytest-benchmark", marker = "extra == 'dev'", specifier = ">=5.2" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1" },
+    { name = "python-dateutil", specifier = ">=2.9" },
 ]
 provides-extras = ["dev"]
 
