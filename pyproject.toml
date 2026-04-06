@@ -1,6 +1,6 @@
 [project]
 name = "python-dateutil-rs"
-version = "0.0.1"
+version = "0.0.2"
 description = "A Rust-backed port of python-dateutil"
 license = "MIT"
 requires-python = ">=3.10"
