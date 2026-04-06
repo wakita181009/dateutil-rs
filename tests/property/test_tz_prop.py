@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 import pytest
-from hypothesis import assume, given
+from hypothesis import given
 from hypothesis import strategies as st
 
 from dateutil import tz as tz
@@ -15,7 +15,9 @@ NEGATIVE_EPOCHALYPSE = datetime.fromtimestamp(0) - timedelta(seconds=2147483648)
 # TODO: Remove bounds when GH #590 is resolved
 @given(
     dt=st.datetimes(
-        min_value=NEGATIVE_EPOCHALYPSE, max_value=EPOCHALYPSE, timezones=st.just(tz.UTC),
+        min_value=NEGATIVE_EPOCHALYPSE,
+        max_value=EPOCHALYPSE,
+        timezones=st.just(tz.UTC),
     )
 )
 def test_gettz_returns_local(gettz_arg, dt):

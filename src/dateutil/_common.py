@@ -3,8 +3,8 @@ Common code used in multiple modules.
 """
 
 
-class weekday(object):
-    __slots__ = ["weekday", "n"]
+class weekday:
+    __slots__ = ["n", "weekday"]
 
     def __init__(self, weekday, n=None):
         self.weekday = weekday
@@ -25,10 +25,12 @@ class weekday(object):
         return True
 
     def __hash__(self):
-        return hash((
-          self.weekday,
-          self.n,
-        ))
+        return hash(
+            (
+                self.weekday,
+                self.n,
+            )
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -39,5 +41,6 @@ class weekday(object):
             return s
         else:
             return "%s(%+d)" % (s, self.n)
+
 
 # vim:ts=4:sw=4:et

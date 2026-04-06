@@ -1,8 +1,8 @@
 [project]
 name = "dateutil-rs"
-version = "0.1.0"
+version = "0.0.1"
 description = "A Rust-backed port of python-dateutil (Python-only phase)"
-license = "Apache-2.0 OR BSD-3-Clause"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = []
 
@@ -44,3 +44,80 @@ markers = [
     "tzoffset",
     "tzstr",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.9",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+src = ["src", "tests"]
+extend-exclude = ["tests/test_imports.py", "tests/test_import_star.py"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    # Naming — follow python-dateutil's public API
+    "N801",   # class names (weekday, rrule, etc.)
+    "N802",   # method names
+    "N806",   # variable names
+    "N815",   # mixedCase class variables (_handle_FREQ, etc.)
+    "N816",   # mixed-case variables
+    # Pycodestyle — original code style
+    "E402",   # late imports used intentionally in __init__.py
+    "E501",   # line length (handled by formatter where possible)
+    "E701",   # multiple statements on one line (original test style)
+    "E721",   # type comparison (original test style)
+    "E731",   # lambda assignment (original code pattern)
+    "E722",   # bare except (original code)
+    "E741",   # ambiguous variable names
+    # Pyflakes — re-exports and deprecation wrappers
+    "F401",   # re-exports in __init__.py
+    "F403",   # wildcard imports (used in __init__.py and tests)
+    "F405",   # names from star imports
+    "F811",   # redefinitions for deprecation wrappers
+    "F841",   # unused local variables (original code)
+    # Pyupgrade — keep original formatting
+    "UP031",  # percent format
+    "UP036",  # version blocks
+    # Bugbear — original code patterns
+    "B006",   # mutable default arguments
+    "B007",   # unused loop variables
+    "B015",   # pointless comparison (intentional in tests)
+    "B020",   # loop variable overrides iterable
+    "B028",   # stacklevel in warnings
+    "B029",   # bare except
+    "B904",   # raise from
+    "B905",   # zip without strict= (original code)
+    # Simplify — keep original structure
+    "SIM102", # nested ifs
+    "SIM105", # try-except-pass
+    "SIM108", # ternary rewrites
+    "SIM110", # reimplemented builtins
+    "SIM114", # combined if branches
+    "SIM115", # context manager for open()
+    "SIM117", # nested with statements
+    "SIM201", # negated == (intentional in tests)
+    "SIM202", # negated != (intentional in tests)
+    "SIM211", # bool idioms
+    # Ruff-specific
+    "RUF001", # ambiguous unicode (intentional in tests)
+    "RUF005", # concatenation vs unpacking (original style)
+    "RUF012", # mutable class attributes (original parserinfo design)
+    "RUF059", # unpacked unused variables
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dateutil"]
