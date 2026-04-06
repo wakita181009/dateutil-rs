@@ -13,54 +13,18 @@ pub fn within_delta(dt1: NaiveDateTime, dt2: NaiveDateTime, delta: TimeDelta) ->
     -delta <= difference && difference <= delta
 }
 
+/// PyO3 wrapper. With the `chrono` feature enabled on pyo3, NaiveDateTime and
+/// TimeDelta are automatically converted from/to Python datetime/timedelta.
+/// Timezone-aware datetimes will raise TypeError (NaiveDateTime rejects them).
 #[cfg(feature = "python")]
-use pyo3::prelude::*;
-
-#[cfg(feature = "python")]
-fn py_datetime_to_naive(dt: &Bound<'_, pyo3::types::PyDateTime>) -> PyResult<NaiveDateTime> {
-    use chrono::NaiveDate;
-    use pyo3::types::{PyDateAccess, PyTimeAccess};
-
-    let date = NaiveDate::from_ymd_opt(
-        dt.get_year(),
-        dt.get_month() as u32,
-        dt.get_day() as u32,
-    )
-    .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("invalid date"))?;
-    let time = chrono::NaiveTime::from_hms_micro_opt(
-        dt.get_hour() as u32,
-        dt.get_minute() as u32,
-        dt.get_second() as u32,
-        dt.get_microsecond(),
-    )
-    .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("invalid time"))?;
-
-    Ok(NaiveDateTime::new(date, time))
-}
-
-#[cfg(feature = "python")]
-fn py_delta_to_timedelta(delta: &Bound<'_, pyo3::types::PyDelta>) -> PyResult<TimeDelta> {
-    use pyo3::types::PyDeltaAccess;
-
-    let days = delta.get_days() as i64;
-    let seconds = delta.get_seconds() as i64;
-    let microseconds = delta.get_microseconds() as i64;
-    let total_us = days * 86_400_000_000 + seconds * 1_000_000 + microseconds;
-    Ok(TimeDelta::microseconds(total_us))
-}
-
-#[cfg(feature = "python")]
-#[pyfunction]
+#[pyo3::prelude::pyfunction]
 #[pyo3(name = "within_delta")]
 pub fn within_delta_py(
-    dt1: &Bound<'_, pyo3::types::PyDateTime>,
-    dt2: &Bound<'_, pyo3::types::PyDateTime>,
-    delta: &Bound<'_, pyo3::types::PyDelta>,
-) -> PyResult<bool> {
-    let ndt1 = py_datetime_to_naive(dt1)?;
-    let ndt2 = py_datetime_to_naive(dt2)?;
-    let td = py_delta_to_timedelta(delta)?;
-    Ok(within_delta(ndt1, ndt2, td))
+    dt1: NaiveDateTime,
+    dt2: NaiveDateTime,
+    delta: TimeDelta,
+) -> bool {
+    within_delta(dt1, dt2, delta)
 }
 
 #[cfg(test)]

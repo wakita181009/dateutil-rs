@@ -9,7 +9,7 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(name = "weekday", frozen, hash, eq)
+    pyo3::pyclass(name = "weekday", frozen, hash, eq, from_py_object)
 )]
 pub struct Weekday {
     weekday: u8,
@@ -57,15 +57,20 @@ impl fmt::Display for Weekday {
 impl Weekday {
     #[new]
     #[pyo3(signature = (weekday, n=None))]
-    fn py_new(weekday: u8, n: Option<i32>) -> Self {
-        Self::new(weekday, n)
+    fn py_new(weekday: u8, n: Option<i32>) -> pyo3::PyResult<Self> {
+        if weekday > 6 {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "weekday must be 0..=6, got {weekday}"
+            )));
+        }
+        Ok(Self { weekday, n })
     }
 
-    fn __call__(&self, n: i32) -> Self {
-        if Some(n) == self.n {
+    fn __call__(&self, n: Option<i32>) -> Self {
+        if n == self.n {
             self.clone()
         } else {
-            Self::new(self.weekday, Some(n))
+            Self { weekday: self.weekday, n }
         }
     }
 

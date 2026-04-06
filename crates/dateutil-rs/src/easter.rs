@@ -1,30 +1,18 @@
 use chrono::NaiveDate;
-use std::fmt;
 
 pub const EASTER_JULIAN: i32 = 1;
 pub const EASTER_ORTHODOX: i32 = 2;
 pub const EASTER_WESTERN: i32 = 3;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum EasterError {
+    #[error("invalid method: {0}")]
     InvalidMethod(i32),
+    #[error("invalid year: {0}")]
     InvalidYear(i32),
+    #[error("date out of range: {year}-{month}-{day}")]
     DateOutOfRange { year: i32, month: u32, day: u32 },
 }
-
-impl fmt::Display for EasterError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            EasterError::InvalidMethod(m) => write!(f, "invalid method: {m}"),
-            EasterError::InvalidYear(y) => write!(f, "invalid year: {y}"),
-            EasterError::DateOutOfRange { year, month, day } => {
-                write!(f, "date out of range: {year}-{month}-{day}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for EasterError {}
 
 /// Compute the date of Easter for a given year and method.
 ///
@@ -82,26 +70,13 @@ pub fn easter(year: i32, method: i32) -> Result<NaiveDate, EasterError> {
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-
-#[cfg(feature = "python")]
-use chrono::Datelike;
+use thiserror::Error;
 
 #[cfg(feature = "python")]
 #[pyfunction]
 #[pyo3(name = "easter", signature = (year, method=3))]
-pub fn easter_py(py: Python<'_>, year: i32, method: i32) -> PyResult<Py<pyo3::types::PyDate>> {
-    match easter(year, method) {
-        Ok(date) => {
-            let py_date = pyo3::types::PyDate::new(
-                py,
-                date.year(),
-                date.month() as u8,
-                date.day() as u8,
-            )?;
-            Ok(py_date.into())
-        }
-        Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e.to_string())),
-    }
+pub fn easter_py(year: i32, method: i32) -> PyResult<NaiveDate> {
+    easter(year, method).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
 #[cfg(test)]

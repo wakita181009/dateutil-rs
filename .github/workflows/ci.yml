@@ -23,6 +23,22 @@ jobs:
       - name: Cargo test
         run: cargo test --manifest-path crates/dateutil-rs/Cargo.toml
 
+  integration:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v7
+      - run: uv python install 3.13
+      - name: Build and install (maturin)
+        run: uv sync --extra dev --python 3.13
+      - name: Test dateutil_rs Python bindings
+        run: uv run pytest tests/test_dateutil_rs.py tests/test_easter.py --rust -x -q
+
   lint:
     runs-on: ubuntu-latest
     steps:

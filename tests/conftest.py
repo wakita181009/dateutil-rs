@@ -1,6 +1,43 @@
 import os
+import sys
 
 import pytest
+
+# ---------------------------------------------------------------------------
+# --rust flag: redirect implemented dateutil.* modules to dateutil_rs.*
+# ---------------------------------------------------------------------------
+# Modules that have been ported to Rust and can be tested via dateutil_rs.
+# Add modules here as they are implemented in each phase.
+_RUST_READY_MODULES = {
+    "dateutil.easter": "dateutil_rs.easter",
+    # Phase 2: "dateutil.relativedelta": "dateutil_rs.relativedelta",
+    # Phase 2: "dateutil.parser": "dateutil_rs.parser",
+    # Phase 3: "dateutil.tz": "dateutil_rs.tz",
+    # Phase 4: "dateutil.rrule": "dateutil_rs.rrule",
+}
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--rust",
+        action="store_true",
+        default=False,
+        help="Test against dateutil_rs Rust implementation instead of Python reference",
+    )
+
+
+def pytest_configure(config):
+    if not config.getoption("--rust"):
+        return
+
+    try:
+        import dateutil_rs  # noqa: F401
+    except ImportError:
+        pytest.exit("--rust requires dateutil_rs to be installed (run: uv sync)")
+
+    for py_mod, rs_mod in _RUST_READY_MODULES.items():
+        rust_module = __import__(rs_mod, fromlist=[""])
+        sys.modules[py_mod] = rust_module
 
 
 # Configure pytest to ignore xfailing tests
