@@ -10,7 +10,7 @@ import pytest
 # Add modules here as they are implemented in each phase.
 _RUST_READY_MODULES = {
     "dateutil.easter": "dateutil_rs.easter",
-    # Phase 2: "dateutil.relativedelta": "dateutil_rs.relativedelta",
+    "dateutil.relativedelta": "dateutil_rs.relativedelta",
     # Phase 2: "dateutil.parser": "dateutil_rs.parser",
     # Phase 3: "dateutil.tz": "dateutil_rs.tz",
     # Phase 4: "dateutil.rrule": "dateutil_rs.rrule",
@@ -31,7 +31,7 @@ def pytest_configure(config):
         return
 
     try:
-        import dateutil_rs  # noqa: F401
+        import dateutil_rs
     except ImportError:
         pytest.exit("--rust requires dateutil_rs to be installed (run: uv sync)")
 

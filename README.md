@@ -86,17 +86,28 @@ uv run ruff format --check src/ tests/
 
 Benchmarks compare three implementations: the original `python-dateutil` (PyPI), the local Python port, and the Rust extension (`dateutil_rs`) using pytest-benchmark.
 
-#### Easter module (Rust implemented)
+#### Easter (Rust implemented)
 
 | Benchmark | python-dateutil | dateutil-rs (Rust) | Speedup |
 |-----------|----------------:|-------------------:|--------:|
-| single call (Western) | 0.49 µs | 0.11 µs | **4.4x** |
-| single call (Orthodox) | 0.39 µs | 0.11 µs | **3.7x** |
+| single call (Western) | 0.49 µs | 0.11 µs | **4.3x** |
+| single call (Orthodox) | 0.40 µs | 0.06 µs | **6.9x** |
 | single call (Julian) | 0.29 µs | 0.06 µs | **4.9x** |
-| 1000 years (Western) | 423.92 µs | 68.32 µs | **6.2x** |
-| 500 years × 3 methods | 558.51 µs | 107.97 µs | **5.2x** |
+| 1000 years (Western) | 429.86 µs | 69.17 µs | **6.2x** |
+| 500 years × 3 methods | 563.81 µs | 108.03 µs | **5.2x** |
 
-> Measured on Apple Silicon (M-series), Python 3.13. Full results: [benchmarks/RESULTS.md](benchmarks/RESULTS.md)
+#### RelativeDelta (Rust implemented)
+
+| Benchmark | python-dateutil | dateutil-rs (Rust) | Speedup |
+|-----------|----------------:|-------------------:|--------:|
+| create simple | 0.95 µs | 0.12 µs | **8.1x** |
+| add months to datetime | 1.60 µs | 0.18 µs | **9.0x** |
+| subtract from datetime | 3.00 µs | 0.19 µs | **15.7x** |
+| multiply by scalar | 1.45 µs | 0.08 µs | **17.4x** |
+| diff between datetimes | 2.69 µs | 0.26 µs | **10.5x** |
+| sequential add ×12 | 18.59 µs | 1.66 µs | **11.2x** |
+
+> Measured on Apple Silicon (M-series), Python 3.13, release build. Full results: [benchmarks/RESULTS.md](benchmarks/RESULTS.md)
 
 ```bash
 # Install the original python-dateutil for comparison

@@ -20,6 +20,7 @@ dev = [
     "pytest-benchmark>=5.2",
     "freezegun>=1.5",
     "hypothesis>=6.0",
+    "maturin>=1.0",
 ]
 
 [build-system]

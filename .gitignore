@@ -29,3 +29,6 @@ src/dateutil/_version.py
 
 # Bundled data (copied from python-dateutil at setup time)
 src/dateutil/zoneinfo/dateutil-zoneinfo.tar.gz
+
+# Maturin build artifacts
+*.dSYM/

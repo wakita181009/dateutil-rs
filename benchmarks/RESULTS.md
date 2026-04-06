@@ -1,12 +1,13 @@
 # Benchmark Results
 
-> Last updated: 2026-04-07 | Commit: `fb59aed7`
+> Last updated: 2026-04-07 | Commit: `029092b`
 
 ## Environment
 
 - **Python:** 3.13.12
 - **Platform:** macOS 26.3.1, Apple Silicon (arm64)
 - **Tool:** pytest-benchmark 5.2.3
+- **Build:** `maturin develop --release`
 
 ## Summary
 
@@ -22,9 +23,9 @@ Benchmarks compare three implementations side-by-side:
 
 | Module | Rust Status | Speedup vs original |
 |--------|-------------|---------------------|
-| easter | Implemented | **3.7x – 6.2x** |
+| easter | Implemented | **4.3x – 6.9x** |
+| relativedelta | Implemented | **3.8x – 17.4x** |
 | parser | Not yet | — |
-| relativedelta | Not yet | — |
 | rrule | Not yet | — |
 | tz | Not yet | — |
 
@@ -32,13 +33,31 @@ Benchmarks compare three implementations side-by-side:
 
 ## Easter
 
-| Benchmark | original | local | rust | Speedup |
-|-----------|----------|-------|------|---------|
-| single (Western) | 0.49 µs | 0.43 µs | 0.11 µs | **4.4x** |
-| single (Orthodox) | 0.39 µs | 0.34 µs | 0.11 µs | **3.7x** |
-| single (Julian) | 0.29 µs | 0.29 µs | 0.06 µs | **4.9x** |
-| range 1000 years (Western) | 423.92 µs | 424.89 µs | 68.32 µs | **6.2x** |
-| range 500 years × 3 methods | 558.51 µs | 560.31 µs | 107.97 µs | **5.2x** |
+| Benchmark | original | rust | Speedup |
+|-----------|----------|------|---------|
+| single (Western) | 0.49 µs | 0.11 µs | **4.3x** |
+| single (Orthodox) | 0.40 µs | 0.06 µs | **6.9x** |
+| single (Julian) | 0.29 µs | 0.06 µs | **4.9x** |
+| range 1000 years (Western) | 429.86 µs | 69.17 µs | **6.2x** |
+| range 500 years × 3 methods | 563.81 µs | 108.03 µs | **5.2x** |
+
+## RelativeDelta
+
+| Benchmark | original | rust | Speedup |
+|-----------|----------|------|---------|
+| create simple | 0.95 µs | 0.12 µs | **8.1x** |
+| create complex | 0.95 µs | 0.25 µs | **3.8x** |
+| create absolute | 1.05 µs | 0.26 µs | **4.1x** |
+| create weekday | 0.90 µs | 0.12 µs | **7.2x** |
+| add months | 1.60 µs | 0.18 µs | **9.0x** |
+| add complex | 1.61 µs | 0.13 µs | **12.5x** |
+| add weekday | 1.77 µs | 0.15 µs | **12.1x** |
+| subtract | 3.00 µs | 0.19 µs | **15.7x** |
+| multiply | 1.45 µs | 0.08 µs | **17.4x** |
+| diff dates | 2.78 µs | 0.31 µs | **8.9x** |
+| diff datetimes | 2.69 µs | 0.26 µs | **10.5x** |
+| sequential add (×12) | 18.59 µs | 1.66 µs | **11.2x** |
+| month-end overflow | 1.59 µs | 0.13 µs | **12.2x** |
 
 ## Parser
 
@@ -60,24 +79,6 @@ Benchmarks compare three implementations side-by-side:
 | isoparse compact | 1.97 µs | 1.94 µs | 1.0x |
 | isoparse with µs | 2.61 µs | 2.61 µs | 1.0x |
 | isoparse various | 23.45 µs | 23.19 µs | 1.0x |
-
-## RelativeDelta
-
-| Benchmark | original | local | Ratio |
-|-----------|----------|-------|-------|
-| create simple | 0.93 µs | 0.93 µs | 1.0x |
-| create complex | 0.91 µs | 0.90 µs | 1.0x |
-| create absolute | 1.05 µs | 1.00 µs | 1.1x |
-| create weekday | 0.89 µs | 0.88 µs | 1.0x |
-| add months | 1.57 µs | 1.58 µs | 1.0x |
-| add complex | 1.62 µs | 1.64 µs | 1.0x |
-| add weekday | 1.77 µs | 1.77 µs | 1.0x |
-| subtract | 2.93 µs | 2.94 µs | 1.0x |
-| multiply | 1.44 µs | 1.45 µs | 1.0x |
-| diff dates | 2.71 µs | 2.69 µs | 1.0x |
-| diff datetimes | 2.68 µs | 2.66 µs | 1.0x |
-| sequential add (×10) | 18.49 µs | 18.46 µs | 1.0x |
-| month-end overflow | 1.58 µs | 1.57 µs | 1.0x |
 
 ## RRule
 
@@ -127,8 +128,8 @@ Benchmarks compare three implementations side-by-side:
 # Install dependencies
 uv pip install python-dateutil
 
-# Build Rust extension
-maturin develop --manifest-path crates/dateutil-rs/Cargo.toml -F python
+# Build Rust extension (release mode)
+maturin develop --release
 
 # Run benchmarks
 make bench

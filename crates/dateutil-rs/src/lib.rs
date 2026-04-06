@@ -1,5 +1,6 @@
 pub mod common;
 pub mod easter;
+pub mod relativedelta;
 pub mod utils;
 
 #[cfg(feature = "python")]
@@ -27,6 +28,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Easter function
     m.add_function(wrap_pyfunction!(easter::easter_py, m)?)?;
+
+    // RelativeDelta class
+    m.add_class::<relativedelta::RelativeDelta>()?;
 
     // Utils function
     m.add_function(wrap_pyfunction!(utils::within_delta_py, m)?)?;

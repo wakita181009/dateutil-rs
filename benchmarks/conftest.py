@@ -12,7 +12,9 @@ _PROJECT_SRC = str(Path(__file__).resolve().parent.parent / "src")
 
 def _ensure_zoneinfo_data():
     """Copy dateutil-zoneinfo.tar.gz from PyPI python-dateutil if missing locally."""
-    local_zoneinfo = Path(_PROJECT_SRC) / "dateutil" / "zoneinfo" / "dateutil-zoneinfo.tar.gz"
+    local_zoneinfo = (
+        Path(_PROJECT_SRC) / "dateutil" / "zoneinfo" / "dateutil-zoneinfo.tar.gz"
+    )
     if local_zoneinfo.exists():
         return
     import dateutil.zoneinfo as _zi
@@ -87,6 +89,7 @@ def _import_rust():
     """Import dateutil_rs and wrap it in a namespace matching the dateutil API."""
     try:
         import dateutil_rs.easter
+        import dateutil_rs.relativedelta
         import dateutil_rs.utils
     except ImportError:
         return None
@@ -94,7 +97,7 @@ def _import_rust():
     return SimpleNamespace(
         easter=dateutil_rs.easter,
         parser=None,
-        relativedelta=None,
+        relativedelta=dateutil_rs.relativedelta,
         rrule=None,
         tz=None,
         utils=dateutil_rs.utils,

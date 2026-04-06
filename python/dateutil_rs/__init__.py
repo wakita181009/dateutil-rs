@@ -11,7 +11,6 @@ from dateutil_rs._native import (
     TH,
     TU,
     WE,
-    easter,
     weekday,
     within_delta,
 )
@@ -28,6 +27,7 @@ __all__ = [
     "SA",
     "SU",
     "easter",
+    "relativedelta",
     "weekday",
     "within_delta",
 ]
