@@ -1,9 +1,10 @@
 [package]
 name = "dateutil-rs"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 license = "MIT"
 description = "Rust port of python-dateutil"
+readme = "../../README.md"
 
 [lib]
 name = "dateutil_rs"
