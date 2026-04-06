@@ -78,7 +78,9 @@ edition = "2021"
 
 [lib]
 name = "dateutil_rs"
-crate-type = ["cdylib", "rlib"]
+# rlib only by default — maturin adds cdylib at build time.
+# This avoids requiring Python interpreter linkage for `cargo test`.
+crate-type = ["rlib"]
 
 [dependencies]
 chrono = "0.4"
@@ -89,9 +91,10 @@ default = []
 python = ["pyo3"]
 ```
 
-- `cdylib` — Python extension module (via PyO3)
-- `rlib` — Pure Rust library (no Python dependency)
+- `rlib` — Pure Rust library (no Python dependency). Default crate type.
+- `cdylib` — Python extension module (via PyO3). Added automatically by maturin at build time.
 - `#[cfg(feature = "python")]` gates all PyO3 bindings
+- `cargo test` works without Python installed (rlib only, no cdylib linking)
 
 ### pyproject.toml (maturin settings)
 
@@ -126,9 +129,11 @@ module-name = "dateutil_rs._native"
 
 **Phase 1 — Core Types & Foundations**
 - `common::Weekday` (MO–SU with N-th occurrence support)
-- `easter::easter()` (3 calendar methods)
-- `utils` module
+- `easter::easter()` (3 calendar methods). Handle year <= 0 explicitly (match Python's ValueError).
+- `utils::within_delta()` only. `today()` and `default_tzinfo()` deferred to Phase 3 (depend on timezone types).
+- PyO3 bindings for Phase 1 modules (incremental — each phase ships bindings)
 - Rust project scaffolding (Cargo.toml, module structure, CI)
+- Python-side benchmarks (extend existing pytest-benchmark to compare dateutil vs dateutil_rs). Criterion deferred to Phase 5.
 
 **Phase 2 — Parser & RelativeDelta**
 - `relativedelta::RelativeDelta` (relative/absolute date arithmetic)
@@ -142,6 +147,7 @@ module-name = "dateutil_rs._native"
 - `tz::TzStr`, `tz::TzRange` (TZ environment string)
 - `tz::TzLocal` (system local timezone)
 - `tz::gettz()` (convenience lookup)
+- `utils::today()`, `utils::default_tzinfo()` (deferred from Phase 1, depend on tz types)
 - `zoneinfo` (bundled IANA timezone database)
 
 **Phase 4 — Recurrence Rules**
@@ -150,11 +156,14 @@ module-name = "dateutil_rs._native"
 - `rrule::rrulestr()` (RFC string parsing)
 - Frequency/weekday constants
 
-**Phase 5 — Python Bindings & Compatibility**
-- PyO3 bindings for all public APIs
-- maturin build configuration
-- Drop-in replacement compatibility with python-dateutil
-- Benchmark suite (Python dateutil vs dateutil-rs)
+**Phase 5 — Polish & Release**
+Note: PyO3 bindings are built incrementally in Phases 1-4 (each phase ships its own bindings).
+Phase 5 focuses on cross-platform polish and release readiness.
+- Cross-platform wheel builds (manylinux, macOS, Windows) via GitHub Actions
+- Full Python-side compatibility test suite (dateutil_rs vs dateutil reference)
+- Criterion benchmarks for Rust-internal regression testing
+- Documentation and README
+- Publish to crates.io and PyPI
 
 ## Key Design Decisions
 
@@ -196,12 +205,19 @@ module-name = "dateutil_rs._native"
 ### utils
 - `today(tzinfo=None)`, `default_tzinfo(dt, tzinfo)`, `within_delta(dt1, dt2, delta)`
 
+## Testing Strategy
+
+- **Rust unit tests:** `cargo test --manifest-path crates/dateutil-rs/Cargo.toml` — Tests pure Rust logic without Python.
+- **Python reference tests:** `PYTHONPATH=src uv run pytest tests/` — Tests the original python-dateutil code. Defines "correct behavior".
+- **Python integration tests:** `uv run pytest` — After `maturin develop`, tests dateutil_rs against the same test expectations.
+- **Benchmarks:** `uv run pytest benchmarks/ --benchmark-enable` — Python-side comparison (dateutil vs dateutil_rs). Primary performance measurement.
+
 ## Development Commands
 
-- `cargo test --manifest-path crates/dateutil-rs/Cargo.toml` — Run Rust tests
+- `cargo test --manifest-path crates/dateutil-rs/Cargo.toml` — Run Rust tests (no Python needed)
 - `cargo clippy --manifest-path crates/dateutil-rs/Cargo.toml` — Rust linter
 - `maturin develop --manifest-path crates/dateutil-rs/Cargo.toml -F python` — Build Python extension
-- `uv run pytest` — Run Python tests
+- `PYTHONPATH=src uv run pytest tests/` — Run reference Python tests
 - `uv run pytest benchmarks/ --benchmark-enable` — Run benchmarks
 - `uv run ruff check src/ tests/` — Python linter
 
