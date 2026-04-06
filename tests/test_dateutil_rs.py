@@ -243,6 +243,41 @@ class TestRelativeDeltaBindings:
         rd = relativedelta(days=14)
         assert rd.weeks == 2.0
 
+    def test_invalid_weekday_int_raises_valueerror(self):
+        from dateutil_rs.relativedelta import relativedelta
+
+        with pytest.raises(ValueError, match=r"weekday must be 0\.\.=6"):
+            relativedelta(weekday=7)
+
+        with pytest.raises(ValueError, match=r"weekday must be 0\.\.=6"):
+            relativedelta(weekday=99)
+
+    def test_add_to_aware_datetime_preserves_tzinfo(self):
+        from dateutil_rs.relativedelta import relativedelta
+
+        dt = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        result = dt + relativedelta(months=1)
+        assert result == datetime(2024, 2, 15, 12, 0, 0, tzinfo=timezone.utc)
+        assert result.tzinfo is timezone.utc
+
+    def test_add_to_aware_datetime_fixed_offset(self):
+        from dateutil_rs.relativedelta import relativedelta
+
+        tz_jst = timezone(timedelta(hours=9))
+        dt = datetime(2024, 6, 15, 10, 0, 0, tzinfo=tz_jst)
+        result = dt + relativedelta(days=10, hours=3)
+        assert result == datetime(2024, 6, 25, 13, 0, 0, tzinfo=tz_jst)
+        assert result.utcoffset() == timedelta(hours=9)
+
+    def test_diff_aware_datetimes(self):
+        from dateutil_rs.relativedelta import relativedelta
+
+        tz = timezone.utc
+        dt1 = datetime(2024, 3, 15, 10, 0, 0, tzinfo=tz)
+        dt2 = datetime(2024, 1, 15, 10, 0, 0, tzinfo=tz)
+        rd = relativedelta(dt1=dt1, dt2=dt2)
+        assert rd.months == 2
+
 
 class TestSubmoduleImports:
     def test_easter_module(self):

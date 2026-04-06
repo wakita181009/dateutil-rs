@@ -295,7 +295,7 @@ impl RelativeDelta {
             year: other.year.or(self.year),
             month: other.month.or(self.month),
             day: other.day.or(self.day),
-            weekday: other.weekday.clone().or(self.weekday.clone()),
+            weekday: other.weekday.or(self.weekday),
             hour: other.hour.or(self.hour),
             minute: other.minute.or(self.minute),
             second: other.second.or(self.second),
@@ -323,7 +323,7 @@ impl RelativeDelta {
             year: self.year.or(other.year),
             month: self.month.or(other.month),
             day: self.day.or(other.day),
-            weekday: self.weekday.clone().or(other.weekday.clone()),
+            weekday: self.weekday.or(other.weekday),
             hour: self.hour.or(other.hour),
             minute: self.minute.or(other.minute),
             second: self.second.or(other.second),
@@ -347,7 +347,7 @@ impl RelativeDelta {
             year: self.year,
             month: self.month,
             day: self.day,
-            weekday: self.weekday.clone(),
+            weekday: self.weekday,
             hour: self.hour,
             minute: self.minute,
             second: self.second,
@@ -371,7 +371,7 @@ impl RelativeDelta {
             year: self.year,
             month: self.month,
             day: self.day,
-            weekday: self.weekday.clone(),
+            weekday: self.weekday,
             hour: self.hour,
             minute: self.minute,
             second: self.second,
@@ -395,7 +395,7 @@ impl RelativeDelta {
             year: self.year,
             month: self.month,
             day: self.day,
-            weekday: self.weekday.clone(),
+            weekday: self.weekday,
             hour: self.hour,
             minute: self.minute,
             second: self.second,
@@ -700,11 +700,16 @@ mod py {
             let years = years as i32;
             let months = months as i32;
 
-            // Parse weekday
+            // Parse weekday (int 0-6 or Weekday instance)
             let wd = match weekday {
                 Some(w) => {
                     if w.is_instance_of::<PyInt>() {
                         let i: u8 = w.extract()?;
+                        if i > 6 {
+                            return Err(PyValueError::new_err(format!(
+                                "weekday must be 0..=6, got {i}"
+                            )));
+                        }
                         Some(Weekday::new(i, None))
                     } else {
                         Some(w.extract::<Weekday>()?)
@@ -945,7 +950,7 @@ mod py {
                 self.year,
                 self.month,
                 self.day,
-                self.weekday.clone(),
+                self.weekday,
                 None,
                 None,
                 self.hour,
@@ -1020,7 +1025,7 @@ mod py {
         }
         #[getter]
         fn get_weekday(&self) -> Option<Weekday> {
-            self.weekday.clone()
+            self.weekday
         }
         #[getter]
         fn get_weeks(&self) -> f64 {
@@ -1113,7 +1118,7 @@ mod py {
                 year: self.year,
                 month: self.month,
                 day: self.day,
-                weekday: self.weekday.clone(),
+                weekday: self.weekday,
                 hour: self.hour,
                 minute: self.minute,
                 second: self.second,

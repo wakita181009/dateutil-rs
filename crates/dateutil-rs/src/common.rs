@@ -6,7 +6,7 @@ use std::fmt;
 /// The `n` field indicates the N-th occurrence (e.g., 2nd Tuesday = TU(+2)).
 /// When `n` is `None` or `Some(0)`, only the day name is displayed,
 /// matching Python's `if not self.n` behavior where 0 is falsy.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(name = "weekday", frozen, hash, eq, from_py_object)
