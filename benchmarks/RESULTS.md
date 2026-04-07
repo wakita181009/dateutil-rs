@@ -1,6 +1,6 @@
 # Benchmark Results
 
-> Last updated: 2026-04-07 | Commit: `d41836e`
+> Last updated: 2026-04-07 | Commit: `914821d`
 
 ## Environment
 
@@ -22,12 +22,12 @@ Benchmarks compare two implementations side-by-side:
 
 | Module | Rust Status | Speedup vs original |
 |--------|-------------|---------------------|
-| easter | Implemented | **4.0x – 7.2x** |
-| relativedelta | Implemented | **3.4x – 18.6x** |
+| easter | Implemented | **3.2x – 6.2x** |
+| relativedelta | Implemented | **3.5x – 18.7x** |
 | parser (parse) | Implemented | **1.3x – 3.5x** |
-| parser (isoparse) | Implemented | **5.1x – 21.0x** |
-| rrule | Not yet | — |
-| tz | Implemented | **1.0x – 3.7x** (varies) |
+| parser (isoparse) | Implemented | **5.1x – 23.5x** |
+| rrule | Implemented | **1.7x – 9.1x** |
+| tz | Implemented | **1.0x – 3.4x** (varies) |
 
 ---
 
@@ -35,95 +35,95 @@ Benchmarks compare two implementations side-by-side:
 
 | Benchmark | original | rust | Speedup |
 |-----------|----------|------|---------|
-| single (Western) | 0.50 µs | 0.13 µs | **4.0x** |
-| single (Orthodox) | 0.42 µs | 0.06 µs | **7.2x** |
-| single (Julian) | 0.28 µs | 0.06 µs | **4.9x** |
-| range 1000 years (Western) | 426.17 µs | 66.04 µs | **6.5x** |
-| range 500 years × 3 methods | 557.75 µs | 105.25 µs | **5.3x** |
+| single (Western) | 0.51 µs | 0.13 µs | **3.9x** |
+| single (Orthodox) | 0.35 µs | 0.11 µs | **3.2x** |
+| single (Julian) | 0.29 µs | 0.06 µs | **4.9x** |
+| range 1000 years (Western) | 437.88 µs | 70.46 µs | **6.2x** |
+| range 500 years × 3 methods | 567.99 µs | 110.33 µs | **5.2x** |
 
 ## RelativeDelta
 
 | Benchmark | original | rust | Speedup |
 |-----------|----------|------|---------|
-| create simple | 0.92 µs | 0.17 µs | **5.5x** |
-| create complex | 0.89 µs | 0.26 µs | **3.4x** |
-| create absolute | 1.04 µs | 0.19 µs | **5.4x** |
-| create weekday | 0.92 µs | 0.13 µs | **7.3x** |
-| add months | 1.54 µs | 0.12 µs | **12.6x** |
-| add complex | 1.58 µs | 0.12 µs | **13.1x** |
-| add weekday | 1.71 µs | 0.14 µs | **12.0x** |
-| subtract | 2.83 µs | 0.17 µs | **17.0x** |
-| multiply | 1.42 µs | 0.08 µs | **18.6x** |
-| diff dates | 2.67 µs | 0.25 µs | **10.7x** |
-| diff datetimes | 2.58 µs | 0.29 µs | **8.8x** |
-| sequential add (×12) | 18.12 µs | 1.63 µs | **11.2x** |
-| month-end overflow | 1.54 µs | 0.17 µs | **9.2x** |
+| create simple | 0.94 µs | 0.19 µs | **4.9x** |
+| create complex | 0.91 µs | 0.26 µs | **3.5x** |
+| create absolute | 1.04 µs | 0.20 µs | **5.2x** |
+| create weekday | 0.91 µs | 0.13 µs | **7.0x** |
+| add months | 1.62 µs | 0.13 µs | **12.7x** |
+| add complex | 1.67 µs | 0.14 µs | **12.3x** |
+| add weekday | 2.46 µs | 0.50 µs | **4.9x** |
+| subtract | 3.03 µs | 0.18 µs | **16.5x** |
+| multiply | 1.49 µs | 0.08 µs | **18.7x** |
+| diff dates | 2.81 µs | 0.33 µs | **8.6x** |
+| diff datetimes | 2.72 µs | 0.26 µs | **10.5x** |
+| sequential add (×12) | 19.41 µs | 1.70 µs | **11.4x** |
+| month-end overflow | 1.74 µs | 0.13 µs | **13.3x** |
 
 ## Parser — parse()
 
 | Benchmark | original | rust | Speedup |
 |-----------|----------|------|---------|
-| simple date | 8.25 µs | 5.04 µs | **1.6x** |
-| datetime with time | 13.17 µs | 5.46 µs | **2.4x** |
-| datetime with tz | 17.08 µs | 6.12 µs | **2.8x** |
-| American format | 13.50 µs | 5.87 µs | **2.3x** |
-| European format | 8.42 µs | 5.08 µs | **1.7x** |
-| with microseconds | 14.87 µs | 5.50 µs | **2.7x** |
-| fuzzy parsing | 28.13 µs | 7.96 µs | **3.5x** |
-| relative with default | 6.21 µs | 4.75 µs | **1.3x** |
-| 10 various formats | 163.71 µs | 59.00 µs | **2.8x** |
+| simple date | 8.78 µs | 5.96 µs | **1.5x** |
+| datetime with time | 14.00 µs | 6.12 µs | **2.3x** |
+| datetime with tz | 17.99 µs | 6.52 µs | **2.8x** |
+| American format | 14.83 µs | 6.34 µs | **2.3x** |
+| European format | 9.01 µs | 5.56 µs | **1.6x** |
+| with microseconds | 15.69 µs | 5.89 µs | **2.7x** |
+| fuzzy parsing | 29.42 µs | 8.45 µs | **3.5x** |
+| relative with default | 6.56 µs | 5.13 µs | **1.3x** |
+| 10 various formats | 165.30 µs | 63.13 µs | **2.6x** |
 
 ## Parser — isoparse()
 
 | Benchmark | original | rust | Speedup |
 |-----------|----------|------|---------|
-| isoparse date | 0.79 µs | 0.07 µs | **10.8x** |
-| isoparse datetime | 1.96 µs | 0.09 µs | **21.0x** |
-| isoparse datetime+tz | 2.96 µs | 0.58 µs | **5.1x** |
-| isoparse datetime+UTC | 2.21 µs | 0.38 µs | **5.9x** |
-| isoparse compact | 1.92 µs | 0.13 µs | **15.3x** |
-| isoparse with µs | 2.54 µs | 0.17 µs | **15.3x** |
-| isoparse various | 22.37 µs | 2.96 µs | **7.6x** |
+| isoparse date | 0.81 µs | 0.08 µs | **10.7x** |
+| isoparse datetime | 2.06 µs | 0.10 µs | **20.9x** |
+| isoparse datetime+tz | 3.11 µs | 0.61 µs | **5.1x** |
+| isoparse datetime+UTC | 2.32 µs | 0.39 µs | **6.0x** |
+| isoparse compact | 1.98 µs | 0.15 µs | **13.4x** |
+| isoparse with µs | 2.67 µs | 0.11 µs | **23.5x** |
+| isoparse various | 23.10 µs | 3.10 µs | **7.4x** |
 
 ## RRule
 
 | Benchmark | original | rust | Speedup |
 |-----------|----------|------|---------|
-| daily 100 | 96.04 µs | — | — |
-| daily interval=3 | 101.79 µs | — | — |
-| weekly 52 | 95.92 µs | — | — |
-| weekly byday interval=2 | 123.58 µs | — | — |
-| monthly 120 | 408.67 µs | — | — |
-| monthly byday | 16.38 µs | — | — |
-| monthly bymonthday | 119.58 µs | — | — |
-| yearly 100 | 1,965.87 µs | — | — |
-| yearly bymonth | 624.38 µs | — | — |
-| hourly 1000 | 1,167.04 µs | — | — |
-| rruleset union | 119.54 µs | — | — |
-| rruleset exdate | 125.71 µs | — | — |
-| rruleset exrule | 578.63 µs | — | — |
-| rrulestr simple | 2.71 µs | — | — |
-| rrulestr complex | 5.83 µs | — | — |
-| rrulestr with dtstart | 14.54 µs | — | — |
+| daily 100 | 105.63 µs | 63.11 µs | **1.7x** |
+| daily interval=3 | 129.37 µs | 72.78 µs | **1.8x** |
+| weekly 52 | 105.33 µs | 34.44 µs | **3.1x** |
+| weekly byday interval=2 | 137.45 µs | 49.78 µs | **2.8x** |
+| monthly 120 | 448.46 µs | 114.12 µs | **3.9x** |
+| monthly byday | 19.56 µs | 11.13 µs | **1.8x** |
+| monthly bymonthday | 130.80 µs | 45.09 µs | **2.9x** |
+| yearly 100 | 2,144.58 µs | 235.02 µs | **9.1x** |
+| yearly bymonth | 669.32 µs | 81.82 µs | **8.2x** |
+| hourly 1000 | 1,269.24 µs | 645.47 µs | **2.0x** |
+| rruleset union | 129.28 µs | 69.38 µs | **1.9x** |
+| rruleset exdate | 146.35 µs | 70.43 µs | **2.1x** |
+| rruleset exrule | 624.26 µs | 220.76 µs | **2.8x** |
+| rrulestr simple | 3.14 µs | 0.53 µs | **6.0x** |
+| rrulestr complex | 6.60 µs | 0.90 µs | **7.4x** |
+| rrulestr with dtstart | 15.61 µs | 0.78 µs | **20.0x** |
 
 ## Timezone
 
 | Benchmark | original | rust | Speedup |
 |-----------|----------|------|---------|
-| tzutc create | 0.05 µs | 0.06 µs | 0.9x |
-| tzoffset create | 0.42 µs | 0.54 µs | 0.8x |
-| tzlocal create | 0.46 µs | 0.21 µs | **2.2x** |
-| gettz UTC | 0.29 µs | 20.13 µs | 0.01x (*) |
-| gettz named | 0.29 µs | 22.04 µs | 0.01x (*) |
-| gettz offset | 18.50 µs | 5.04 µs | **3.7x** |
-| convert UTC→JST | 1.33 µs | 1.33 µs | 1.0x |
-| convert UTC→Eastern | 1.58 µs | 1.42 µs | **1.1x** |
-| convert chain | 6.87 µs | 5.00 µs | **1.4x** |
-| localize naive | 0.07 µs | 0.07 µs | 1.0x |
-| datetime_exists | 3.12 µs | 1.92 µs | **1.6x** |
-| datetime_ambiguous | 1.00 µs | 0.63 µs | **1.6x** |
-| resolve_imaginary | 6.46 µs | 2.00 µs | **3.2x** |
-| gettz various (×10) | 709.50 µs | 220.12 µs | **3.2x** |
+| tzutc create | 0.06 µs | 0.07 µs | 1.0x |
+| tzoffset create | 0.43 µs | 0.56 µs | 0.8x |
+| tzlocal create | 0.49 µs | 0.23 µs | **2.1x** |
+| gettz UTC | 0.33 µs | 21.77 µs | 0.02x (*) |
+| gettz named | 0.31 µs | 23.54 µs | 0.01x (*) |
+| gettz offset | 22.57 µs | 5.40 µs | **4.2x** |
+| convert UTC→JST | 1.44 µs | 1.43 µs | 1.0x |
+| convert UTC→Eastern | 1.66 µs | 1.47 µs | **1.1x** |
+| convert chain | 7.16 µs | 5.33 µs | **1.3x** |
+| localize naive | 0.08 µs | 0.08 µs | 1.0x |
+| datetime_exists | 3.22 µs | 2.05 µs | **1.6x** |
+| datetime_ambiguous | 1.07 µs | 0.65 µs | **1.6x** |
+| resolve_imaginary | 6.71 µs | 2.11 µs | **3.2x** |
+| gettz various (×10) | 786.67 µs | 231.92 µs | **3.4x** |
 
 (*) python-dateutil caches `gettz()` results via `_TzFactory`. Single repeated lookups appear faster in the original because the factory returns a cached singleton. The Rust implementation does not cache yet; each call performs a fresh filesystem lookup.
 

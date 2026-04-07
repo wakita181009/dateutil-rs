@@ -1,6 +1,6 @@
 [project]
 name = "python-dateutil-rs"
-version = "0.0.5"
+version = "0.0.6"
 description = "A Rust-backed port of python-dateutil"
 readme = "README.md"
 license = "MIT"
@@ -89,55 +89,40 @@ select = [
     "RUF",  # ruff-specific rules
 ]
 ignore = [
-    # Naming — follow python-dateutil's public API
-    "N801",   # class names (weekday, rrule, etc.)
-    "N802",   # method names
+    # Naming — match python-dateutil's public API (parserinfo, weekday, rrule, etc.)
+    "N801",   # class names
+    "N806",   # variable names in functions
+    # Re-exports in __init__.py and wrapper modules
+    "F401",   # imported but unused (re-exports)
+    # python-dateutil compatibility patterns
+    "B020",   # loop variable overrides iterable (parser.py)
+    "RUF012", # mutable class attributes (parserinfo design)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Original python-dateutil test suite — avoid modifying upstream test code
+"tests/*" = [
+    "N802",   # function names (assertPicklable, setUp, etc.)
     "N806",   # variable names
-    "N815",   # mixedCase class variables (_handle_FREQ, etc.)
-    "N816",   # mixed-case variables
-    # Pycodestyle — original code style
-    "E402",   # late imports used intentionally in __init__.py
-    "E501",   # line length (handled by formatter where possible)
-    "E701",   # multiple statements on one line (original test style)
-    "E721",   # type comparison (original test style)
-    "E731",   # lambda assignment (original code pattern)
-    "E722",   # bare except (original code)
-    "E741",   # ambiguous variable names
-    # Pyflakes — re-exports and deprecation wrappers
-    "F401",   # re-exports in __init__.py
-    "F403",   # wildcard imports (used in __init__.py and tests)
-    "F405",   # names from star imports
-    "F811",   # redefinitions for deprecation wrappers
-    "F841",   # unused local variables (original code)
-    # Pyupgrade — keep original formatting
+    "E402",   # late imports
+    "E501",   # line length
+    "E721",   # type comparison
+    "E722",   # bare except
+    "F401",   # unused imports
+    "F841",   # unused local variables
     "UP031",  # percent format
-    "UP036",  # version blocks
-    # Bugbear — original code patterns
-    "B006",   # mutable default arguments
     "B007",   # unused loop variables
-    "B015",   # pointless comparison (intentional in tests)
-    "B020",   # loop variable overrides iterable
-    "B028",   # stacklevel in warnings
-    "B029",   # bare except
-    "B904",   # raise from
-    "B905",   # zip without strict= (original code)
-    # Simplify — keep original structure
-    "SIM102", # nested ifs
-    "SIM105", # try-except-pass
-    "SIM108", # ternary rewrites
-    "SIM110", # reimplemented builtins
-    "SIM114", # combined if branches
-    "SIM115", # context manager for open()
-    "SIM117", # nested with statements
-    "SIM201", # negated == (intentional in tests)
-    "SIM202", # negated != (intentional in tests)
-    "SIM211", # bool idioms
-    # Ruff-specific
-    "RUF001", # ambiguous unicode (intentional in tests)
-    "RUF005", # concatenation vs unpacking (original style)
-    "RUF012", # mutable class attributes (original parserinfo design)
+    "B015",   # pointless comparison (intentional)
+    "B905",   # zip without strict=
+    "SIM201", # negated ==
+    "SIM202", # negated !=
+    "RUF001", # ambiguous unicode (Cyrillic test data)
+    "RUF005", # concatenation vs unpacking
+    "RUF012", # mutable class attributes
     "RUF059", # unpacked unused variables
 ]
+# Benchmarks use uppercase constants matching dateutil API
+"benchmarks/*" = ["N806"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["dateutil"]
