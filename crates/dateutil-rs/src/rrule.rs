@@ -2042,6 +2042,788 @@ mod tests {
         assert_eq!(it.next(), Some(dt(2020, 1, 2, 0, 0, 0)));
         assert_eq!(it.next(), Some(dt(2020, 1, 3, 0, 0, 0)));
     }
+
+    // -----------------------------------------------------------------------
+    // RRuleBuilder tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_builder_basic() {
+        let rule = RRuleBuilder::new(DAILY)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .build()
+            .unwrap();
+        assert_eq!(rule.all().len(), 3);
+    }
+
+    #[test]
+    fn test_builder_all_methods() {
+        let rule = RRuleBuilder::new(MONTHLY)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .interval(2)
+            .wkst(0)
+            .count(3)
+            .until(dt(2021, 12, 31, 0, 0, 0))
+            .bysetpos(vec![1])
+            .bymonth(vec![1, 6])
+            .bymonthday(vec![15])
+            .byyearday(vec![1])
+            .byeaster(vec![0])
+            .byweekno(vec![1])
+            .byweekday(vec![Weekday::new(0, None)])
+            .byhour(vec![9])
+            .byminute(vec![0])
+            .bysecond(vec![0])
+            .build()
+            .unwrap();
+        // Just verify it builds without error
+        assert!(rule.is_finite());
+    }
+
+    // -----------------------------------------------------------------------
+    // Display tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_display_daily_count() {
+        let rule = RRule::new(
+            DAILY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("FREQ=DAILY"));
+        assert!(s.contains("COUNT=3"));
+        assert!(s.contains("DTSTART:20200101T000000"));
+    }
+
+    #[test]
+    fn test_display_weekly_interval_wkst() {
+        let rule = RRule::new(
+            WEEKLY,
+            Some(dt(2020, 1, 6, 0, 0, 0)),
+            2, Some(6), Some(3), None,  // wkst=SU
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("FREQ=WEEKLY"));
+        assert!(s.contains("INTERVAL=2"));
+        assert!(s.contains("WKST=SU"));
+    }
+
+    #[test]
+    fn test_display_monthly_until() {
+        let rule = RRule::new(
+            MONTHLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, None, Some(dt(2020, 6, 1, 0, 0, 0)),
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("UNTIL=20200601T000000"));
+    }
+
+    #[test]
+    fn test_display_with_bymonth() {
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None, Some(vec![1, 6]), Some(vec![15]), None, None, None, None, None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYMONTH=1,6"));
+        assert!(s.contains("BYMONTHDAY=15"));
+    }
+
+    #[test]
+    fn test_display_with_byday_nth() {
+        let rule = RRule::new(
+            MONTHLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None, None, None, None, None, None,
+            Some(vec![Weekday::new(4, Some(1))]), // FR(+1)
+            None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYDAY=+1FR"));
+    }
+
+    #[test]
+    fn test_display_with_byhour_byminute_bysecond() {
+        let rule = RRule::new(
+            DAILY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(1), None,
+            None, None, None, None, None, None, None,
+            Some(vec![9, 17]),
+            Some(vec![0, 30]),
+            Some(vec![0]),
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYHOUR=9,17"));
+        assert!(s.contains("BYMINUTE=0,30"));
+        assert!(s.contains("BYSECOND=0"));
+    }
+
+    #[test]
+    fn test_display_with_byweekno() {
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(2), None,
+            None, None, None, None, None,
+            Some(vec![1, 52]),
+            Some(vec![Weekday::new(0, None)]), // MO
+            None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYWEEKNO=1,52"));
+    }
+
+    #[test]
+    fn test_display_with_byyearday() {
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(2), None,
+            None, None, None,
+            Some(vec![1, 100]),
+            None, None, None, None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYYEARDAY=1,100"));
+    }
+
+    #[test]
+    fn test_display_with_byeaster() {
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(2), None,
+            None, None, None, None,
+            Some(vec![0, -2]),
+            None, None, None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYEASTER=-2,0"));
+    }
+
+    #[test]
+    fn test_display_with_bysetpos() {
+        let rule = RRule::new(
+            MONTHLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(2), None,
+            Some(vec![-1]),
+            None, None, None, None, None,
+            Some(vec![
+                Weekday::new(0, None),
+                Weekday::new(1, None),
+                Weekday::new(2, None),
+                Weekday::new(3, None),
+                Weekday::new(4, None),
+            ]),
+            None, None, None,
+        ).unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYSETPOS=-1"));
+    }
+
+    // -----------------------------------------------------------------------
+    // RRule before / after / between / count_all
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_rrule_before() {
+        let rule = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(10), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        assert_eq!(rule.before(dt(2020, 1, 5, 0, 0, 0), false), Some(dt(2020, 1, 4, 0, 0, 0)));
+        assert_eq!(rule.before(dt(2020, 1, 5, 0, 0, 0), true), Some(dt(2020, 1, 5, 0, 0, 0)));
+    }
+
+    #[test]
+    fn test_rrule_after() {
+        let rule = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(10), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        assert_eq!(rule.after(dt(2020, 1, 5, 0, 0, 0), false), Some(dt(2020, 1, 6, 0, 0, 0)));
+        assert_eq!(rule.after(dt(2020, 1, 5, 0, 0, 0), true), Some(dt(2020, 1, 5, 0, 0, 0)));
+    }
+
+    #[test]
+    fn test_rrule_between_inclusive() {
+        let rule = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(10), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let results = rule.between(dt(2020, 1, 3, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0), true);
+        assert_eq!(results, vec![
+            dt(2020, 1, 3, 0, 0, 0),
+            dt(2020, 1, 4, 0, 0, 0),
+            dt(2020, 1, 5, 0, 0, 0),
+            dt(2020, 1, 6, 0, 0, 0),
+        ]);
+    }
+
+    #[test]
+    fn test_rrule_between_exclusive() {
+        let rule = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(10), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let results = rule.between(dt(2020, 1, 3, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0), false);
+        assert_eq!(results, vec![
+            dt(2020, 1, 4, 0, 0, 0),
+            dt(2020, 1, 5, 0, 0, 0),
+        ]);
+    }
+
+    #[test]
+    fn test_rrule_count_all() {
+        let rule = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(7), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        assert_eq!(rule.count_all(), 7);
+    }
+
+    // -----------------------------------------------------------------------
+    // RRuleSet: rdate, before, after, between, count_all
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_rruleset_rdate() {
+        let mut rset = RRuleSet::new();
+        rset.rdate(dt(2020, 3, 15, 0, 0, 0));
+        rset.rdate(dt(2020, 1, 1, 0, 0, 0));
+        rset.rdate(dt(2020, 6, 20, 0, 0, 0));
+        let results = rset.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 0, 0, 0),
+            dt(2020, 3, 15, 0, 0, 0),
+            dt(2020, 6, 20, 0, 0, 0),
+        ]);
+    }
+
+    #[test]
+    fn test_rruleset_before_after() {
+        let r1 = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(10), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let mut rset = RRuleSet::new();
+        rset.rrule(r1);
+        assert_eq!(rset.before(dt(2020, 1, 5, 0, 0, 0), false), Some(dt(2020, 1, 4, 0, 0, 0)));
+        assert_eq!(rset.after(dt(2020, 1, 5, 0, 0, 0), false), Some(dt(2020, 1, 6, 0, 0, 0)));
+    }
+
+    #[test]
+    fn test_rruleset_between() {
+        let r1 = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(10), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let mut rset = RRuleSet::new();
+        rset.rrule(r1);
+        let inc = rset.between(dt(2020, 1, 3, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0), true);
+        assert_eq!(inc.len(), 4);
+        let exc = rset.between(dt(2020, 1, 3, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0), false);
+        assert_eq!(exc.len(), 2);
+    }
+
+    #[test]
+    fn test_rruleset_count_all() {
+        let r1 = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(5), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let mut rset = RRuleSet::new();
+        rset.rrule(r1);
+        assert_eq!(rset.count_all(), 5);
+    }
+
+    #[test]
+    fn test_rruleset_default() {
+        let rset = RRuleSet::default();
+        assert_eq!(rset.all().len(), 0);
+    }
+
+    #[test]
+    fn test_rruleset_exrule() {
+        let r1 = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None, Some(5), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        // Exclude odd days
+        let exr = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 2, None, Some(3), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let mut rset = RRuleSet::new();
+        rset.rrule(r1);
+        rset.exrule(exr);
+        let results = rset.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 2, 0, 0, 0),
+            dt(2020, 1, 4, 0, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // rrulestr parsing
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_rrulestr_single_no_prefix() {
+        // Single RRULE without "RRULE:" prefix
+        let result = rrulestr(
+            "FREQ=WEEKLY;COUNT=3",
+            Some(dt(2020, 1, 6, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        assert_eq!(result.all().len(), 3);
+    }
+
+    #[test]
+    fn test_rrulestr_forceset() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=3",
+            None, true, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates.len(), 3);
+    }
+
+    #[test]
+    fn test_rrulestr_compatible() {
+        // compatible mode: forceset + unfold + rdate(dtstart)
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=3",
+            None, false, true, false,
+        ).unwrap();
+        let dates = result.all();
+        // dtstart is added as rdate in compatible mode, but deduped
+        assert_eq!(dates.len(), 3);
+    }
+
+    #[test]
+    fn test_rrulestr_with_exdate() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=5\nEXDATE:20200103T000000",
+            None, true, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates.len(), 4);
+        assert!(!dates.contains(&dt(2020, 1, 3, 0, 0, 0)));
+    }
+
+    #[test]
+    fn test_rrulestr_with_rdate() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=2\nRDATE:20200115T000000",
+            None, true, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates.len(), 3);
+        assert!(dates.contains(&dt(2020, 1, 15, 0, 0, 0)));
+    }
+
+    #[test]
+    fn test_rrulestr_with_exrule() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=5\nEXRULE:FREQ=DAILY;INTERVAL=2;COUNT=3",
+            None, true, false, false,
+        ).unwrap();
+        let dates = result.all();
+        // Exrule removes Jan 1, 3, 5
+        assert_eq!(dates, vec![dt(2020, 1, 2, 0, 0, 0), dt(2020, 1, 4, 0, 0, 0)]);
+    }
+
+    #[test]
+    fn test_rrulestr_unfold() {
+        // Line continuation (folding) — leading space continues previous line
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;\n COUNT=3",
+            None, true, false, true,
+        ).unwrap();
+        assert_eq!(result.all().len(), 3);
+    }
+
+    #[test]
+    fn test_rrulestr_empty_error() {
+        assert!(rrulestr("", None, false, false, false).is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_no_freq_error() {
+        assert!(rrulestr("COUNT=3", Some(dt(2020, 1, 1, 0, 0, 0)), false, false, false).is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_unknown_property() {
+        assert!(rrulestr(
+            "DTSTART:20200101T000000\nFOOBAR:test",
+            None, true, false, false,
+        ).is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_invalid_freq() {
+        assert!(rrulestr(
+            "FREQ=FOOBAR;COUNT=3",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_with_wkst() {
+        let result = rrulestr(
+            "FREQ=WEEKLY;COUNT=2;WKST=SU",
+            Some(dt(2020, 1, 5, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        assert_eq!(result.all().len(), 2);
+    }
+
+    #[test]
+    fn test_rrulestr_with_until() {
+        let result = rrulestr(
+            "FREQ=DAILY;UNTIL=20200105T000000",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        assert_eq!(result.all().len(), 5);
+    }
+
+    #[test]
+    fn test_rrulestr_byday_formats() {
+        // +1MO format
+        let result = rrulestr(
+            "FREQ=MONTHLY;COUNT=2;BYDAY=+1MO",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates[0], dt(2020, 1, 6, 0, 0, 0)); // first Monday of Jan 2020
+    }
+
+    #[test]
+    fn test_rrulestr_byday_plain() {
+        let result = rrulestr(
+            "FREQ=WEEKLY;COUNT=3;BYDAY=MO,WE,FR",
+            Some(dt(2020, 1, 6, 0, 0, 0)), // Monday
+            false, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates.len(), 3);
+    }
+
+    #[test]
+    fn test_rrulestr_bymonth_bymonthday() {
+        let result = rrulestr(
+            "FREQ=YEARLY;COUNT=2;BYMONTH=3;BYMONTHDAY=15",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates, vec![dt(2020, 3, 15, 0, 0, 0), dt(2021, 3, 15, 0, 0, 0)]);
+    }
+
+    #[test]
+    fn test_rrulestr_byhour_byminute_bysecond() {
+        let result = rrulestr(
+            "FREQ=DAILY;COUNT=1;BYHOUR=9;BYMINUTE=30;BYSECOND=15",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates, vec![dt(2020, 1, 1, 9, 30, 15)]);
+    }
+
+    #[test]
+    fn test_rrulestr_byyearday() {
+        let result = rrulestr(
+            "FREQ=YEARLY;COUNT=2;BYYEARDAY=1",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates, vec![dt(2020, 1, 1, 0, 0, 0), dt(2021, 1, 1, 0, 0, 0)]);
+    }
+
+    #[test]
+    fn test_rrulestr_bysetpos() {
+        let result = rrulestr(
+            "FREQ=MONTHLY;COUNT=2;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates[0], dt(2020, 1, 31, 0, 0, 0)); // last weekday of Jan 2020
+    }
+
+    #[test]
+    fn test_rrulestr_byweekno() {
+        let result = rrulestr(
+            "FREQ=YEARLY;COUNT=2;BYWEEKNO=1;BYDAY=MO",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates.len(), 2);
+    }
+
+    #[test]
+    fn test_rrulestr_byeaster() {
+        let result = rrulestr(
+            "FREQ=YEARLY;COUNT=2;BYEASTER=0",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        let dates = result.all();
+        assert_eq!(dates[0], dt(2020, 4, 12, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_rrulestr_multiple_rrules() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=2\nRRULE:FREQ=DAILY;COUNT=2;INTERVAL=3",
+            None, true, false, false,
+        ).unwrap();
+        let dates = result.all();
+        // Rule 1: Jan 1, 2. Rule 2: Jan 1, 4. Merged+deduped: Jan 1, 2, 4
+        assert_eq!(dates, vec![
+            dt(2020, 1, 1, 0, 0, 0),
+            dt(2020, 1, 2, 0, 0, 0),
+            dt(2020, 1, 4, 0, 0, 0),
+        ]);
+    }
+
+    #[test]
+    fn test_rrulestr_result_all() {
+        let result = rrulestr(
+            "FREQ=DAILY;COUNT=3",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false, false, false,
+        ).unwrap();
+        // RRuleStrResult::Single.all()
+        assert_eq!(result.all().len(), 3);
+
+        let result2 = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=3",
+            None, true, false, false,
+        ).unwrap();
+        // RRuleStrResult::Set.all()
+        assert_eq!(result2.all().len(), 3);
+    }
+
+    // -----------------------------------------------------------------------
+    // construct_byset / mod_distance
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_construct_byset_basic() {
+        let result = construct_byset(0, &[0, 6, 12, 18], 24, 6).unwrap();
+        assert_eq!(result, vec![0, 6, 12, 18]);
+    }
+
+    #[test]
+    fn test_construct_byset_filtered() {
+        let result = construct_byset(0, &[0, 6, 12, 18], 24, 8).unwrap();
+        // gcd(8,24) = 8, only values where (val - 0) % 8 == 0
+        assert_eq!(result, vec![0]);
+    }
+
+    #[test]
+    fn test_construct_byset_empty_error() {
+        let result = construct_byset(1, &[0], 24, 8);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mod_distance_basic() {
+        let result = mod_distance(0, &[0, 6, 12, 18], 24, 6);
+        assert!(result.is_some());
+        let (acc, val) = result.unwrap();
+        assert_eq!(val, 6);
+        assert_eq!(acc, 0);
+    }
+
+    #[test]
+    fn test_mod_distance_wraps() {
+        let result = mod_distance(18, &[0, 6, 12, 18], 24, 6);
+        assert!(result.is_some());
+        let (acc, val) = result.unwrap();
+        assert_eq!(val, 0);
+        assert_eq!(acc, 1); // wrapped around
+    }
+
+    // -----------------------------------------------------------------------
+    // Error cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_invalid_frequency() {
+        let result = RRule::new(
+            7, // invalid freq
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(1), None,
+            None, None, None, None, None, None, None, None, None, None,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rrule_error_display() {
+        assert!(format!("{}", RRuleError::InvalidBySetPos).contains("bysetpos"));
+        assert!(format!("{}", RRuleError::EmptyBySet).contains("empty set"));
+        assert!(format!("{}", RRuleError::WeekdayNZero).contains("n==0"));
+        assert!(format!("{}", RRuleError::ValueError("test".into())).contains("test"));
+        assert!(format!("{}", RRuleError::UntilTzMismatch).contains("UTC"));
+        assert!(format!("{}", RRuleError::EmptyHourRule).contains("byhour"));
+        assert!(format!("{}", RRuleError::EmptyMinuteRule).contains("byminute"));
+    }
+
+    #[test]
+    fn test_parse_rfc_datetime_z_suffix() {
+        assert_eq!(
+            parse_rfc_datetime("20200101T120000Z"),
+            Some(dt(2020, 1, 1, 12, 0, 0))
+        );
+    }
+
+    #[test]
+    fn test_parse_rfc_datetime_invalid() {
+        assert_eq!(parse_rfc_datetime("invalid"), None);
+        assert_eq!(parse_rfc_datetime("2020010"), None); // 7 chars
+    }
+
+    #[test]
+    fn test_parse_rfc_datetime_date_only() {
+        assert_eq!(
+            parse_rfc_datetime("20200315"),
+            Some(dt(2020, 3, 15, 0, 0, 0))
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // negative bymonthday
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_negative_bymonthday() {
+        let rule = RRule::new(
+            MONTHLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None, None, Some(vec![-1]), None, None, None, None, None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 31, 0, 0, 0),
+            dt(2020, 2, 29, 0, 0, 0), // leap year
+            dt(2020, 3, 31, 0, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // RRule with bynweekday for YEARLY without bymonth
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_yearly_bynweekday_no_bymonth() {
+        // First Monday of the year
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(2), None,
+            None, None, None, None, None, None,
+            Some(vec![Weekday::new(0, Some(1))]), // MO(+1)
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0], dt(2020, 1, 6, 0, 0, 0));
+    }
+
+    // -----------------------------------------------------------------------
+    // Hourly with byhour
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_hourly_with_byhour() {
+        let rule = RRule::new(
+            HOURLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(4), None,
+            None, None, None, None, None, None, None,
+            Some(vec![9, 17]),
+            None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 9, 0, 0),
+            dt(2020, 1, 1, 17, 0, 0),
+            dt(2020, 1, 2, 9, 0, 0),
+            dt(2020, 1, 2, 17, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Minutely with byminute + byhour
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_minutely_with_byminute() {
+        let rule = RRule::new(
+            MINUTELY,
+            Some(dt(2020, 1, 1, 9, 0, 0)),
+            15, None, Some(4), None,
+            None, None, None, None, None, None, None,
+            Some(vec![9]),
+            Some(vec![0, 15, 30, 45]),
+            None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 9, 0, 0),
+            dt(2020, 1, 1, 9, 15, 0),
+            dt(2020, 1, 1, 9, 30, 0),
+            dt(2020, 1, 1, 9, 45, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Secondly with bysecond
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_secondly_with_bysecond() {
+        let rule = RRule::new(
+            SECONDLY,
+            Some(dt(2020, 1, 1, 9, 0, 0)),
+            15, None, Some(4), None,
+            None, None, None, None, None, None, None,
+            None,
+            None,
+            Some(vec![0, 15, 30, 45]),
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 9, 0, 0),
+            dt(2020, 1, 1, 9, 0, 15),
+            dt(2020, 1, 1, 9, 0, 30),
+            dt(2020, 1, 1, 9, 0, 45),
+        ]);
+    }
 }
 
 // ===========================================================================

@@ -1206,4 +1206,358 @@ mod tests {
             .unwrap();
         assert!(!datetime_ambiguous(dt, &tz));
     }
+
+    // --- Tz::Offset fromutc ---
+
+    #[test]
+    fn test_tz_offset_fromutc() {
+        let tz = Tz::Offset(TzOffset::new(Some("EST".into()), -18000));
+        let utc_dt = NaiveDate::from_ymd_opt(2020, 1, 1)
+            .unwrap()
+            .and_hms_opt(17, 0, 0)
+            .unwrap();
+        let (wall, _fold) = tz.fromutc(utc_dt);
+        assert_eq!(wall, NaiveDate::from_ymd_opt(2020, 1, 1)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap());
+    }
+
+    // --- Tz::Range fromutc ---
+
+    #[test]
+    fn test_tz_range_fromutc() {
+        let tzrange = TzRange::new(
+            "EST".into(),
+            Some(Duration::seconds(-18000)),
+            Some("EDT".into()),
+            Some(Duration::seconds(-14400)),
+            None,
+            None,
+        );
+        let tz = Tz::Range(tzrange);
+        let utc_dt = NaiveDate::from_ymd_opt(2020, 7, 15)
+            .unwrap()
+            .and_hms_opt(17, 0, 0)
+            .unwrap();
+        let (wall, _fold) = tz.fromutc(utc_dt);
+        // EDT offset is -4h, so 17:00 UTC → 13:00 EDT
+        assert_eq!(wall, NaiveDate::from_ymd_opt(2020, 7, 15)
+            .unwrap()
+            .and_hms_opt(13, 0, 0)
+            .unwrap());
+    }
+
+    // --- Tz::Str fromutc ---
+
+    #[test]
+    fn test_tz_str_fromutc() {
+        let tzstr = TzStr::parse("EST5EDT,M3.2.0/2,M11.1.0/2", false).unwrap();
+        let tz = Tz::Str(tzstr);
+        let utc_dt = NaiveDate::from_ymd_opt(2020, 7, 15)
+            .unwrap()
+            .and_hms_opt(17, 0, 0)
+            .unwrap();
+        let (wall, _fold) = tz.fromutc(utc_dt);
+        // EDT offset is -4h, so 17:00 UTC → 13:00 EDT
+        assert_eq!(wall, NaiveDate::from_ymd_opt(2020, 7, 15)
+            .unwrap()
+            .and_hms_opt(13, 0, 0)
+            .unwrap());
+    }
+
+    // --- Tz::File fromutc ---
+
+    #[test]
+    fn test_tz_file_fromutc() {
+        if let Some(tz) = gettz(Some("America/New_York")) {
+            let utc_dt = NaiveDate::from_ymd_opt(2020, 7, 15)
+                .unwrap()
+                .and_hms_opt(17, 0, 0)
+                .unwrap();
+            let (wall, _fold) = tz.fromutc(utc_dt);
+            // EDT: -4h, so 17:00 UTC → 13:00 EDT
+            assert_eq!(wall, NaiveDate::from_ymd_opt(2020, 7, 15)
+                .unwrap()
+                .and_hms_opt(13, 0, 0)
+                .unwrap());
+        }
+    }
+
+    // --- Tz::Range is_ambiguous ---
+
+    #[test]
+    fn test_tz_range_is_ambiguous() {
+        let tzrange = TzRange::new(
+            "EST".into(),
+            Some(Duration::seconds(-18000)),
+            Some("EDT".into()),
+            Some(Duration::seconds(-14400)),
+            None,
+            None,
+        );
+        let tz = Tz::Range(tzrange);
+        // Normal time — not ambiguous
+        let normal = NaiveDate::from_ymd_opt(2020, 7, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert!(!tz.is_ambiguous(normal));
+    }
+
+    // --- Tz::Str is_ambiguous ---
+
+    #[test]
+    fn test_tz_str_is_ambiguous() {
+        let tzstr = TzStr::parse("EST5EDT,M3.2.0/2,M11.1.0/2", false).unwrap();
+        let tz = Tz::Str(tzstr);
+        let normal = NaiveDate::from_ymd_opt(2020, 7, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert!(!tz.is_ambiguous(normal));
+    }
+
+    // --- datetime_exists with DST gap ---
+
+    #[test]
+    fn test_datetime_exists_dst_gap() {
+        // Spring forward: March 8, 2020 at 2:30 AM doesn't exist in America/New_York
+        if let Some(tz) = gettz(Some("America/New_York")) {
+            let gap_dt = NaiveDate::from_ymd_opt(2020, 3, 8)
+                .unwrap()
+                .and_hms_opt(2, 30, 0)
+                .unwrap();
+            assert!(!datetime_exists(gap_dt, &tz));
+        }
+    }
+
+    // --- datetime_ambiguous with DST overlap ---
+
+    #[test]
+    fn test_datetime_ambiguous_dst_overlap() {
+        // Fall back: Nov 1, 2020 at 1:30 AM is ambiguous in America/New_York
+        if let Some(tz) = gettz(Some("America/New_York")) {
+            let overlap_dt = NaiveDate::from_ymd_opt(2020, 11, 1)
+                .unwrap()
+                .and_hms_opt(1, 30, 0)
+                .unwrap();
+            assert!(datetime_ambiguous(overlap_dt, &tz));
+        }
+    }
+
+    // --- resolve_imaginary with DST gap ---
+
+    #[test]
+    fn test_resolve_imaginary_dst_gap() {
+        // 2:30 AM doesn't exist on spring-forward day
+        if let Some(tz) = gettz(Some("America/New_York")) {
+            let gap_dt = NaiveDate::from_ymd_opt(2020, 3, 8)
+                .unwrap()
+                .and_hms_opt(2, 30, 0)
+                .unwrap();
+            let resolved = resolve_imaginary(gap_dt, &tz);
+            // Resolved time must be different from the gap time
+            assert_ne!(resolved, gap_dt);
+            // Resolved time must actually exist in the timezone
+            assert!(datetime_exists(resolved, &tz));
+        }
+    }
+
+    // --- datetime_exists / datetime_ambiguous with TzStr ---
+
+    #[test]
+    fn test_datetime_exists_tzstr() {
+        let tzstr = TzStr::parse("EST5EDT,M3.2.0/2,M11.1.0/2", false).unwrap();
+        let tz = Tz::Str(tzstr);
+        // Spring-forward gap: Mar 8, 2020 at 2:30 AM
+        let gap_dt = NaiveDate::from_ymd_opt(2020, 3, 8)
+            .unwrap()
+            .and_hms_opt(2, 30, 0)
+            .unwrap();
+        assert!(!datetime_exists(gap_dt, &tz));
+    }
+
+    #[test]
+    fn test_datetime_ambiguous_tzstr() {
+        let tzstr = TzStr::parse("EST5EDT,M3.2.0/2,M11.1.0/2", false).unwrap();
+        let tz = Tz::Str(tzstr);
+        // Fall-back overlap: Nov 1, 2020 at 1:30 AM
+        let overlap_dt = NaiveDate::from_ymd_opt(2020, 11, 1)
+            .unwrap()
+            .and_hms_opt(1, 30, 0)
+            .unwrap();
+        assert!(datetime_ambiguous(overlap_dt, &tz));
+    }
+
+    // --- resolve_imaginary with TzStr ---
+
+    #[test]
+    fn test_resolve_imaginary_tzstr() {
+        let tzstr = TzStr::parse("EST5EDT,M3.2.0/2,M11.1.0/2", false).unwrap();
+        let tz = Tz::Str(tzstr);
+        let gap_dt = NaiveDate::from_ymd_opt(2020, 3, 8)
+            .unwrap()
+            .and_hms_opt(2, 30, 0)
+            .unwrap();
+        let resolved = resolve_imaginary(gap_dt, &tz);
+        assert_eq!(resolved, NaiveDate::from_ymd_opt(2020, 3, 8)
+            .unwrap()
+            .and_hms_opt(3, 30, 0)
+            .unwrap());
+    }
+
+    // --- Tz::Offset: datetime_exists, datetime_ambiguous, resolve_imaginary ---
+
+    #[test]
+    fn test_offset_always_exists_not_ambiguous() {
+        let tz = Tz::Offset(TzOffset::new(Some("JST".into()), 32400));
+        let dt = NaiveDate::from_ymd_opt(2020, 6, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert!(datetime_exists(dt, &tz));
+        assert!(!datetime_ambiguous(dt, &tz));
+        assert_eq!(resolve_imaginary(dt, &tz), dt);
+    }
+
+    // --- Tz enum dst for all variants ---
+
+    #[test]
+    fn test_tz_utc_dst() {
+        let tz = Tz::Utc(TzUtc::new());
+        let dt = NaiveDate::from_ymd_opt(2020, 6, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert_eq!(tz.dst(Some(dt), false), Some(Duration::zero()));
+    }
+
+    #[test]
+    fn test_tz_offset_dst() {
+        let tz = Tz::Offset(TzOffset::new(None, 3600));
+        let dt = NaiveDate::from_ymd_opt(2020, 6, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert_eq!(tz.dst(Some(dt), false), Some(Duration::zero()));
+    }
+
+    // --- gettz cache hit (second call should use cache) ---
+
+    #[test]
+    fn test_gettz_cache_hit() {
+        let tz1 = gettz(Some("UTC"));
+        let tz2 = gettz(Some("UTC"));
+        assert!(tz1.is_some());
+        assert!(tz2.is_some());
+    }
+
+    // --- Tz::File dst and tzname ---
+
+    #[test]
+    fn test_tz_file_dst_and_tzname() {
+        if let Some(tz) = gettz(Some("America/New_York")) {
+            let summer = NaiveDate::from_ymd_opt(2020, 7, 15)
+                .unwrap()
+                .and_hms_opt(12, 0, 0)
+                .unwrap();
+            // Summer: DST should be 1 hour
+            assert_eq!(tz.dst(Some(summer), false), Some(Duration::seconds(3600)));
+            assert_eq!(tz.tzname(Some(summer), false), Some("EDT".into()));
+
+            let winter = NaiveDate::from_ymd_opt(2020, 1, 15)
+                .unwrap()
+                .and_hms_opt(12, 0, 0)
+                .unwrap();
+            // Winter: DST should be 0
+            assert_eq!(tz.dst(Some(winter), false), Some(Duration::zero()));
+            assert_eq!(tz.tzname(Some(winter), false), Some("EST".into()));
+        }
+    }
+
+    // --- Tz::File is_ambiguous ---
+
+    #[test]
+    fn test_tz_file_is_ambiguous() {
+        if let Some(tz) = gettz(Some("America/New_York")) {
+            // Fall-back: Nov 1, 2020 at 1:30 AM
+            let overlap_dt = NaiveDate::from_ymd_opt(2020, 11, 1)
+                .unwrap()
+                .and_hms_opt(1, 30, 0)
+                .unwrap();
+            assert!(tz.is_ambiguous(overlap_dt));
+
+            // Normal time
+            let normal = NaiveDate::from_ymd_opt(2020, 7, 15)
+                .unwrap()
+                .and_hms_opt(12, 0, 0)
+                .unwrap();
+            assert!(!tz.is_ambiguous(normal));
+        }
+    }
+
+    // --- Tz::Range dst ---
+
+    #[test]
+    fn test_tz_range_dst_summer_and_winter() {
+        let tzrange = TzRange::new(
+            "EST".into(),
+            Some(Duration::seconds(-18000)),
+            Some("EDT".into()),
+            Some(Duration::seconds(-14400)),
+            None,
+            None,
+        );
+        let tz = Tz::Range(tzrange);
+        let winter = NaiveDate::from_ymd_opt(2020, 1, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert_eq!(tz.dst(Some(winter), false), Some(Duration::zero()));
+
+        let summer = NaiveDate::from_ymd_opt(2020, 7, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert_eq!(tz.dst(Some(summer), false), Some(Duration::seconds(3600)));
+    }
+
+    // --- Tz::Str dst ---
+
+    #[test]
+    fn test_tz_str_dst_summer() {
+        let tzstr = TzStr::parse("EST5EDT,M3.2.0/2,M11.1.0/2", false).unwrap();
+        let tz = Tz::Str(tzstr);
+        let summer = NaiveDate::from_ymd_opt(2020, 7, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert_eq!(tz.dst(Some(summer), false), Some(Duration::seconds(3600)));
+        assert_eq!(tz.tzname(Some(summer), false), Some("EDT".into()));
+    }
+
+    // --- Tz::Local is_ambiguous and dst ---
+
+    #[test]
+    fn test_tz_local_is_ambiguous() {
+        let tz = Tz::Local(TzLocal::new());
+        let dt = NaiveDate::from_ymd_opt(2020, 6, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        // Just verify it doesn't panic
+        let _ = tz.is_ambiguous(dt);
+    }
+
+    #[test]
+    fn test_tz_local_dst() {
+        let tz = Tz::Local(TzLocal::new());
+        let dt = NaiveDate::from_ymd_opt(2020, 6, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        // Just verify it returns Some
+        assert!(tz.dst(Some(dt), false).is_some());
+    }
 }

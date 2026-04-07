@@ -62,12 +62,12 @@ def default_tzinfo(
 class relativedelta:
     years: int
     months: int
-    days: float
+    days: int
     leapdays: int
-    hours: float
-    minutes: float
-    seconds: float
-    microseconds: float
+    hours: int
+    minutes: int
+    seconds: int
+    microseconds: int
     year: int | None
     month: int | None
     day: int | None
@@ -102,7 +102,7 @@ class relativedelta:
         microsecond: int | None = None,
     ) -> None: ...
     @property
-    def weeks(self) -> float: ...
+    def weeks(self) -> int: ...
     @weeks.setter
     def weeks(self, value: float) -> None: ...
     def normalized(self) -> Self: ...

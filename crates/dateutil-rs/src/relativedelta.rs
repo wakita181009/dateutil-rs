@@ -972,28 +972,28 @@ mod py {
             self.months
         }
         #[getter]
-        fn get_days(&self) -> f64 {
-            self.days
+        fn get_days(&self) -> i64 {
+            self.days as i64
         }
         #[getter]
         fn get_leapdays(&self) -> i32 {
             self.leapdays
         }
         #[getter]
-        fn get_hours(&self) -> f64 {
-            self.hours
+        fn get_hours(&self) -> i64 {
+            self.hours as i64
         }
         #[getter]
-        fn get_minutes(&self) -> f64 {
-            self.minutes
+        fn get_minutes(&self) -> i64 {
+            self.minutes as i64
         }
         #[getter]
-        fn get_seconds(&self) -> f64 {
-            self.seconds
+        fn get_seconds(&self) -> i64 {
+            self.seconds as i64
         }
         #[getter]
-        fn get_microseconds(&self) -> f64 {
-            self.microseconds
+        fn get_microseconds(&self) -> i64 {
+            self.microseconds as i64
         }
         #[getter]
         fn get_year(&self) -> Option<i32> {
@@ -1028,8 +1028,8 @@ mod py {
             self.weekday
         }
         #[getter]
-        fn get_weeks(&self) -> f64 {
-            self.weeks()
+        fn get_weeks(&self) -> i64 {
+            self.weeks() as i64
         }
         #[setter]
         fn set_weeks(&mut self, value: f64) {

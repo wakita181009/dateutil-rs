@@ -1050,4 +1050,368 @@ mod tests {
             ]
         );
     }
+
+    // -----------------------------------------------------------------------
+    // byweekno
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_yearly_byweekno() {
+        // Week 1 + Monday
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None, None, None, None, None,
+            Some(vec![1]),
+            Some(vec![Weekday::new(0, None)]), // MO
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 3);
+    }
+
+    #[test]
+    fn test_yearly_byweekno_negative() {
+        // Last week of year + Friday
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(2), None,
+            None, None, None, None, None,
+            Some(vec![-1]),
+            Some(vec![Weekday::new(4, None)]), // FR
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // byyearday
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_yearly_byyearday() {
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None, None, None,
+            Some(vec![1, 100, -1]), // Jan 1, Apr 9 (leap), Dec 31
+            None, None, None, None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0], dt(2020, 1, 1, 0, 0, 0));
+        assert_eq!(results[1], dt(2020, 4, 9, 0, 0, 0)); // day 100 in leap year
+        assert_eq!(results[2], dt(2020, 12, 31, 0, 0, 0)); // day -1
+    }
+
+    // -----------------------------------------------------------------------
+    // Monthly with negative bymonthday
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_monthly_negative_bymonthday() {
+        let rule = RRule::new(
+            MONTHLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None, None,
+            Some(vec![-1]),
+            None, None, None, None, None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 31, 0, 0, 0),
+            dt(2020, 2, 29, 0, 0, 0),
+            dt(2020, 3, 31, 0, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Hourly with byhour filtering
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_hourly_with_byhour() {
+        let rule = RRule::new(
+            HOURLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(4), None,
+            None, None, None, None, None, None, None,
+            Some(vec![9, 17]),
+            None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 9, 0, 0),
+            dt(2020, 1, 1, 17, 0, 0),
+            dt(2020, 1, 2, 9, 0, 0),
+            dt(2020, 1, 2, 17, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Minutely with byminute and byhour
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_minutely_with_byminute_byhour() {
+        let rule = RRule::new(
+            MINUTELY,
+            Some(dt(2020, 1, 1, 9, 0, 0)),
+            15, None, Some(4), None,
+            None, None, None, None, None, None, None,
+            Some(vec![9]),
+            Some(vec![0, 15, 30, 45]),
+            None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 9, 0, 0),
+            dt(2020, 1, 1, 9, 15, 0),
+            dt(2020, 1, 1, 9, 30, 0),
+            dt(2020, 1, 1, 9, 45, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Secondly with bysecond and byhour/byminute
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_secondly_with_bysecond() {
+        let rule = RRule::new(
+            SECONDLY,
+            Some(dt(2020, 1, 1, 9, 0, 0)),
+            15, None, Some(4), None,
+            None, None, None, None, None, None, None,
+            None, None,
+            Some(vec![0, 15, 30, 45]),
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 9, 0, 0),
+            dt(2020, 1, 1, 9, 0, 15),
+            dt(2020, 1, 1, 9, 0, 30),
+            dt(2020, 1, 1, 9, 0, 45),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Yearly bynweekday without bymonth (whole-year range)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_yearly_bynweekday_whole_year() {
+        // First Monday of the year
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(2), None,
+            None, None, None, None, None, None,
+            Some(vec![Weekday::new(0, Some(1))]), // MO(+1)
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results[0], dt(2020, 1, 6, 0, 0, 0));
+        assert_eq!(results[1], dt(2021, 1, 4, 0, 0, 0));
+    }
+
+    // -----------------------------------------------------------------------
+    // Yearly bynweekday with bymonth (specific month ranges)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_yearly_bynweekday_with_bymonth() {
+        // Last Friday of March
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None,
+            Some(vec![3]), // March
+            None, None, None, None,
+            Some(vec![Weekday::new(4, Some(-1))]), // FR(-1)
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results[0], dt(2020, 3, 27, 0, 0, 0));
+        assert_eq!(results[1], dt(2021, 3, 26, 0, 0, 0));
+        assert_eq!(results[2], dt(2022, 3, 25, 0, 0, 0));
+    }
+
+    // -----------------------------------------------------------------------
+    // Monthly bynweekday (negative N)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_monthly_last_friday() {
+        let rule = RRule::new(
+            MONTHLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            1, None, Some(3), None,
+            None, None, None, None, None, None,
+            Some(vec![Weekday::new(4, Some(-1))]), // FR(-1)
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 31, 0, 0, 0),
+            dt(2020, 2, 28, 0, 0, 0),
+            dt(2020, 3, 27, 0, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Weekly with wkst (week start day) variation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_weekly_with_wkst_sunday() {
+        let rule = RRule::new(
+            WEEKLY,
+            Some(dt(2020, 1, 1, 0, 0, 0)), // Wednesday
+            1, Some(6), Some(3), None, // wkst=SU
+            None, None, None, None, None, None,
+            Some(vec![Weekday::new(0, None), Weekday::new(2, None)]), // MO, WE
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 3);
+    }
+
+    // -----------------------------------------------------------------------
+    // Day overflow (month boundary crossing)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_daily_crosses_month() {
+        let rule = RRule::new(
+            DAILY,
+            Some(dt(2020, 1, 30, 0, 0, 0)),
+            1, None, Some(5), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 30, 0, 0, 0),
+            dt(2020, 1, 31, 0, 0, 0),
+            dt(2020, 2, 1, 0, 0, 0),
+            dt(2020, 2, 2, 0, 0, 0),
+            dt(2020, 2, 3, 0, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Hourly crossing day boundary
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_hourly_crosses_day() {
+        let rule = RRule::new(
+            HOURLY,
+            Some(dt(2020, 1, 1, 22, 0, 0)),
+            1, None, Some(5), None,
+            None, None, None, None, None, None, None,
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 22, 0, 0),
+            dt(2020, 1, 1, 23, 0, 0),
+            dt(2020, 1, 2, 0, 0, 0),
+            dt(2020, 1, 2, 1, 0, 0),
+            dt(2020, 1, 2, 2, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Minutely crossing hour boundary
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_minutely_crosses_hour() {
+        let rule = RRule::new(
+            MINUTELY,
+            Some(dt(2020, 1, 1, 9, 58, 0)),
+            1, None, Some(5), None,
+            None, None, None, None, None, None, None,
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 9, 58, 0),
+            dt(2020, 1, 1, 9, 59, 0),
+            dt(2020, 1, 1, 10, 0, 0),
+            dt(2020, 1, 1, 10, 1, 0),
+            dt(2020, 1, 1, 10, 2, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Secondly crossing minute boundary
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_secondly_crosses_minute() {
+        let rule = RRule::new(
+            SECONDLY,
+            Some(dt(2020, 1, 1, 9, 0, 58)),
+            1, None, Some(5), None,
+            None, None, None, None, None, None, None,
+            None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 1, 1, 9, 0, 58),
+            dt(2020, 1, 1, 9, 0, 59),
+            dt(2020, 1, 1, 9, 1, 0),
+            dt(2020, 1, 1, 9, 1, 1),
+            dt(2020, 1, 1, 9, 1, 2),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Monthly interval crossing year boundary
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_monthly_crosses_year() {
+        let rule = RRule::new(
+            MONTHLY,
+            Some(dt(2020, 11, 1, 0, 0, 0)),
+            1, None, Some(4), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 11, 1, 0, 0, 0),
+            dt(2020, 12, 1, 0, 0, 0),
+            dt(2021, 1, 1, 0, 0, 0),
+            dt(2021, 2, 1, 0, 0, 0),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Yearly interval
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_yearly_interval_2() {
+        let rule = RRule::new(
+            YEARLY,
+            Some(dt(2020, 6, 15, 0, 0, 0)),
+            2, None, Some(3), None,
+            None, None, None, None, None, None, None, None, None, None,
+        ).unwrap();
+        let results = rule.all();
+        assert_eq!(results, vec![
+            dt(2020, 6, 15, 0, 0, 0),
+            dt(2022, 6, 15, 0, 0, 0),
+            dt(2024, 6, 15, 0, 0, 0),
+        ]);
+    }
 }
