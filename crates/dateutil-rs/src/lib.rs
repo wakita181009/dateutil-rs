@@ -2,7 +2,6 @@ pub mod common;
 pub mod easter;
 pub mod parser;
 pub mod relativedelta;
-pub mod rrule;
 pub mod tz;
 pub mod utils;
 
@@ -43,9 +42,6 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Timezone classes and functions
     tz::python::register(m)?;
-
-    // RRule classes and functions
-    rrule::python::register(m)?;
 
     Ok(())
 }
