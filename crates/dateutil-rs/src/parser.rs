@@ -280,6 +280,37 @@ impl ParserInfo {
         }
     }
 
+    /// Build a `ParserInfo` from pre-built lookup tables (received from Python).
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_config(
+        dayfirst: bool,
+        yearfirst: bool,
+        jump: HashMap<String, usize>,
+        weekdays: HashMap<String, usize>,
+        months: HashMap<String, usize>,
+        hms: HashMap<String, usize>,
+        ampm: HashMap<String, usize>,
+        utczone: HashMap<String, usize>,
+        pertain: HashMap<String, usize>,
+        tzoffset_map: HashMap<String, i32>,
+    ) -> Self {
+        let now_year = chrono::Local::now().year();
+        Self {
+            dayfirst,
+            yearfirst,
+            jump,
+            weekdays,
+            months,
+            hms,
+            ampm,
+            utczone,
+            pertain,
+            tzoffset_map,
+            year: now_year,
+            century: now_year / 100 * 100,
+        }
+    }
+
     fn convert_list(lst: &[&[&str]]) -> HashMap<String, usize> {
         let mut m = HashMap::new();
         for (i, variants) in lst.iter().enumerate() {
@@ -1326,9 +1357,49 @@ pub mod python {
     use super::*;
     use pyo3::exceptions::PyValueError;
     use pyo3::prelude::*;
-    use pyo3::types::{PyDateAccess, PyDateTime, PyTimeAccess, PyTuple, PyTzInfo};
+    use pyo3::types::{PyDateAccess, PyDateTime, PyDict, PyTimeAccess, PyTuple, PyTzInfo};
 
     pyo3::create_exception!(_native, ParserErrorPy, pyo3::exceptions::PyValueError);
+
+    // ---- helpers: parserinfo config extraction ----
+
+    fn extract_str_usize_map(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<HashMap<String, usize>> {
+        let obj = dict
+            .get_item(key)?
+            .ok_or_else(|| PyValueError::new_err(format!("parserinfo_config missing key: {key}")))?;
+        obj.extract::<HashMap<String, usize>>()
+    }
+
+    fn extract_str_i32_map(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<HashMap<String, i32>> {
+        let obj = dict
+            .get_item(key)?
+            .ok_or_else(|| PyValueError::new_err(format!("parserinfo_config missing key: {key}")))?;
+        obj.extract::<HashMap<String, i32>>()
+    }
+
+    fn parser_info_from_py_config(config: &Bound<'_, PyDict>) -> PyResult<ParserInfo> {
+        let dayfirst = config
+            .get_item("dayfirst")?
+            .ok_or_else(|| PyValueError::new_err("parserinfo_config missing key: dayfirst"))?
+            .extract::<bool>()?;
+        let yearfirst = config
+            .get_item("yearfirst")?
+            .ok_or_else(|| PyValueError::new_err("parserinfo_config missing key: yearfirst"))?
+            .extract::<bool>()?;
+
+        Ok(ParserInfo::from_config(
+            dayfirst,
+            yearfirst,
+            extract_str_usize_map(config, "jump")?,
+            extract_str_usize_map(config, "weekdays")?,
+            extract_str_usize_map(config, "months")?,
+            extract_str_usize_map(config, "hms")?,
+            extract_str_usize_map(config, "ampm")?,
+            extract_str_usize_map(config, "utczone")?,
+            extract_str_usize_map(config, "pertain")?,
+            extract_str_i32_map(config, "tzoffset")?,
+        ))
+    }
 
     // ---- helpers ----
 
@@ -1397,6 +1468,7 @@ pub mod python {
     #[pyo3(name = "parse", signature = (
         timestr,
         *,
+        parserinfo_config = None,
         default = None,
         ignoretz = false,
         tzinfos = None,
@@ -1408,6 +1480,7 @@ pub mod python {
     pub fn parse_py<'py>(
         py: Python<'py>,
         timestr: &str,
+        parserinfo_config: Option<&Bound<'_, PyDict>>,
         default: Option<&Bound<'_, PyDateTime>>,
         ignoretz: bool,
         tzinfos: Option<Bound<'py, pyo3::PyAny>>,
@@ -1438,7 +1511,11 @@ pub mod python {
             NaiveDateTime::new(now.date(), NaiveTime::from_hms_opt(0, 0, 0).unwrap())
         };
 
-        let parser = Parser::default();
+        let parser = if let Some(config) = parserinfo_config {
+            Parser::new(parser_info_from_py_config(config)?)
+        } else {
+            Parser::default()
+        };
         let output = parser
             .parse(
                 timestr,
