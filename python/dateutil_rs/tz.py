@@ -7,7 +7,7 @@ All classes inherit from datetime.tzinfo so they work with Python's datetime.
 from __future__ import annotations
 
 import datetime
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from dateutil_rs._native import (
     _TzFile,
@@ -195,6 +195,9 @@ class tzoffset(datetime.tzinfo):
 class tzfile(datetime.tzinfo):
     """Timezone loaded from a TZif binary file."""
 
+    _inner: _TzFile
+    _filename: str
+
     def __init__(self, fileobj: str | Any, filename: str | None = None) -> None:
         super().__init__()
         if isinstance(fileobj, str):
@@ -217,6 +220,8 @@ class tzfile(datetime.tzinfo):
         return self._inner.tzname(dt)
 
     def is_ambiguous(self, dt: datetime.datetime | None) -> bool:
+        if dt is None:
+            return False
         return self._inner.is_ambiguous(dt)
 
     def fromutc(self, dt: datetime.datetime) -> datetime.datetime:
@@ -247,6 +252,8 @@ class tzlocal(datetime.tzinfo):
         return self._inner.tzname(dt)
 
     def is_ambiguous(self, dt: datetime.datetime | None) -> bool:
+        if dt is None:
+            return False
         return self._inner.is_ambiguous(dt)
 
     def fromutc(self, dt: datetime.datetime) -> datetime.datetime:
@@ -262,6 +269,10 @@ class tzlocal(datetime.tzinfo):
 
 class tzrange(datetime.tzinfo):
     """Timezone with annual DST transitions defined by rules."""
+
+    _inner: _TzRange
+    _stdabbr: str
+    _dstabbr: str | None
 
     def __init__(
         self,
@@ -293,6 +304,8 @@ class tzrange(datetime.tzinfo):
         return self._inner.tzname(dt)
 
     def is_ambiguous(self, dt: datetime.datetime | None) -> bool:
+        if dt is None:
+            return False
         return self._inner.is_ambiguous(dt)
 
     def fromutc(self, dt: datetime.datetime) -> datetime.datetime:
@@ -305,6 +318,10 @@ class tzrange(datetime.tzinfo):
 
 class tzstr(datetime.tzinfo):
     """Timezone parsed from a POSIX TZ string."""
+
+    _inner: _TzStr
+    _s: str
+    _posix_offset: bool
 
     def __init__(self, s: str, posix_offset: bool = False) -> None:
         super().__init__()
@@ -322,6 +339,8 @@ class tzstr(datetime.tzinfo):
         return self._inner.tzname(dt)
 
     def is_ambiguous(self, dt: datetime.datetime | None) -> bool:
+        if dt is None:
+            return False
         return self._inner.is_ambiguous(dt)
 
     def fromutc(self, dt: datetime.datetime) -> datetime.datetime:
@@ -357,24 +376,24 @@ def gettz(name: str | None = None) -> datetime.tzinfo | None:
         return tzoffset(result.name(), result.offset_seconds())
     elif cls_name == "_TzFile":
         # Create a tzfile wrapper around the existing native object
-        tz = datetime.tzinfo.__new__(tzfile)
-        tz._inner = result
-        tz._filename = result.filename() or name
-        return tz
+        tz_file = datetime.tzinfo.__new__(tzfile)
+        tz_file._inner = result
+        tz_file._filename = result.filename() or name or ""
+        return tz_file
     elif cls_name == "_TzLocal":
         return tzlocal()
     elif cls_name == "_TzStr":
-        tz = datetime.tzinfo.__new__(tzstr)
-        tz._inner = result
-        tz._s = result.source()
-        tz._posix_offset = False
-        return tz
+        tz_str = datetime.tzinfo.__new__(tzstr)
+        tz_str._inner = result
+        tz_str._s = result.source()
+        tz_str._posix_offset = False
+        return tz_str
     elif cls_name == "_TzRange":
-        tz = datetime.tzinfo.__new__(tzrange)
-        tz._inner = result
-        tz._stdabbr = result.std_abbr()
-        tz._dstabbr = result.dst_abbr()
-        return tz
+        tz_range = datetime.tzinfo.__new__(tzrange)
+        tz_range._inner = result
+        tz_range._stdabbr = result.std_abbr()
+        tz_range._dstabbr = result.dst_abbr()
+        return tz_range
     else:
         # Fallback: return the raw native object
         return result
@@ -445,7 +464,7 @@ def resolve_imaginary(dt: _DateTimeT) -> _DateTimeT:
         return dt
     utc_naive = naive - offset
     utc_dt = utc_naive.replace(tzinfo=tz)
-    return tz.fromutc(utc_dt)
+    return cast(_DateTimeT, tz.fromutc(utc_dt))
 
 
 def enfold(dt: _DateTimeT, fold: int = 1) -> _DateTimeT:

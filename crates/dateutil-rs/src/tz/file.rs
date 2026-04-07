@@ -394,18 +394,27 @@ impl TzFile {
         let timestamp = dt.and_utc().timestamp();
         let idx = self.find_transition(timestamp, false);
 
-        if !fold {
-            // fold=0: if ambiguous, use the *previous* transition's ttinfo
-            // (first occurrence = DST time, before the fall-back)
-            if let Some(i) = idx {
-                if i > 0 {
-                    let prev_tt = &self.ttinfo_list[self.transitions[i - 1].ttinfo_idx];
-                    let curr_tt = &self.ttinfo_list[self.transitions[i].ttinfo_idx];
-                    // Fall-back: previous offset (DST) > current offset (standard)
+        if let Some(i) = idx {
+            if i > 0 {
+                let prev_tt = &self.ttinfo_list[self.transitions[i - 1].ttinfo_idx];
+                let curr_tt = &self.ttinfo_list[self.transitions[i].ttinfo_idx];
+
+                if !fold {
+                    // fold=0: if ambiguous (fall-back overlap), use previous ttinfo
                     if prev_tt.offset > curr_tt.offset {
                         let curr_wall = self.transitions[i].wall_time;
                         let overlap = (prev_tt.offset - curr_tt.offset) as i64;
                         if timestamp >= curr_wall && timestamp < curr_wall + overlap {
+                            return prev_tt;
+                        }
+                    }
+                } else {
+                    // fold=1: if in a gap (spring-forward), use previous ttinfo
+                    // so that resolve_imaginary gets a different offset to try
+                    if prev_tt.offset < curr_tt.offset {
+                        let curr_wall = self.transitions[i].wall_time;
+                        let gap = (curr_tt.offset - prev_tt.offset) as i64;
+                        if timestamp >= curr_wall && timestamp < curr_wall + gap {
                             return prev_tt;
                         }
                     }

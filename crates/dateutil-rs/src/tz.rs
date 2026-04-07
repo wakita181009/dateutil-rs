@@ -192,7 +192,10 @@ fn gettz_uncached(name: Option<&str>) -> Option<Tz> {
     let name = name.strip_prefix(':').unwrap_or(name).trim();
 
     if name.is_empty() {
-        return gettz(None);
+        // Fall back to local timezone directly instead of gettz(None),
+        // which would re-check $TZ and potentially loop infinitely
+        // (e.g. $TZ=": " → strip → empty → gettz(None) → $TZ → ...).
+        return Some(Tz::Local(TzLocal::new()));
     }
 
     // Absolute path
@@ -309,15 +312,25 @@ pub fn datetime_ambiguous(dt: NaiveDateTime, tz: &Tz) -> bool {
 
 /// Resolve an imaginary datetime (one that falls in a DST gap) by shifting
 /// it forward to the correct wall time after the transition.
+///
+/// Mirrors python-dateutil's algorithm: try both fold=0 and fold=1 offsets,
+/// convert each to UTC and back to wall time via `fromutc`, then return the
+/// later wall time (which is always the post-transition time).
 pub fn resolve_imaginary(dt: NaiveDateTime, tz: &Tz) -> NaiveDateTime {
     if datetime_exists(dt, tz) {
         return dt;
     }
-    // Convert via UTC to get the correct wall time
-    let offset = tz.utcoffset(Some(dt), false).unwrap_or(Duration::zero());
-    let utc = dt - offset;
-    let (wall, _fold) = tz.fromutc(utc);
-    wall
+    // The gap time has two candidate offsets (pre- and post-transition).
+    // Which fold value maps to which offset varies by Tz variant, so we
+    // try both and pick the result that lands after the gap.
+    let offset0 = tz.utcoffset(Some(dt), false).unwrap_or(Duration::zero());
+    let offset1 = tz.utcoffset(Some(dt), true).unwrap_or(Duration::zero());
+
+    let (wall0, _) = tz.fromutc(dt - offset0);
+    let (wall1, _) = tz.fromutc(dt - offset1);
+
+    // The later wall time is always the correct post-transition result.
+    if wall0 >= wall1 { wall0 } else { wall1 }
 }
 
 // ============================================================================
@@ -1350,17 +1363,17 @@ mod tests {
 
     #[test]
     fn test_resolve_imaginary_dst_gap() {
-        // 2:30 AM doesn't exist on spring-forward day
+        // 2:30 AM doesn't exist on spring-forward day, should resolve to 3:30 AM EDT
         if let Some(tz) = gettz(Some("America/New_York")) {
             let gap_dt = NaiveDate::from_ymd_opt(2020, 3, 8)
                 .unwrap()
                 .and_hms_opt(2, 30, 0)
                 .unwrap();
             let resolved = resolve_imaginary(gap_dt, &tz);
-            // Resolved time must be different from the gap time
-            assert_ne!(resolved, gap_dt);
-            // Resolved time must actually exist in the timezone
-            assert!(datetime_exists(resolved, &tz));
+            assert_eq!(resolved, NaiveDate::from_ymd_opt(2020, 3, 8)
+                .unwrap()
+                .and_hms_opt(3, 30, 0)
+                .unwrap());
         }
     }
 

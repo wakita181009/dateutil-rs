@@ -8,7 +8,7 @@ and forwarded to the Rust parser so parsing is always Rust-accelerated.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, tzinfo
 from typing import Any, Literal, overload
 
@@ -120,12 +120,12 @@ class parserinfo:
         self._year = time.localtime().tm_year
         self._century = self._year // 100 * 100
 
-    def _convert(self, lst: list[str] | list[tuple[str, ...]]) -> dict[str, int]:
+    def _convert(self, lst: Sequence[str | tuple[str, ...]]) -> dict[str, int]:
         dct: dict[str, int] = {}
         for i, v in enumerate(lst):
             if isinstance(v, tuple):
-                for v in v:
-                    dct[v.lower()] = i
+                for s in v:
+                    dct[s.lower()] = i
             else:
                 dct[v.lower()] = i
         return dct

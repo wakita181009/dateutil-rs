@@ -5,12 +5,16 @@ from __future__ import annotations
 import datetime
 import sys
 from collections.abc import Callable, Iterator, Mapping
-from typing import Any, Final, Literal, SupportsFloat, overload
+from typing import Any, Final, Literal, SupportsFloat, TypeAlias, overload
 
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
+
+# Type aliases to avoid name shadowing in class definitions
+_Weekday: TypeAlias = "weekday"
+_RRule: TypeAlias = "rrule"
 
 # ---------------------------------------------------------------------------
 # common — Weekday
@@ -93,7 +97,7 @@ class relativedelta:
         year: int | None = None,
         month: int | None = None,
         day: int | None = None,
-        weekday: int | weekday | None = None,
+        weekday: int | _Weekday | None = None,
         yearday: int | None = None,
         nlyearday: int | None = None,
         hour: int | None = None,
@@ -244,9 +248,9 @@ class rrule:
 
 class rruleset:
     def __init__(self, cache: bool = False) -> None: ...
-    def rrule(self, rrule: rrule) -> None: ...
+    def rrule(self, rrule: _RRule) -> None: ...
     def rdate(self, rdate: datetime.datetime) -> None: ...
-    def exrule(self, exrule: rrule) -> None: ...
+    def exrule(self, exrule: _RRule) -> None: ...
     def exdate(self, exdate: datetime.datetime) -> None: ...
     def __iter__(self) -> Iterator[datetime.datetime]: ...
     @overload
