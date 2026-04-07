@@ -2,5 +2,26 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "enabledPlugins": {
     "rust-analyzer-lsp@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in *.rs) cargo clippy --manifest-path crates/dateutil-rs/Cargo.toml --quiet 2>&1 ;; esac; } || true",
+            "timeout": 30,
+            "statusMessage": "Running cargo clippy..."
+          },
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in *.py) uv run ruff check \"$f\" 2>&1 ;; esac; } || true",
+            "timeout": 15,
+            "statusMessage": "Running ruff check..."
+          }
+        ]
+      }
+    ]
   }
 }
