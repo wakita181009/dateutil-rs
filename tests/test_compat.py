@@ -981,3 +981,874 @@ class TestDatetimeAmbiguousCompat:
         dt_py = datetime(2024, 3, 10, 2, 30, tzinfo=py_tz)
         dt_rs = datetime(2024, 3, 10, 2, 30, tzinfo=rs_tz)
         assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) is False
+
+
+# ---------------------------------------------------------------------------
+# RRule
+# ---------------------------------------------------------------------------
+try:
+    from dateutil.rrule import (
+        DAILY as PY_DAILY,
+    )
+    from dateutil.rrule import (
+        FR as PY_FR,
+    )
+    from dateutil.rrule import (
+        HOURLY as PY_HOURLY,
+    )
+    from dateutil.rrule import (
+        MINUTELY as PY_MINUTELY,
+    )
+    from dateutil.rrule import (
+        MO as PY_MO,
+    )
+    from dateutil.rrule import (
+        MONTHLY as PY_MONTHLY,
+    )
+    from dateutil.rrule import (
+        SA as PY_SA,
+    )
+    from dateutil.rrule import (
+        SECONDLY as PY_SECONDLY,
+    )
+    from dateutil.rrule import (
+        SU as PY_SU,
+    )
+    from dateutil.rrule import (
+        TH as PY_TH,
+    )
+    from dateutil.rrule import (
+        TU as PY_TU,
+    )
+    from dateutil.rrule import (
+        WE as PY_WE,
+    )
+    from dateutil.rrule import (
+        WEEKLY as PY_WEEKLY,
+    )
+    from dateutil.rrule import (
+        YEARLY as PY_YEARLY,
+    )
+    from dateutil.rrule import (
+        rrule as py_rrule,
+    )
+    from dateutil.rrule import (
+        rruleset as py_rruleset,
+    )
+    from dateutil.rrule import (
+        rrulestr as py_rrulestr,
+    )
+    from dateutil_rs.rrule import (
+        DAILY as RS_DAILY,
+    )
+    from dateutil_rs.rrule import (
+        FR as RSFR,
+    )
+    from dateutil_rs.rrule import (
+        HOURLY as RS_HOURLY,
+    )
+    from dateutil_rs.rrule import (
+        MINUTELY as RS_MINUTELY,
+    )
+    from dateutil_rs.rrule import (
+        MO as RSMO,
+    )
+    from dateutil_rs.rrule import (
+        MONTHLY as RS_MONTHLY,
+    )
+    from dateutil_rs.rrule import (
+        SA as RSSA,
+    )
+    from dateutil_rs.rrule import (
+        SECONDLY as RS_SECONDLY,
+    )
+    from dateutil_rs.rrule import (
+        SU as RSSU,
+    )
+    from dateutil_rs.rrule import (
+        TH as RSTH,
+    )
+    from dateutil_rs.rrule import (
+        TU as RSTU,
+    )
+    from dateutil_rs.rrule import (
+        WE as RSWE,
+    )
+    from dateutil_rs.rrule import (
+        WEEKLY as RS_WEEKLY,
+    )
+    from dateutil_rs.rrule import (
+        YEARLY as RS_YEARLY,
+    )
+    from dateutil_rs.rrule import (
+        rrule as rs_rrule,
+    )
+    from dateutil_rs.rrule import (
+        rruleset as rs_rruleset,
+    )
+    from dateutil_rs.rrule import (
+        rrulestr as rs_rrulestr,
+    )
+
+    HAS_RRULE = True
+except ImportError:
+    HAS_RRULE = False
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleBasicCompat:
+    """Basic frequency tests: compare dateutil vs dateutil_rs rrule output."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule, limit=None):
+        py_list = list(py_rule)
+        rs_list = list(rs_rule)
+        if limit:
+            py_list = py_list[:limit]
+            rs_list = rs_list[:limit]
+        assert py_list == rs_list, (
+            f"Mismatch:\n  py={py_list[:5]}...\n  rs={rs_list[:5]}..."
+        )
+
+    def test_yearly(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, dtstart=self.DTSTART),
+        )
+
+    def test_yearly_interval(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, interval=2, dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, interval=2, dtstart=self.DTSTART),
+        )
+
+    def test_monthly(self):
+        self._assert_same(
+            py_rrule(PY_MONTHLY, count=3, dtstart=self.DTSTART),
+            rs_rrule(RS_MONTHLY, count=3, dtstart=self.DTSTART),
+        )
+
+    def test_monthly_interval(self):
+        self._assert_same(
+            py_rrule(PY_MONTHLY, count=3, interval=2, dtstart=self.DTSTART),
+            rs_rrule(RS_MONTHLY, count=3, interval=2, dtstart=self.DTSTART),
+        )
+
+    def test_weekly(self):
+        self._assert_same(
+            py_rrule(PY_WEEKLY, count=3, dtstart=self.DTSTART),
+            rs_rrule(RS_WEEKLY, count=3, dtstart=self.DTSTART),
+        )
+
+    def test_weekly_interval(self):
+        self._assert_same(
+            py_rrule(PY_WEEKLY, count=3, interval=2, dtstart=self.DTSTART),
+            rs_rrule(RS_WEEKLY, count=3, interval=2, dtstart=self.DTSTART),
+        )
+
+    def test_daily(self):
+        self._assert_same(
+            py_rrule(PY_DAILY, count=3, dtstart=self.DTSTART),
+            rs_rrule(RS_DAILY, count=3, dtstart=self.DTSTART),
+        )
+
+    def test_daily_interval(self):
+        self._assert_same(
+            py_rrule(PY_DAILY, count=3, interval=2, dtstart=self.DTSTART),
+            rs_rrule(RS_DAILY, count=3, interval=2, dtstart=self.DTSTART),
+        )
+
+    def test_hourly(self):
+        self._assert_same(
+            py_rrule(PY_HOURLY, count=3, dtstart=self.DTSTART),
+            rs_rrule(RS_HOURLY, count=3, dtstart=self.DTSTART),
+        )
+
+    def test_minutely(self):
+        self._assert_same(
+            py_rrule(PY_MINUTELY, count=3, dtstart=self.DTSTART),
+            rs_rrule(RS_MINUTELY, count=3, dtstart=self.DTSTART),
+        )
+
+    def test_secondly(self):
+        self._assert_same(
+            py_rrule(PY_SECONDLY, count=3, dtstart=self.DTSTART),
+            rs_rrule(RS_SECONDLY, count=3, dtstart=self.DTSTART),
+        )
+
+    def test_until(self):
+        until = datetime(1997, 12, 31)
+        self._assert_same(
+            py_rrule(PY_MONTHLY, dtstart=self.DTSTART, until=until),
+            rs_rrule(RS_MONTHLY, dtstart=self.DTSTART, until=until),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleByMonthCompat:
+    """bymonth filter tests."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_bymonth(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, bymonth=(1, 3), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, bymonth=(1, 3), dtstart=self.DTSTART),
+        )
+
+    def test_monthly_bymonth(self):
+        self._assert_same(
+            py_rrule(PY_MONTHLY, count=3, bymonth=(1, 3), dtstart=self.DTSTART),
+            rs_rrule(RS_MONTHLY, count=3, bymonth=(1, 3), dtstart=self.DTSTART),
+        )
+
+    def test_weekly_bymonth(self):
+        self._assert_same(
+            py_rrule(PY_WEEKLY, count=3, bymonth=(1, 3), dtstart=self.DTSTART),
+            rs_rrule(RS_WEEKLY, count=3, bymonth=(1, 3), dtstart=self.DTSTART),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleByMonthDayCompat:
+    """bymonthday filter tests."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_bymonthday(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, bymonthday=(1, 3), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, bymonthday=(1, 3), dtstart=self.DTSTART),
+        )
+
+    def test_monthly_bymonthday(self):
+        self._assert_same(
+            py_rrule(PY_MONTHLY, count=3, bymonthday=(1, 3), dtstart=self.DTSTART),
+            rs_rrule(RS_MONTHLY, count=3, bymonthday=(1, 3), dtstart=self.DTSTART),
+        )
+
+    def test_monthly_bymonthday_negative(self):
+        self._assert_same(
+            py_rrule(PY_MONTHLY, count=3, bymonthday=(-1,), dtstart=self.DTSTART),
+            rs_rrule(RS_MONTHLY, count=3, bymonthday=(-1,), dtstart=self.DTSTART),
+        )
+
+    def test_yearly_bymonth_and_bymonthday(self):
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=3, bymonth=(1, 3),
+                bymonthday=(5, 7), dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=3, bymonth=(1, 3),
+                bymonthday=(5, 7), dtstart=self.DTSTART,
+            ),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleByWeekDayCompat:
+    """byweekday filter tests."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_byweekday(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byweekday=(RSTU, RSTH), dtstart=self.DTSTART),
+        )
+
+    def test_monthly_byweekday(self):
+        self._assert_same(
+            py_rrule(PY_MONTHLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART),
+            rs_rrule(RS_MONTHLY, count=3, byweekday=(RSTU, RSTH), dtstart=self.DTSTART),
+        )
+
+    def test_weekly_byweekday(self):
+        self._assert_same(
+            py_rrule(PY_WEEKLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART),
+            rs_rrule(RS_WEEKLY, count=3, byweekday=(RSTU, RSTH), dtstart=self.DTSTART),
+        )
+
+    def test_yearly_by_nweekday(self):
+        """Nth weekday of the year (e.g. 1st Tuesday)."""
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, byweekday=PY_TU(1), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byweekday=RSTU(1), dtstart=self.DTSTART),
+        )
+
+    def test_monthly_by_nweekday(self):
+        """1st Friday and -1st Friday of each month."""
+        self._assert_same(
+            py_rrule(
+                PY_MONTHLY, count=6,
+                byweekday=(PY_FR(1), PY_FR(-1)),
+                dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_MONTHLY, count=6,
+                byweekday=(RSFR(1), RSFR(-1)),
+                dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_yearly_bymonth_and_byweekday(self):
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=3, bymonth=(1, 3),
+                byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=3, bymonth=(1, 3),
+                byweekday=(RSTU, RSTH), dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_yearly_bymonth_and_nweekday(self):
+        """3rd Tuesday of Jan and Mar."""
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=3, bymonth=(1, 3),
+                byweekday=PY_TU(3), dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=3, bymonth=(1, 3),
+                byweekday=RSTU(3), dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_monthly_bymonthday_and_byweekday(self):
+        self._assert_same(
+            py_rrule(
+                PY_MONTHLY, count=3,
+                bymonthday=(1, 3), byweekday=(PY_TU, PY_TH),
+                dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_MONTHLY, count=3,
+                bymonthday=(1, 3), byweekday=(RSTU, RSTH),
+                dtstart=self.DTSTART,
+            ),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleByYearDayCompat:
+    """byyearday filter tests."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_byyearday(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=4, byyearday=(1, 100, 200, 365), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=4, byyearday=(1, 100, 200, 365), dtstart=self.DTSTART),
+        )
+
+    def test_yearly_byyearday_neg(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=4, byyearday=(-1,), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=4, byyearday=(-1,), dtstart=self.DTSTART),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleByWeekNoCompat:
+    """byweekno filter tests."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_byweekno(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, byweekno=20, dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byweekno=20, dtstart=self.DTSTART),
+        )
+
+    def test_yearly_byweekno_and_byweekday(self):
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=3, byweekno=20,
+                byweekday=PY_MO, dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=3, byweekno=20,
+                byweekday=RSMO, dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_yearly_byweekno_53(self):
+        """Week 53 — tricky edge case."""
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=3, byweekno=53,
+                byweekday=PY_MO, dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=3, byweekno=53,
+                byweekday=RSMO, dtstart=self.DTSTART,
+            ),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleByEasterCompat:
+    """byeaster filter tests."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_byeaster(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, byeaster=0, dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byeaster=0, dtstart=self.DTSTART),
+        )
+
+    def test_yearly_byeaster_positive_offset(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, byeaster=1, dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byeaster=1, dtstart=self.DTSTART),
+        )
+
+    def test_yearly_byeaster_negative_offset(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, byeaster=-2, dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byeaster=-2, dtstart=self.DTSTART),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleByTimeCompat:
+    """byhour / byminute / bysecond filter tests."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_byhour(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, byhour=(6, 18), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byhour=(6, 18), dtstart=self.DTSTART),
+        )
+
+    def test_yearly_byminute(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, byminute=(6, 18), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byminute=(6, 18), dtstart=self.DTSTART),
+        )
+
+    def test_yearly_bysecond(self):
+        self._assert_same(
+            py_rrule(PY_YEARLY, count=3, bysecond=(6, 18), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, bysecond=(6, 18), dtstart=self.DTSTART),
+        )
+
+    def test_daily_byhour_and_byminute(self):
+        self._assert_same(
+            py_rrule(
+                PY_DAILY, count=6, byhour=(9, 17),
+                byminute=(0, 30), dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_DAILY, count=6, byhour=(9, 17),
+                byminute=(0, 30), dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_hourly_byminute_and_bysecond(self):
+        self._assert_same(
+            py_rrule(
+                PY_HOURLY, count=3, byminute=(15, 45),
+                bysecond=(0,), dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_HOURLY, count=3, byminute=(15, 45),
+                bysecond=(0,), dtstart=self.DTSTART,
+            ),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleBySetPosCompat:
+    """bysetpos filter tests."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_bysetpos(self):
+        """Last day of the year that is TU or TH."""
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=3,
+                byweekday=(PY_TU, PY_TH), bysetpos=-1,
+                dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=3,
+                byweekday=(RSTU, RSTH), bysetpos=-1,
+                dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_monthly_bysetpos(self):
+        """3rd instance of monthday 7 or 1 (i.e. 3rd occurrence in the set)."""
+        self._assert_same(
+            py_rrule(
+                PY_MONTHLY, count=3,
+                bymonthday=(7, 1), bysetpos=3,
+                dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_MONTHLY, count=3,
+                bymonthday=(7, 1), bysetpos=3,
+                dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_monthly_byday_bysetpos_neg(self):
+        """Last weekday of month (MO-FR, bysetpos=-1)."""
+        self._assert_same(
+            py_rrule(
+                PY_MONTHLY, count=3,
+                byweekday=(PY_MO, PY_TU, PY_WE, PY_TH, PY_FR),
+                bysetpos=-1, dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_MONTHLY, count=3,
+                byweekday=(RSMO, RSTU, RSWE, RSTH, RSFR),
+                bysetpos=-1, dtstart=self.DTSTART,
+            ),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleWkstCompat:
+    """wkst (week start day) tests."""
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_weekly_wkst_su(self):
+        self._assert_same(
+            py_rrule(
+                PY_WEEKLY, count=3, wkst=PY_SU,
+                dtstart=datetime(1997, 9, 2, 9, 0),
+            ),
+            rs_rrule(
+                RS_WEEKLY, count=3, wkst=RSSU,
+                dtstart=datetime(1997, 9, 2, 9, 0),
+            ),
+        )
+
+    def test_weekly_wkst_su_byweekday(self):
+        self._assert_same(
+            py_rrule(
+                PY_WEEKLY, count=3, wkst=PY_SU,
+                byweekday=(PY_TU, PY_TH), dtstart=datetime(1997, 9, 2, 9, 0),
+            ),
+            rs_rrule(
+                RS_WEEKLY, count=3, wkst=RSSU,
+                byweekday=(RSTU, RSTH), dtstart=datetime(1997, 9, 2, 9, 0),
+            ),
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleQueryCompat:
+    """before / after / between / count query methods."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def test_before(self):
+        py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
+        target = datetime(1997, 9, 15, 9, 0)
+        assert py_r.before(target) == rs_r.before(target)
+
+    def test_before_inc(self):
+        py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
+        target = datetime(1997, 9, 15, 9, 0)
+        assert py_r.before(target, inc=True) == rs_r.before(target, inc=True)
+
+    def test_after(self):
+        py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
+        target = datetime(1997, 9, 15, 9, 0)
+        assert py_r.after(target) == rs_r.after(target)
+
+    def test_after_inc(self):
+        py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
+        target = datetime(1997, 9, 15, 9, 0)
+        assert py_r.after(target, inc=True) == rs_r.after(target, inc=True)
+
+    def test_between(self):
+        py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
+        after = datetime(1997, 9, 10, 9, 0)
+        before = datetime(1997, 9, 20, 9, 0)
+        assert list(py_r.between(after, before, count=100)) == list(
+            rs_r.between(after, before, count=100)
+        )
+
+    def test_between_inc(self):
+        py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
+        after = datetime(1997, 9, 10, 9, 0)
+        before = datetime(1997, 9, 20, 9, 0)
+        assert list(py_r.between(after, before, inc=True, count=100)) == list(
+            rs_r.between(after, before, inc=True, count=100)
+        )
+
+    def test_count(self):
+        py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
+        assert py_r.count() == rs_r.count() == 30
+
+    def test_getitem(self):
+        py_r = py_rrule(PY_DAILY, count=10, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=10, dtstart=self.DTSTART)
+        assert py_r[0] == rs_r[0]
+        assert py_r[5] == rs_r[5]
+        assert py_r[-1] == rs_r[-1]
+
+    def test_contains(self):
+        py_r = py_rrule(PY_DAILY, count=10, dtstart=self.DTSTART)
+        rs_r = rs_rrule(RS_DAILY, count=10, dtstart=self.DTSTART)
+        target = datetime(1997, 9, 5, 9, 0)
+        assert (target in py_r) == (target in rs_r) is True
+        miss = datetime(1997, 9, 5, 10, 0)
+        assert (miss in py_r) == (miss in rs_r) is False
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleSetCompat:
+    """rruleset tests — combine rules, rdates, exrules, exdates."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def test_rruleset_two_rules(self):
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=3, dtstart=datetime(1997, 9, 2, 9, 0)))
+        py_set.rrule(py_rrule(PY_DAILY, count=3, dtstart=datetime(1997, 9, 5, 9, 0)))
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=3, dtstart=datetime(1997, 9, 2, 9, 0)))
+        rs_set.rrule(rs_rrule(RS_DAILY, count=3, dtstart=datetime(1997, 9, 5, 9, 0)))
+
+        assert list(py_set) == list(rs_set)
+
+    def test_rruleset_rdate(self):
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=3, dtstart=self.DTSTART))
+        py_set.rdate(datetime(1997, 9, 10, 9, 0))
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=3, dtstart=self.DTSTART))
+        rs_set.rdate(datetime(1997, 9, 10, 9, 0))
+
+        assert list(py_set) == list(rs_set)
+
+    def test_rruleset_exdate(self):
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART))
+        py_set.exdate(datetime(1997, 9, 4, 9, 0))
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART))
+        rs_set.exdate(datetime(1997, 9, 4, 9, 0))
+
+        assert list(py_set) == list(rs_set)
+
+    def test_rruleset_exrule(self):
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=10, dtstart=self.DTSTART))
+        py_set.exrule(py_rrule(PY_DAILY, count=5, interval=2, dtstart=self.DTSTART))
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=10, dtstart=self.DTSTART))
+        rs_set.exrule(rs_rrule(RS_DAILY, count=5, interval=2, dtstart=self.DTSTART))
+
+        assert list(py_set) == list(rs_set)
+
+    def test_rruleset_count(self):
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART))
+        py_set.exdate(datetime(1997, 9, 4, 9, 0))
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART))
+        rs_set.exdate(datetime(1997, 9, 4, 9, 0))
+
+        assert py_set.count() == rs_set.count()
+
+    def test_rruleset_before_after(self):
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=10, dtstart=self.DTSTART))
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=10, dtstart=self.DTSTART))
+
+        target = datetime(1997, 9, 5, 9, 0)
+        assert py_set.before(target) == rs_set.before(target)
+        assert py_set.after(target) == rs_set.after(target)
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleStrCompat:
+    """rrulestr() parsing — compare round-trip results."""
+
+    def _assert_same(self, rule_str, **kwargs):
+        py_result = list(py_rrulestr(rule_str, **kwargs))
+        rs_result = list(rs_rrulestr(rule_str, **kwargs))
+        assert py_result == rs_result, (
+            f"rrulestr mismatch for {rule_str!r}:\n  py={py_result[:5]}\n  rs={rs_result[:5]}"
+        )
+
+    def test_yearly_count(self):
+        self._assert_same("DTSTART:19970902T090000\nRRULE:FREQ=YEARLY;COUNT=3")
+
+    def test_monthly_until(self):
+        self._assert_same(
+            "DTSTART:19970902T090000\nRRULE:FREQ=MONTHLY;UNTIL=19971231T090000"
+        )
+
+    def test_weekly_byday(self):
+        self._assert_same(
+            "DTSTART:19970902T090000\nRRULE:FREQ=WEEKLY;COUNT=6;BYDAY=TU,TH"
+        )
+
+    def test_daily_interval(self):
+        self._assert_same(
+            "DTSTART:19970902T090000\nRRULE:FREQ=DAILY;INTERVAL=10;COUNT=5"
+        )
+
+    def test_monthly_byday_with_n(self):
+        self._assert_same(
+            "DTSTART:19970902T090000\nRRULE:FREQ=MONTHLY;COUNT=3;BYDAY=1FR"
+        )
+
+    def test_yearly_bymonth_byday(self):
+        self._assert_same(
+            "DTSTART:19970902T090000\n"
+            "RRULE:FREQ=YEARLY;COUNT=3;BYMONTH=1,3;BYDAY=TU,TH"
+        )
+
+    def test_monthly_bysetpos(self):
+        self._assert_same(
+            "DTSTART:19970902T090000\n"
+            "RRULE:FREQ=MONTHLY;COUNT=3;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1"
+        )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleCombinedFiltersCompat:
+    """Complex combined filter tests to catch subtle differences."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def _assert_same(self, py_rule, rs_rule):
+        assert list(py_rule) == list(rs_rule)
+
+    def test_yearly_bymonth_bymonthday_byweekday(self):
+        """Intersection of month, monthday, and weekday filters."""
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=3, bymonth=(1, 3),
+                bymonthday=(1, 3), byweekday=(PY_TU, PY_TH),
+                dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=3, bymonth=(1, 3),
+                bymonthday=(1, 3), byweekday=(RSTU, RSTH),
+                dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_monthly_large_interval_bymonthday(self):
+        """Monthly with large interval + bymonthday."""
+        self._assert_same(
+            py_rrule(
+                PY_MONTHLY, count=3, interval=18,
+                bymonthday=(10, 11, 12, 13, 14, 15),
+                dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_MONTHLY, count=3, interval=18,
+                bymonthday=(10, 11, 12, 13, 14, 15),
+                dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_yearly_bymonth_byyearday(self):
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=4, bymonth=(4, 7),
+                byyearday=(1, 100, 200, 365), dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=4, bymonth=(4, 7),
+                byyearday=(1, 100, 200, 365), dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_yearly_byhour_byminute_bysecond(self):
+        """All three time-based filters."""
+        self._assert_same(
+            py_rrule(
+                PY_YEARLY, count=4, byhour=(6, 18),
+                byminute=(0, 30), bysecond=(0,), dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_YEARLY, count=4, byhour=(6, 18),
+                byminute=(0, 30), bysecond=(0,), dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_daily_bymonth_byweekday(self):
+        """Daily occurrences filtered to specific month and weekday."""
+        self._assert_same(
+            py_rrule(
+                PY_DAILY, count=5, bymonth=(1,),
+                byweekday=(PY_MO, PY_FR), dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_DAILY, count=5, bymonth=(1,),
+                byweekday=(RSMO, RSFR), dtstart=self.DTSTART,
+            ),
+        )
+
+    def test_weekly_interval_byweekday(self):
+        """Bi-weekly on specific days."""
+        self._assert_same(
+            py_rrule(
+                PY_WEEKLY, count=6, interval=2,
+                byweekday=(PY_MO, PY_WE, PY_FR),
+                dtstart=self.DTSTART,
+            ),
+            rs_rrule(
+                RS_WEEKLY, count=6, interval=2,
+                byweekday=(RSMO, RSWE, RSFR),
+                dtstart=self.DTSTART,
+            ),
+        )
