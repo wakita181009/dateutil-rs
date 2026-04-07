@@ -588,4 +588,180 @@ mod tests {
     fn numeric_sep_rejected() {
         assert!(IsoParser::new(Some(b'1')).is_err());
     }
+
+    // --- to_naive_datetime ---
+
+    #[test]
+    fn test_to_naive_datetime() {
+        use chrono::{Datelike as _, Timelike as _};
+        let r = p("2003-09-25T10:49:41");
+        let ndt = r.to_naive_datetime();
+        assert!(ndt.is_some());
+        let ndt = ndt.unwrap();
+        assert_eq!(ndt.year(), 2003);
+        assert_eq!(ndt.month(), 9);
+        assert_eq!(ndt.day(), 25);
+        assert_eq!(ndt.hour(), 10);
+        assert_eq!(ndt.minute(), 49);
+        assert_eq!(ndt.second(), 41);
+    }
+
+    // --- parse_isodate_str ---
+
+    #[test]
+    fn test_parse_isodate_str() {
+        let parser = IsoParser::default();
+        let (y, m, d) = parser.parse_isodate_str("2003-09-25").unwrap();
+        assert_eq!((y, m, d), (2003, 9, 25));
+    }
+
+    #[test]
+    fn test_parse_isodate_str_compact() {
+        let parser = IsoParser::default();
+        let (y, m, d) = parser.parse_isodate_str("20030925").unwrap();
+        assert_eq!((y, m, d), (2003, 9, 25));
+    }
+
+    #[test]
+    fn test_parse_isodate_str_trailing() {
+        let parser = IsoParser::default();
+        // Should error if there are extra characters
+        let result = parser.parse_isodate_str("2003-09-25T10");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_isodate_str_non_ascii() {
+        let parser = IsoParser::default();
+        let result = parser.parse_isodate_str("２００３");
+        assert!(result.is_err());
+    }
+
+    // --- parse_isotime_str ---
+
+    #[test]
+    fn test_parse_isotime_str() {
+        let parser = IsoParser::default();
+        let r = parser.parse_isotime_str("10:49:41").unwrap();
+        assert_eq!((r.hour, r.minute, r.second), (10, 49, 41));
+    }
+
+    #[test]
+    fn test_parse_isotime_str_with_tz() {
+        let parser = IsoParser::default();
+        let r = parser.parse_isotime_str("10:49:41+05:30").unwrap();
+        assert_eq!((r.hour, r.minute, r.second), (10, 49, 41));
+        assert_eq!(r.tz_offset_seconds, Some(5 * 3600 + 30 * 60));
+    }
+
+    #[test]
+    fn test_parse_isotime_str_24h() {
+        let parser = IsoParser::default();
+        let r = parser.parse_isotime_str("24:00:00").unwrap();
+        assert_eq!(r.hour, 0);
+    }
+
+    #[test]
+    fn test_parse_isotime_str_non_ascii() {
+        let parser = IsoParser::default();
+        let result = parser.parse_isotime_str("１０:49:41");
+        assert!(result.is_err());
+    }
+
+    // --- parse_tzstr_str ---
+
+    #[test]
+    fn test_parse_tzstr_str_utc() {
+        let parser = IsoParser::default();
+        let offset = parser.parse_tzstr_str("Z", true).unwrap();
+        assert_eq!(offset, 0);
+    }
+
+    #[test]
+    fn test_parse_tzstr_str_positive() {
+        let parser = IsoParser::default();
+        let offset = parser.parse_tzstr_str("+05:30", true).unwrap();
+        assert_eq!(offset, 5 * 3600 + 30 * 60);
+    }
+
+    #[test]
+    fn test_parse_tzstr_str_negative() {
+        let parser = IsoParser::default();
+        let offset = parser.parse_tzstr_str("-03:00", true).unwrap();
+        assert_eq!(offset, -3 * 3600);
+    }
+
+    #[test]
+    fn test_parse_tzstr_str_non_ascii() {
+        let parser = IsoParser::default();
+        let result = parser.parse_tzstr_str("＋05", true);
+        assert!(result.is_err());
+    }
+
+    // --- IsoParser::new edge cases ---
+
+    #[test]
+    fn test_isoparser_new_none_sep() {
+        let parser = IsoParser::new(None).unwrap();
+        // Should accept T separator
+        let r = parser.isoparse("2003-09-25T10:49:41").unwrap();
+        assert_eq!(r.hour, 10);
+    }
+
+    #[test]
+    fn test_isoparser_new_space_sep() {
+        let parser = IsoParser::new(Some(b' ')).unwrap();
+        let r = parser.isoparse("2003-09-25 10:49:41").unwrap();
+        assert_eq!(r.hour, 10);
+    }
+
+    #[test]
+    fn test_isoparser_non_ascii_sep() {
+        assert!(IsoParser::new(Some(0x80)).is_err());
+    }
+
+    // --- compact time (no colon) ---
+
+    #[test]
+    fn compact_time_hhmm() {
+        let r = p("2003-09-25T1049");
+        assert_eq!((r.hour, r.minute), (10, 49));
+    }
+
+    #[test]
+    fn compact_time_hhmmss() {
+        let r = p("2003-09-25T104941");
+        assert_eq!((r.hour, r.minute, r.second), (10, 49, 41));
+    }
+
+    // --- week date edge cases ---
+
+    #[test]
+    fn week_date_friday() {
+        // 2003-W01-5 = Friday
+        let r = p("2003-W01-5");
+        assert_eq!((r.year, r.month, r.day), (2003, 1, 3));
+    }
+
+    // --- ordinal date edge cases ---
+
+    #[test]
+    fn ordinal_jan1() {
+        let r = p("2003-001");
+        assert_eq!((r.year, r.month, r.day), (2003, 1, 1));
+    }
+
+    #[test]
+    fn ordinal_dec31() {
+        let r = p("2003-365");
+        assert_eq!((r.year, r.month, r.day), (2003, 12, 31));
+    }
+
+    // --- negative offset compact ---
+
+    #[test]
+    fn negative_offset_hours_only() {
+        let r = p("2003-09-25T10:49:41-05");
+        assert_eq!(r.tz_offset_seconds, Some(-5 * 3600));
+    }
 }

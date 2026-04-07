@@ -1,7 +1,476 @@
-"""dateutil_rs.tz - Timezone support.
+"""dateutil_rs.tz — Timezone support backed by Rust.
 
-Delegates to python-dateutil until Rust implementation is ready.
+Provides timezone classes compatible with python-dateutil's tz module.
+All classes inherit from datetime.tzinfo so they work with Python's datetime.
 """
 
-from dateutil.tz import *
-from dateutil.tz import __all__
+import datetime
+
+from dateutil_rs._native import (
+    _TzFile,
+    _TzLocal,
+    _TzOffset,
+    _TzRange,
+    _TzStr,
+    _TzUtc,
+)
+from dateutil_rs._native import (
+    datetime_ambiguous as _datetime_ambiguous_native,
+)
+from dateutil_rs._native import (
+    datetime_exists as _datetime_exists_native,
+)
+from dateutil_rs._native import (
+    gettz as _gettz_native,
+)
+
+__all__ = [
+    "UTC",
+    "datetime_ambiguous",
+    "datetime_exists",
+    "enfold",
+    "gettz",
+    "resolve_imaginary",
+    "tzfile",
+    "tzlocal",
+    "tzoffset",
+    "tzrange",
+    "tzstr",
+    "tzutc",
+]
+
+ZERO = datetime.timedelta(0)
+
+
+def _offset_to_seconds(offset):
+    """Convert an offset (None, int seconds, or timedelta) to seconds or None."""
+    if offset is None:
+        return None
+    if isinstance(offset, datetime.timedelta):
+        return int(offset.total_seconds())
+    return int(offset)
+
+
+def _relativedelta_to_rule(rule):
+    """Convert a relativedelta transition rule to (month, week, weekday, time_secs).
+
+    Returns None if rule is None (Rust will use default US rules).
+    Weekday uses POSIX convention: 0=Sunday, 6=Saturday.
+    """
+    if rule is None:
+        return None
+
+    month = getattr(rule, "month", None)
+    wd = getattr(rule, "weekday", None)
+    if month is None or wd is None:
+        return None
+
+    # python-dateutil weekday: MO=0, TU=1, ..., SU=6
+    # POSIX/Rust DateRule weekday: 0=Sunday, 1=Monday, ..., 6=Saturday
+    py_wd = wd.weekday
+    rust_wd = (py_wd + 1) % 7
+
+    # Week occurrence (1-5, where 5=last)
+    week = wd.n if wd.n is not None else 1
+    if week < 0:
+        week = 5  # last occurrence
+
+    # Time of day in seconds
+    hours = getattr(rule, "hours", 0) or 0
+    minutes = getattr(rule, "minutes", 0) or 0
+    seconds = getattr(rule, "seconds", 0) or 0
+    time_secs = hours * 3600 + minutes * 60 + seconds
+
+    return (month, week, rust_wd, time_secs)
+
+
+class tzutc(datetime.tzinfo):
+    """UTC timezone.
+
+    Singleton — all instances are the same object.
+    """
+
+    _instance = None
+    _inner = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            inst = super().__new__(cls)
+            inst._inner = _TzUtc()
+            cls._instance = inst
+        return cls._instance
+
+    def utcoffset(self, dt):
+        return ZERO
+
+    def dst(self, dt):
+        return ZERO
+
+    def tzname(self, dt):
+        return "UTC"
+
+    def is_ambiguous(self, dt):
+        return False
+
+    def fromutc(self, dt):
+        return dt.replace(tzinfo=self)
+
+    def __repr__(self):
+        return "tzutc()"
+
+    def __str__(self):
+        return "tzutc()"
+
+    def __eq__(self, other):
+        if isinstance(other, tzutc):
+            return True
+        if isinstance(other, tzoffset) and other._offset == ZERO:
+            return True
+        return NotImplemented
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
+
+    def __hash__(self):
+        return hash(("tzutc",))
+
+    def __reduce__(self):
+        return (self.__class__, ())
+
+
+class tzoffset(datetime.tzinfo):
+    """Fixed-offset timezone (no DST)."""
+
+    def __init__(self, name, offset):
+        super().__init__()
+        if isinstance(offset, datetime.timedelta):
+            self._offset = offset
+            self._offset_secs = int(offset.total_seconds())
+        else:
+            self._offset_secs = int(offset)
+            self._offset = datetime.timedelta(seconds=self._offset_secs)
+        self._name = name
+        self._inner = _TzOffset(name, self._offset_secs)
+
+    def utcoffset(self, dt):
+        return self._offset
+
+    def dst(self, dt):
+        return ZERO
+
+    def tzname(self, dt):
+        return self._name
+
+    def is_ambiguous(self, dt):
+        return False
+
+    def fromutc(self, dt):
+        return (dt + self._offset).replace(tzinfo=self)
+
+    def __repr__(self):
+        return f"tzoffset({self._name!r}, {self._offset_secs})"
+
+    def __eq__(self, other):
+        if isinstance(other, tzutc) and self._offset == ZERO:
+            return True
+        if isinstance(other, tzoffset):
+            return self._name == other._name and self._offset == other._offset
+        return NotImplemented
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
+
+    def __hash__(self):
+        return hash((self._name, self._offset))
+
+    def __reduce__(self):
+        return (self.__class__, (self._name, self._offset_secs))
+
+
+class tzfile(datetime.tzinfo):
+    """Timezone loaded from a TZif binary file."""
+
+    def __init__(self, fileobj, filename=None):
+        super().__init__()
+        if isinstance(fileobj, str):
+            self._filename = fileobj
+        elif hasattr(fileobj, "name"):
+            self._filename = fileobj.name
+        elif filename is not None:
+            self._filename = filename
+        else:
+            self._filename = repr(fileobj)
+        self._inner = _TzFile(self._filename)
+
+    def utcoffset(self, dt):
+        result = self._inner.utcoffset(dt)
+        return result
+
+    def dst(self, dt):
+        result = self._inner.dst(dt)
+        return result
+
+    def tzname(self, dt):
+        return self._inner.tzname(dt)
+
+    def is_ambiguous(self, dt):
+        return self._inner.is_ambiguous(dt)
+
+    def fromutc(self, dt):
+        # Standard fromutc: convert UTC dt to wall time
+        offset = self.utcoffset(dt)
+        if offset is None:
+            raise ValueError("utcoffset() returned None")
+        wall = dt + offset
+        # Check fold
+        wall = wall.replace(tzinfo=self)
+        if self.is_ambiguous(wall.replace(tzinfo=None)):
+            # Determine fold: check if the next transition gives a different offset
+            wall = wall.replace(fold=1)
+        return wall
+
+    def __repr__(self):
+        return f"tzfile('{self._filename}')"
+
+    def __reduce__(self):
+        return (self.__class__, (self._filename,))
+
+
+class tzlocal(datetime.tzinfo):
+    """System local timezone."""
+
+    def __init__(self):
+        super().__init__()
+        self._inner = _TzLocal()
+
+    def utcoffset(self, dt):
+        return self._inner.utcoffset(dt)
+
+    def dst(self, dt):
+        return self._inner.dst(dt)
+
+    def tzname(self, dt):
+        return self._inner.tzname(dt)
+
+    def is_ambiguous(self, dt):
+        return self._inner.is_ambiguous(dt)
+
+    def fromutc(self, dt):
+        offset = self.utcoffset(dt)
+        if offset is None:
+            raise ValueError("utcoffset() returned None")
+        wall = (dt + offset).replace(tzinfo=self)
+        return wall
+
+    def __repr__(self):
+        return "tzlocal()"
+
+    def __reduce__(self):
+        return (self.__class__, ())
+
+
+class tzrange(datetime.tzinfo):
+    """Timezone with annual DST transitions defined by rules."""
+
+    def __init__(
+        self,
+        stdabbr,
+        stdoffset=None,
+        dstabbr=None,
+        dstoffset=None,
+        start=None,
+        end=None,
+    ):
+        super().__init__()
+        std_secs = _offset_to_seconds(stdoffset)
+        dst_secs = _offset_to_seconds(dstoffset)
+        start_tuple = _relativedelta_to_rule(start)
+        end_tuple = _relativedelta_to_rule(end)
+        self._inner = _TzRange(
+            stdabbr, std_secs, dstabbr, dst_secs, start_tuple, end_tuple
+        )
+        self._stdabbr = stdabbr
+        self._dstabbr = dstabbr
+
+    def utcoffset(self, dt):
+        return self._inner.utcoffset(dt)
+
+    def dst(self, dt):
+        return self._inner.dst(dt)
+
+    def tzname(self, dt):
+        return self._inner.tzname(dt)
+
+    def is_ambiguous(self, dt):
+        return self._inner.is_ambiguous(dt)
+
+    def fromutc(self, dt):
+        offset = self.utcoffset(dt)
+        if offset is None:
+            raise ValueError("utcoffset() returned None")
+        wall = (dt + offset).replace(tzinfo=self)
+        return wall
+
+    def __repr__(self):
+        return f"tzrange({self._stdabbr!r}, {self._dstabbr!r})"
+
+
+class tzstr(datetime.tzinfo):
+    """Timezone parsed from a POSIX TZ string."""
+
+    def __init__(self, s, posix_offset=False):
+        super().__init__()
+        self._s = s
+        self._posix_offset = posix_offset
+        self._inner = _TzStr(s, posix_offset)
+
+    def utcoffset(self, dt):
+        return self._inner.utcoffset(dt)
+
+    def dst(self, dt):
+        return self._inner.dst(dt)
+
+    def tzname(self, dt):
+        return self._inner.tzname(dt)
+
+    def is_ambiguous(self, dt):
+        return self._inner.is_ambiguous(dt)
+
+    def fromutc(self, dt):
+        offset = self.utcoffset(dt)
+        if offset is None:
+            raise ValueError("utcoffset() returned None")
+        wall = (dt + offset).replace(tzinfo=self)
+        return wall
+
+    def __repr__(self):
+        return f"tzstr({self._s!r})"
+
+    def __reduce__(self):
+        return (self.__class__, (self._s, self._posix_offset))
+
+
+def gettz(name=None):
+    """Get a timezone by name.
+
+    Supports:
+    - None / '' → system local timezone
+    - 'UTC' / 'GMT' → UTC
+    - IANA names (e.g. 'America/New_York')
+    - Absolute file paths
+    - POSIX TZ strings (e.g. 'EST5EDT,M3.2.0/2,M11.1.0/2')
+    """
+    result = _gettz_native(name)
+    if result is None:
+        return None
+
+    # Wrap the native result in the appropriate Python class
+    cls_name = type(result).__name__
+    if cls_name == "_TzUtc":
+        return tzutc()
+    elif cls_name == "_TzOffset":
+        return tzoffset(result.name(), result.offset_seconds())
+    elif cls_name == "_TzFile":
+        # Create a tzfile wrapper around the existing native object
+        tz = datetime.tzinfo.__new__(tzfile)
+        tz._inner = result
+        tz._filename = result.filename() or name
+        return tz
+    elif cls_name == "_TzLocal":
+        return tzlocal()
+    elif cls_name == "_TzStr":
+        tz = datetime.tzinfo.__new__(tzstr)
+        tz._inner = result
+        tz._s = result.source()
+        tz._posix_offset = False
+        return tz
+    elif cls_name == "_TzRange":
+        tz = datetime.tzinfo.__new__(tzrange)
+        tz._inner = result
+        tz._stdabbr = result.std_abbr()
+        tz._dstabbr = result.dst_abbr()
+        return tz
+    else:
+        # Fallback: return the raw native object
+        return result
+
+
+def datetime_exists(dt, tz=None):
+    """Check if a datetime exists in the given timezone.
+
+    Returns False for datetimes in DST gaps (spring forward).
+    """
+    if tz is None:
+        if dt.tzinfo is None:
+            raise ValueError("Datetime is naive and no timezone provided")
+        tz = dt.tzinfo
+
+    naive = dt.replace(tzinfo=None)
+    offset = tz.utcoffset(dt)
+    if offset is None:
+        return True
+
+    utc_dt = (naive - offset).replace(tzinfo=tz)
+    try:
+        wall = tz.fromutc(utc_dt)
+    except Exception:
+        return True
+    return wall.replace(tzinfo=None) == naive
+
+
+def datetime_ambiguous(dt, tz=None):
+    """Check if a datetime is ambiguous in the given timezone.
+
+    Returns True for datetimes in DST overlaps (fall back).
+    """
+    if tz is None:
+        if dt.tzinfo is None:
+            raise ValueError("Datetime is naive and no timezone provided")
+        tz = dt.tzinfo
+
+    if hasattr(tz, "is_ambiguous"):
+        return tz.is_ambiguous(dt)
+
+    # Fallback: compare fold=0 and fold=1
+    naive = dt.replace(tzinfo=None)
+    dt0 = naive.replace(tzinfo=tz, fold=0)
+    dt1 = naive.replace(tzinfo=tz, fold=1)
+    return tz.utcoffset(dt0) != tz.utcoffset(dt1)
+
+
+def resolve_imaginary(dt):
+    """Resolve an imaginary datetime (in a DST gap) to a real one.
+
+    Shifts the datetime forward by the gap amount.
+    """
+    if dt.tzinfo is None:
+        return dt
+
+    tz = dt.tzinfo
+    naive = dt.replace(tzinfo=None)
+
+    if datetime_exists(dt, tz):
+        return dt
+
+    # Round-trip through UTC to get the correct wall time
+    offset = tz.utcoffset(dt)
+    if offset is None:
+        return dt
+    utc_naive = naive - offset
+    utc_dt = utc_naive.replace(tzinfo=tz)
+    return tz.fromutc(utc_dt)
+
+
+def enfold(dt, fold=1):
+    """Set the fold attribute on a datetime."""
+    return dt.replace(fold=fold)
+
+
+# Singleton UTC instance
+UTC = tzutc()

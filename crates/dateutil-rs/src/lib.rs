@@ -2,6 +2,7 @@ pub mod common;
 pub mod easter;
 pub mod parser;
 pub mod relativedelta;
+pub mod tz;
 pub mod utils;
 
 #[cfg(feature = "python")]
@@ -38,6 +39,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Parser functions and classes
     parser::python::register(m)?;
+
+    // Timezone classes and functions
+    tz::python::register(m)?;
 
     Ok(())
 }

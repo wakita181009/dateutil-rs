@@ -1884,4 +1884,265 @@ mod tests {
             ndt_us(2008, 2, 27, 21, 26, 1, 123_456)
         );
     }
+
+    // --- timezone offset patterns ---
+
+    #[test]
+    fn parse_tz_offset_colon() {
+        let parser = Parser::default();
+        let out = parser
+            .parse(
+                "2003-09-25 10:49:41 -03:00",
+                Some(default_dt()),
+                None,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
+        assert_eq!(out.tzoffset, Some(-3 * 3600));
+    }
+
+    #[test]
+    fn parse_tz_offset_positive() {
+        let parser = Parser::default();
+        let out = parser
+            .parse(
+                "2003-09-25 10:49:41 +0530",
+                Some(default_dt()),
+                None,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
+        assert_eq!(out.tzoffset, Some(5 * 3600 + 30 * 60));
+    }
+
+    #[test]
+    fn parse_tz_offset_short() {
+        let parser = Parser::default();
+        let out = parser
+            .parse(
+                "2003-09-25 10:49:41 +05",
+                Some(default_dt()),
+                None,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
+        assert_eq!(out.tzoffset, Some(5 * 3600));
+    }
+
+    // --- timezone name patterns ---
+
+    #[test]
+    fn parse_tz_gmt() {
+        let parser = Parser::default();
+        let out = parser
+            .parse(
+                "2003-09-25 10:49:41 GMT",
+                Some(default_dt()),
+                None,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
+        assert_eq!(out.tzname, Some("GMT".into()));
+    }
+
+    #[test]
+    fn parse_tz_est() {
+        let parser = Parser::default();
+        let out = parser
+            .parse(
+                "2003-09-25 10:49:41 EST",
+                Some(default_dt()),
+                None,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
+        assert_eq!(out.tzname, Some("EST".into()));
+    }
+
+    // --- month with separators ---
+
+    #[test]
+    fn parse_month_name_dash() {
+        // Jan-01-99
+        assert_eq!(pd("Jan-01-99"), ndt(1999, 1, 1, 0, 0, 0));
+    }
+
+    #[test]
+    fn parse_month_name_slash() {
+        assert_eq!(pd("Jan/01/99"), ndt(1999, 1, 1, 0, 0, 0));
+    }
+
+    #[test]
+    fn parse_month_name_dash_year() {
+        assert_eq!(pd("Jan-01-2003"), ndt(2003, 1, 1, 0, 0, 0));
+    }
+
+    // --- AM/PM edge cases ---
+
+    #[test]
+    fn parse_12am_midnight() {
+        assert_eq!(pd("12:00 AM"), ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    #[test]
+    fn parse_12pm_noon() {
+        assert_eq!(pd("12:00 PM"), ndt(2003, 9, 25, 12, 0, 0));
+    }
+
+    #[test]
+    fn parse_am_morning() {
+        assert_eq!(pd("6am"), ndt(2003, 9, 25, 6, 0, 0));
+    }
+
+    // --- dayfirst / yearfirst ---
+
+    #[test]
+    fn parse_dayfirst() {
+        let parser = Parser::default();
+        let out = parser
+            .parse("10/09/03", Some(default_dt()), Some(true), None, false, false)
+            .unwrap();
+        assert_eq!(out.naive, ndt(2003, 9, 10, 0, 0, 0));
+    }
+
+    #[test]
+    fn parse_yearfirst() {
+        let parser = Parser::default();
+        let out = parser
+            .parse("03/09/25", Some(default_dt()), None, Some(true), false, false)
+            .unwrap();
+        assert_eq!(out.naive, ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    // --- HHMMSS.ss format ---
+
+    #[test]
+    fn parse_hhmmss_after_date() {
+        assert_eq!(pd("20030925T104928"), ndt(2003, 9, 25, 10, 49, 28));
+    }
+
+    // --- fuzzy parsing ---
+
+    #[test]
+    fn parse_fuzzy_no_tokens() {
+        let parser = Parser::default();
+        let out = parser
+            .parse(
+                "I]ll meet you at 2003-09-25 10:49",
+                Some(default_dt()),
+                None,
+                None,
+                true,
+                false,
+            )
+            .unwrap();
+        assert_eq!(out.naive, ndt(2003, 9, 25, 10, 49, 0));
+        assert!(out.skipped_tokens.is_none());
+    }
+
+    // --- single date values ---
+
+    #[test]
+    fn parse_month_and_year_value() {
+        // "2003 10" with default -> year=2003, month=10
+        assert_eq!(pd("October 2003"), ndt(2003, 10, 25, 0, 0, 0));
+    }
+
+    #[test]
+    fn parse_two_values_day_month() {
+        // "15 03" — two values, both <= 12: first=month, second=day
+        assert_eq!(pd("10 03"), ndt(2003, 10, 3, 0, 0, 0));
+    }
+
+    // --- ParserError Display ---
+
+    #[test]
+    fn test_parser_error_display() {
+        let e1 = ParserError::UnknownFormat("xyz".into());
+        assert!(format!("{}", e1).contains("Unknown string format"));
+
+        let e2 = ParserError::NoDate("".into());
+        assert!(format!("{}", e2).contains("does not contain a date"));
+
+        let e3 = ParserError::ValueError("bad".into());
+        assert_eq!(format!("{}", e3), "bad");
+    }
+
+    // --- Pertain pattern: "Jan of 2001" ---
+
+    #[test]
+    fn parse_pertain_of() {
+        assert_eq!(pd("Jan of 2003"), ndt(2003, 1, 25, 0, 0, 0));
+    }
+
+    // --- No separator date (YYMMDD) ---
+
+    #[test]
+    fn parse_yymmdd_8digit() {
+        // 8-digit compact: YYYYMMDD
+        assert_eq!(pd("20030925"), ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    // --- convenience parse() function ---
+
+    #[test]
+    fn test_parse_convenience() {
+        let out = parse(
+            "2003-09-25 10:49:41",
+            None,
+            None,
+            Some(default_dt()),
+            false,
+            false,
+        )
+        .unwrap();
+        assert_eq!(out.naive, ndt(2003, 9, 25, 10, 49, 41));
+    }
+
+    // --- GMT+3 sign flip ---
+
+    #[test]
+    fn parse_gmt_plus_offset() {
+        let parser = Parser::default();
+        let out = parser
+            .parse(
+                "2003-09-25 10:49:41 UTC+03:00",
+                Some(default_dt()),
+                None,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
+        // UTC+03:00 → sign is flipped to -3*3600 per Python's behavior
+        assert_eq!(out.tzoffset, Some(-3 * 3600));
+    }
+
+    // --- HHMMSS with fractional seconds ---
+
+    #[test]
+    fn parse_hhmmss_fractional() {
+        // After a date, HHMMSS.ss
+        assert_eq!(
+            pd("2003-09-25 104941.5"),
+            ndt_us(2003, 9, 25, 10, 49, 41, 500_000)
+        );
+    }
+
+    // --- 12am boundary ---
+
+    #[test]
+    fn parse_jump_then_ampm() {
+        assert_eq!(pd("12 am"), ndt(2003, 9, 25, 0, 0, 0));
+    }
 }

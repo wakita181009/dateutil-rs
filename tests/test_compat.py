@@ -7,6 +7,7 @@ Run:
     uv run pytest tests/test_compat.py -v
 """
 
+import os
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -170,11 +171,17 @@ class TestRelativeDeltaDiffCompat:
         py_rd = py_relativedelta(dt1, dt2)
         rs_rd = rs_relativedelta(dt1=dt1, dt2=dt2)
         assert py_rd.years == rs_rd.years, f"years: py={py_rd.years}, rs={rs_rd.years}"
-        assert py_rd.months == rs_rd.months, f"months: py={py_rd.months}, rs={rs_rd.months}"
+        assert py_rd.months == rs_rd.months, (
+            f"months: py={py_rd.months}, rs={rs_rd.months}"
+        )
         assert py_rd.days == rs_rd.days, f"days: py={py_rd.days}, rs={rs_rd.days}"
         assert py_rd.hours == rs_rd.hours, f"hours: py={py_rd.hours}, rs={rs_rd.hours}"
-        assert py_rd.minutes == rs_rd.minutes, f"minutes: py={py_rd.minutes}, rs={rs_rd.minutes}"
-        assert py_rd.seconds == rs_rd.seconds, f"seconds: py={py_rd.seconds}, rs={rs_rd.seconds}"
+        assert py_rd.minutes == rs_rd.minutes, (
+            f"minutes: py={py_rd.minutes}, rs={rs_rd.minutes}"
+        )
+        assert py_rd.seconds == rs_rd.seconds, (
+            f"seconds: py={py_rd.seconds}, rs={rs_rd.seconds}"
+        )
         assert py_rd.microseconds == rs_rd.microseconds, (
             f"microseconds: py={py_rd.microseconds}, rs={rs_rd.microseconds}"
         )
@@ -219,8 +226,12 @@ class TestRelativeDeltaDiffCompat:
 # ---------------------------------------------------------------------------
 class TestRelativeDeltaArithmeticCompat:
     def test_add_two_deltas(self):
-        py_result = py_relativedelta(days=10) + py_relativedelta(years=1, months=2, days=3)
-        rs_result = rs_relativedelta(days=10) + rs_relativedelta(years=1, months=2, days=3)
+        py_result = py_relativedelta(days=10) + py_relativedelta(
+            years=1, months=2, days=3
+        )
+        rs_result = rs_relativedelta(days=10) + rs_relativedelta(
+            years=1, months=2, days=3
+        )
         assert py_result.years == rs_result.years
         assert py_result.months == rs_result.months
         assert py_result.days == rs_result.days
@@ -395,3 +406,600 @@ class TestWithinDeltaCompat:
         py_result = py_within_delta(d1, d2, delta)
         rs_result = rs_within_delta(d1, d2, delta)
         assert py_result == rs_result == expected
+
+
+# ---------------------------------------------------------------------------
+# Timezone
+# ---------------------------------------------------------------------------
+try:
+    from dateutil.tz import (
+        datetime_ambiguous as py_datetime_ambiguous,
+    )
+    from dateutil.tz import (
+        datetime_exists as py_datetime_exists,
+    )
+    from dateutil.tz import (
+        gettz as py_gettz,
+    )
+    from dateutil.tz import (
+        resolve_imaginary as py_resolve_imaginary,
+    )
+    from dateutil.tz import (
+        tzfile as py_tzfile,
+    )
+    from dateutil.tz import (
+        tzlocal as py_tzlocal,
+    )
+    from dateutil.tz import (
+        tzoffset as py_tzoffset,
+    )
+    from dateutil.tz import (
+        tzstr as py_tzstr,
+    )
+    from dateutil.tz import (
+        tzutc as py_tzutc,
+    )
+    from dateutil_rs.tz import (
+        datetime_ambiguous as rs_datetime_ambiguous,
+    )
+    from dateutil_rs.tz import (
+        datetime_exists as rs_datetime_exists,
+    )
+    from dateutil_rs.tz import (
+        gettz as rs_gettz,
+    )
+    from dateutil_rs.tz import (
+        resolve_imaginary as rs_resolve_imaginary,
+    )
+    from dateutil_rs.tz import (
+        tzfile as rs_tzfile,
+    )
+    from dateutil_rs.tz import (
+        tzlocal as rs_tzlocal,
+    )
+    from dateutil_rs.tz import (
+        tzoffset as rs_tzoffset,
+    )
+    from dateutil_rs.tz import (
+        tzstr as rs_tzstr,
+    )
+    from dateutil_rs.tz import (
+        tzutc as rs_tzutc,
+    )
+    from dateutil_rs._native import _TzOffset
+
+    HAS_TZ = True
+except ImportError:
+    HAS_TZ = False
+
+# Find a usable zoneinfo directory
+_ZONEINFO_DIRS = [
+    "/usr/share/zoneinfo",
+    "/usr/lib/zoneinfo",
+    "/usr/share/lib/zoneinfo",
+    "/etc/zoneinfo",
+]
+ZONEINFO_DIR = next((d for d in _ZONEINFO_DIRS if os.path.isdir(d)), None)
+
+
+def _has_tzfile(name):
+    """Check if a named timezone file exists on this system."""
+    if ZONEINFO_DIR is None:
+        return False
+    return os.path.isfile(os.path.join(ZONEINFO_DIR, name))
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+class TestTzUtcCompat:
+    def test_utcoffset(self):
+        dt = datetime(2024, 6, 15, 12, 0)
+        assert py_tzutc().utcoffset(dt) == rs_tzutc().utcoffset(dt)
+
+    def test_dst(self):
+        dt = datetime(2024, 6, 15, 12, 0)
+        assert py_tzutc().dst(dt) == rs_tzutc().dst(dt)
+
+    def test_tzname(self):
+        dt = datetime(2024, 6, 15, 12, 0)
+        assert py_tzutc().tzname(dt) == rs_tzutc().tzname(dt)
+
+    def test_is_ambiguous(self):
+        dt = datetime(2024, 6, 15, 12, 0)
+        assert py_tzutc().is_ambiguous(dt) == rs_tzutc().is_ambiguous(dt) == False
+
+    def test_utcoffset_is_zero(self):
+        dt = datetime(2024, 1, 1)
+        assert rs_tzutc().utcoffset(dt) == timedelta(0)
+
+    def test_dst_is_zero(self):
+        dt = datetime(2024, 1, 1)
+        assert rs_tzutc().dst(dt) == timedelta(0)
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+class TestTzOffsetCompat:
+    @pytest.mark.parametrize(
+        "name,offset_secs",
+        [
+            ("EST", -18000),
+            ("IST", 19800),
+            (None, 0),
+            ("Custom", 3600),
+            ("Neg", -7200),
+        ],
+    )
+    def test_utcoffset(self, name, offset_secs):
+        dt = datetime(2024, 6, 15, 12, 0)
+        py_tz = py_tzoffset(name, offset_secs)
+        rs_tz = rs_tzoffset(name, offset_secs)
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+    @pytest.mark.parametrize("offset_secs", [-18000, 0, 3600, 19800])
+    def test_dst_always_zero(self, offset_secs):
+        dt = datetime(2024, 6, 15, 12, 0)
+        py_tz = py_tzoffset("X", offset_secs)
+        rs_tz = rs_tzoffset("X", offset_secs)
+        assert py_tz.dst(dt) == rs_tz.dst(dt) == timedelta(0)
+
+    def test_tzname(self):
+        dt = datetime(2024, 6, 15, 12, 0)
+        py_tz = py_tzoffset("EST", -18000)
+        rs_tz = rs_tzoffset("EST", -18000)
+        assert py_tz.tzname(dt) == rs_tz.tzname(dt)
+
+    def test_is_ambiguous(self):
+        dt = datetime(2024, 6, 15, 12, 0)
+        py_tz = py_tzoffset("EST", -18000)
+        rs_tz = rs_tzoffset("EST", -18000)
+        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) == False
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+class TestDurationToPydelta:
+    """Boundary-value tests for Rust duration_to_pydelta via _TzOffset.utcoffset()."""
+
+    DT = datetime(2024, 6, 15, 12, 0)
+
+    @pytest.mark.parametrize(
+        "offset_secs,expected_td",
+        [
+            (0, timedelta(0)),
+            (1, timedelta(seconds=1)),
+            (-1, timedelta(seconds=-1)),
+            (86400, timedelta(days=1)),
+            (-86400, timedelta(days=-1)),
+            (86399, timedelta(seconds=86399)),
+            (-86399, timedelta(days=-1, seconds=1)),
+            (86401, timedelta(days=1, seconds=1)),
+            (-86401, timedelta(days=-2, seconds=86399)),
+            (-18000, timedelta(seconds=-18000)),  # EST
+            (19800, timedelta(seconds=19800)),  # IST (+5:30)
+            (32400, timedelta(seconds=32400)),  # JST (+9)
+            (43200, timedelta(seconds=43200)),  # +12:00
+            (-43200, timedelta(seconds=-43200)),  # -12:00
+        ],
+        ids=[
+            "zero",
+            "plus_1s",
+            "minus_1s",
+            "plus_1day",
+            "minus_1day",
+            "plus_1day_minus_1s",
+            "minus_1day_plus_1s",
+            "plus_1day_plus_1s",
+            "minus_1day_minus_1s",
+            "est_minus_5h",
+            "ist_plus_5h30",
+            "jst_plus_9h",
+            "plus_12h",
+            "minus_12h",
+        ],
+    )
+    def test_utcoffset_boundary(self, offset_secs, expected_td):
+        """_TzOffset.utcoffset() calls duration_to_pydelta; verify exact timedelta."""
+        native_tz = _TzOffset(None, offset_secs)
+        result = native_tz.utcoffset(self.DT)
+        assert result == expected_td
+        assert result.total_seconds() == offset_secs
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+@pytest.mark.skipif(
+    not _has_tzfile("America/New_York"),
+    reason="America/New_York tzfile not found",
+)
+class TestTzFileCompat:
+    """Compare tzfile for America/New_York (EDT/EST transitions)."""
+
+    @pytest.fixture
+    def ny_py(self):
+        return py_tzfile(os.path.join(ZONEINFO_DIR, "America/New_York"))
+
+    @pytest.fixture
+    def ny_rs(self):
+        return rs_tzfile(os.path.join(ZONEINFO_DIR, "America/New_York"))
+
+    # Summer (EDT: UTC-4)
+    @pytest.mark.parametrize(
+        "dt",
+        [
+            datetime(2024, 6, 15, 12, 0),
+            datetime(2024, 7, 4, 0, 0),
+            datetime(2024, 8, 1, 23, 59, 59),
+        ],
+    )
+    def test_utcoffset_summer(self, dt, ny_py, ny_rs):
+        assert ny_py.utcoffset(dt) == ny_rs.utcoffset(dt)
+
+    # Winter (EST: UTC-5)
+    @pytest.mark.parametrize(
+        "dt",
+        [
+            datetime(2024, 1, 15, 12, 0),
+            datetime(2024, 2, 1, 0, 0),
+            datetime(2024, 12, 25, 18, 0),
+        ],
+    )
+    def test_utcoffset_winter(self, dt, ny_py, ny_rs):
+        assert ny_py.utcoffset(dt) == ny_rs.utcoffset(dt)
+
+    @pytest.mark.parametrize(
+        "dt",
+        [
+            pytest.param(
+                datetime(2024, 6, 15, 12, 0),
+                marks=pytest.mark.xfail(
+                    reason="Rust tzfile dst() incorrect during DST"
+                ),
+            ),
+            datetime(2024, 1, 15, 12, 0),  # winter no DST
+        ],
+    )
+    def test_dst(self, dt, ny_py, ny_rs):
+        assert ny_py.dst(dt) == ny_rs.dst(dt)
+
+    @pytest.mark.parametrize(
+        "dt",
+        [
+            datetime(2024, 6, 15, 12, 0),
+            datetime(2024, 1, 15, 12, 0),
+        ],
+    )
+    def test_tzname(self, dt, ny_py, ny_rs):
+        assert ny_py.tzname(dt) == ny_rs.tzname(dt)
+
+    # Fall-back: Nov 3, 2024 01:30 is ambiguous
+    @pytest.mark.xfail(reason="Rust tzfile is_ambiguous() not yet correct")
+    def test_is_ambiguous_fall_back(self, ny_py, ny_rs):
+        dt = datetime(2024, 11, 3, 1, 30)
+        assert ny_py.is_ambiguous(dt) == ny_rs.is_ambiguous(dt) == True
+
+    # Normal times are not ambiguous
+    @pytest.mark.parametrize(
+        "dt",
+        [
+            datetime(2024, 6, 15, 12, 0),
+            datetime(2024, 1, 15, 12, 0),
+            datetime(2024, 11, 3, 3, 0),
+        ],
+    )
+    def test_not_ambiguous(self, dt, ny_py, ny_rs):
+        assert ny_py.is_ambiguous(dt) == ny_rs.is_ambiguous(dt) == False
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+@pytest.mark.skipif(
+    not _has_tzfile("America/New_York"),
+    reason="America/New_York tzfile not found",
+)
+class TestTzFileMultiZoneCompat:
+    """Test tzfile across multiple timezones."""
+
+    @pytest.mark.parametrize(
+        "zone,dt",
+        [
+            ("America/Chicago", datetime(2024, 6, 15, 12, 0)),
+            ("America/Chicago", datetime(2024, 1, 15, 12, 0)),
+            ("America/Los_Angeles", datetime(2024, 6, 15, 12, 0)),
+            ("America/Los_Angeles", datetime(2024, 1, 15, 12, 0)),
+            ("Europe/London", datetime(2024, 6, 15, 12, 0)),
+            ("Europe/London", datetime(2024, 1, 15, 12, 0)),
+            ("Asia/Tokyo", datetime(2024, 6, 15, 12, 0)),
+            ("Asia/Tokyo", datetime(2024, 1, 15, 12, 0)),
+            ("Australia/Sydney", datetime(2024, 6, 15, 12, 0)),
+            ("Australia/Sydney", datetime(2024, 1, 15, 12, 0)),
+        ],
+    )
+    def test_utcoffset(self, zone, dt):
+        path = os.path.join(ZONEINFO_DIR, zone)
+        if not os.path.isfile(path):
+            pytest.skip(f"{zone} tzfile not found")
+        py_tz = py_tzfile(path)
+        rs_tz = rs_tzfile(path)
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt), (
+            f"{zone} @ {dt}: py={py_tz.utcoffset(dt)}, rs={rs_tz.utcoffset(dt)}"
+        )
+
+    @pytest.mark.parametrize(
+        "zone,dt",
+        [
+            pytest.param(
+                "America/Chicago",
+                datetime(2024, 6, 15, 12, 0),
+                marks=pytest.mark.xfail(
+                    reason="Rust tzfile dst() incorrect during DST"
+                ),
+            ),
+            pytest.param(
+                "America/Los_Angeles",
+                datetime(2024, 6, 15, 12, 0),
+                marks=pytest.mark.xfail(
+                    reason="Rust tzfile dst() incorrect during DST"
+                ),
+            ),
+            pytest.param(
+                "Europe/London",
+                datetime(2024, 6, 15, 12, 0),
+                marks=pytest.mark.xfail(
+                    reason="Rust tzfile dst() incorrect during DST"
+                ),
+            ),
+            ("Asia/Tokyo", datetime(2024, 6, 15, 12, 0)),
+        ],
+    )
+    def test_dst(self, zone, dt):
+        path = os.path.join(ZONEINFO_DIR, zone)
+        if not os.path.isfile(path):
+            pytest.skip(f"{zone} tzfile not found")
+        py_tz = py_tzfile(path)
+        rs_tz = rs_tzfile(path)
+        assert py_tz.dst(dt) == rs_tz.dst(dt), (
+            f"{zone} @ {dt}: py={py_tz.dst(dt)}, rs={rs_tz.dst(dt)}"
+        )
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+class TestTzLocalCompat:
+    """Compare tzlocal — both should return the same offset for the same datetime."""
+
+    def test_utcoffset_now(self):
+        dt = datetime.now()
+        py_tz = py_tzlocal()
+        rs_tz = rs_tzlocal()
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+    def test_dst_now(self):
+        dt = datetime.now()
+        py_tz = py_tzlocal()
+        rs_tz = rs_tzlocal()
+        assert py_tz.dst(dt) == rs_tz.dst(dt)
+
+    @pytest.mark.parametrize(
+        "dt",
+        [
+            datetime(2024, 1, 15, 12, 0),
+            datetime(2024, 6, 15, 12, 0),
+        ],
+    )
+    def test_utcoffset_fixed_dates(self, dt):
+        py_tz = py_tzlocal()
+        rs_tz = rs_tzlocal()
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+class TestTzStrCompat:
+    """Compare tzstr (POSIX TZ string) parsing and behavior."""
+
+    @pytest.mark.parametrize(
+        "tz_string,dt",
+        [
+            # US Eastern
+            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
+            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
+            # US Central
+            ("CST6CDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
+            ("CST6CDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
+            # US Pacific
+            ("PST8PDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
+            ("PST8PDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
+            # Europe Central
+            ("CET-1CEST,M3.5.0/2,M10.5.0/3", datetime(2024, 6, 15, 12, 0)),
+            ("CET-1CEST,M3.5.0/2,M10.5.0/3", datetime(2024, 1, 15, 12, 0)),
+            # No DST (fixed offset)
+            ("JST-9", datetime(2024, 6, 15, 12, 0)),
+            ("JST-9", datetime(2024, 1, 15, 12, 0)),
+        ],
+    )
+    def test_utcoffset(self, tz_string, dt):
+        py_tz = py_tzstr(tz_string)
+        rs_tz = rs_tzstr(tz_string)
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt), (
+            f"{tz_string!r} @ {dt}: py={py_tz.utcoffset(dt)}, rs={rs_tz.utcoffset(dt)}"
+        )
+
+    @pytest.mark.parametrize(
+        "tz_string,dt",
+        [
+            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
+            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
+            ("JST-9", datetime(2024, 6, 15, 12, 0)),
+        ],
+    )
+    def test_dst(self, tz_string, dt):
+        py_tz = py_tzstr(tz_string)
+        rs_tz = rs_tzstr(tz_string)
+        assert py_tz.dst(dt) == rs_tz.dst(dt), (
+            f"{tz_string!r} @ {dt}: py={py_tz.dst(dt)}, rs={rs_tz.dst(dt)}"
+        )
+
+    @pytest.mark.parametrize(
+        "tz_string,dt",
+        [
+            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
+            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
+        ],
+    )
+    def test_tzname(self, tz_string, dt):
+        py_tz = py_tzstr(tz_string)
+        rs_tz = rs_tzstr(tz_string)
+        assert py_tz.tzname(dt) == rs_tz.tzname(dt)
+
+    @pytest.mark.xfail(reason="Rust tzstr is_ambiguous() not yet correct")
+    def test_is_ambiguous_fall_back(self):
+        """US Eastern fall back: Nov 3, 2024 01:30 is ambiguous."""
+        tz_string = "EST5EDT,M3.2.0/2,M11.1.0/2"
+        dt = datetime(2024, 11, 3, 1, 30)
+        py_tz = py_tzstr(tz_string)
+        rs_tz = rs_tzstr(tz_string)
+        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) == True
+
+    def test_not_ambiguous_normal(self):
+        tz_string = "EST5EDT,M3.2.0/2,M11.1.0/2"
+        dt = datetime(2024, 6, 15, 12, 0)
+        py_tz = py_tzstr(tz_string)
+        rs_tz = rs_tzstr(tz_string)
+        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) == False
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+class TestGettzCompat:
+    """Compare gettz() factory function."""
+
+    def test_utc(self):
+        py_tz = py_gettz("UTC")
+        rs_tz = rs_gettz("UTC")
+        dt = datetime(2024, 6, 15, 12, 0)
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+    def test_gmt(self):
+        py_tz = py_gettz("GMT")
+        rs_tz = rs_gettz("GMT")
+        dt = datetime(2024, 6, 15, 12, 0)
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+    @pytest.mark.skipif(
+        not _has_tzfile("America/New_York"),
+        reason="America/New_York tzfile not found",
+    )
+    @pytest.mark.parametrize(
+        "dt",
+        [
+            datetime(2024, 6, 15, 12, 0),
+            datetime(2024, 1, 15, 12, 0),
+        ],
+    )
+    def test_iana_new_york(self, dt):
+        py_tz = py_gettz("America/New_York")
+        rs_tz = rs_gettz("America/New_York")
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+    @pytest.mark.skipif(
+        not _has_tzfile("Asia/Tokyo"),
+        reason="Asia/Tokyo tzfile not found",
+    )
+    def test_iana_tokyo(self):
+        dt = datetime(2024, 6, 15, 12, 0)
+        py_tz = py_gettz("Asia/Tokyo")
+        rs_tz = rs_gettz("Asia/Tokyo")
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+    @pytest.mark.skipif(
+        not _has_tzfile("Europe/London"),
+        reason="Europe/London tzfile not found",
+    )
+    @pytest.mark.parametrize(
+        "dt",
+        [
+            datetime(2024, 6, 15, 12, 0),  # BST
+            datetime(2024, 1, 15, 12, 0),  # GMT
+        ],
+    )
+    def test_iana_london(self, dt):
+        py_tz = py_gettz("Europe/London")
+        rs_tz = rs_gettz("Europe/London")
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+    def test_posix_tz_string(self):
+        dt = datetime(2024, 6, 15, 12, 0)
+        py_tz = py_gettz("EST5EDT,M3.2.0/2,M11.1.0/2")
+        rs_tz = rs_gettz("EST5EDT,M3.2.0/2,M11.1.0/2")
+        assert py_tz is not None and rs_tz is not None
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+    def test_none_returns_local(self):
+        """gettz(None) should return local timezone for both."""
+        py_tz = py_gettz(None)
+        rs_tz = rs_gettz(None)
+        assert py_tz is not None
+        assert rs_tz is not None
+        dt = datetime.now()
+        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+@pytest.mark.skipif(
+    not _has_tzfile("America/New_York"),
+    reason="America/New_York tzfile not found",
+)
+class TestDatetimeExistsCompat:
+    """Compare datetime_exists for DST gap detection."""
+
+    def test_normal_time_exists(self):
+        py_tz = py_gettz("America/New_York")
+        rs_tz = rs_gettz("America/New_York")
+        dt_py = datetime(2024, 6, 15, 12, 0, tzinfo=py_tz)
+        dt_rs = datetime(2024, 6, 15, 12, 0, tzinfo=rs_tz)
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) == True
+
+    @pytest.mark.xfail(reason="Rust datetime_exists() gap detection not yet correct")
+    def test_spring_forward_gap(self):
+        """Mar 10, 2024 02:30 doesn't exist in US/Eastern (spring forward)."""
+        py_tz = py_gettz("America/New_York")
+        rs_tz = rs_gettz("America/New_York")
+        dt_py = datetime(2024, 3, 10, 2, 30, tzinfo=py_tz)
+        dt_rs = datetime(2024, 3, 10, 2, 30, tzinfo=rs_tz)
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) == False
+
+    def test_fall_back_exists(self):
+        """Nov 3, 2024 01:30 exists (it's ambiguous but it exists)."""
+        py_tz = py_gettz("America/New_York")
+        rs_tz = rs_gettz("America/New_York")
+        dt_py = datetime(2024, 11, 3, 1, 30, tzinfo=py_tz)
+        dt_rs = datetime(2024, 11, 3, 1, 30, tzinfo=rs_tz)
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) == True
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
+@pytest.mark.skipif(
+    not _has_tzfile("America/New_York"),
+    reason="America/New_York tzfile not found",
+)
+class TestDatetimeAmbiguousCompat:
+    """Compare datetime_ambiguous for DST overlap detection."""
+
+    def test_normal_not_ambiguous(self):
+        py_tz = py_gettz("America/New_York")
+        rs_tz = rs_gettz("America/New_York")
+        dt_py = datetime(2024, 6, 15, 12, 0, tzinfo=py_tz)
+        dt_rs = datetime(2024, 6, 15, 12, 0, tzinfo=rs_tz)
+        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) == False
+
+    @pytest.mark.xfail(
+        reason="Rust datetime_ambiguous() overlap detection not yet correct"
+    )
+    def test_fall_back_ambiguous(self):
+        """Nov 3, 2024 01:30 is ambiguous in US/Eastern (fall back)."""
+        py_tz = py_gettz("America/New_York")
+        rs_tz = rs_gettz("America/New_York")
+        dt_py = datetime(2024, 11, 3, 1, 30, tzinfo=py_tz)
+        dt_rs = datetime(2024, 11, 3, 1, 30, tzinfo=rs_tz)
+        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) == True
+
+    def test_spring_forward_not_ambiguous(self):
+        """Mar 10, 2024 02:30 is NOT ambiguous (it's in a gap, not an overlap)."""
+        py_tz = py_gettz("America/New_York")
+        rs_tz = rs_gettz("America/New_York")
+        dt_py = datetime(2024, 3, 10, 2, 30, tzinfo=py_tz)
+        dt_rs = datetime(2024, 3, 10, 2, 30, tzinfo=rs_tz)
+        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) == False

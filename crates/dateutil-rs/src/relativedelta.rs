@@ -1270,4 +1270,398 @@ mod tests {
         assert_eq!(r.day, Some(1));
         assert_eq!(r.leapdays, -1);
     }
+
+    // --- nlyearday ---
+
+    #[test]
+    fn test_nlyearday() {
+        // nlyearday=60 => March 1 (no leapday adjustment)
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, None, None, Some(60), None,
+            None, None, None,
+        )
+        .unwrap();
+        assert_eq!(r.month, Some(3));
+        assert_eq!(r.day, Some(1));
+        assert_eq!(r.leapdays, 0); // no leapday adjustment for nlyearday
+    }
+
+    #[test]
+    fn test_nlyearday_january() {
+        // nlyearday=15 => January 15
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, None, None, Some(15), None,
+            None, None, None,
+        )
+        .unwrap();
+        assert_eq!(r.month, Some(1));
+        assert_eq!(r.day, Some(15));
+    }
+
+    #[test]
+    fn test_invalid_yearday() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, None, Some(367), None, None,
+            None, None, None,
+        );
+        assert!(r.is_err());
+    }
+
+    // --- from_diff with dt1 < dt2 (negative diff) ---
+
+    #[test]
+    fn test_diff_negative() {
+        let dt1 = ndt(2024, 1, 15, 10, 0, 0);
+        let dt2 = ndt(2024, 3, 15, 10, 0, 0);
+        let r = RelativeDelta::from_diff(dt1, dt2);
+        assert_eq!(r.years, 0);
+        assert_eq!(r.months, -2);
+        assert_eq!(r.days, 0.0);
+    }
+
+    #[test]
+    fn test_diff_with_time() {
+        let dt1 = ndt(2024, 3, 15, 14, 30, 45);
+        let dt2 = ndt(2024, 3, 15, 10, 0, 0);
+        let r = RelativeDelta::from_diff(dt1, dt2);
+        assert_eq!(r.years, 0);
+        assert_eq!(r.months, 0);
+        // 4h30m45s = 16245 seconds total, stored as hours+minutes+seconds after fix()
+        let total_secs = r.hours * 3600.0 + r.minutes * 60.0 + r.seconds;
+        assert_eq!(total_secs, 16245.0);
+    }
+
+    // --- add_to_naive_date ---
+
+    #[test]
+    fn test_add_to_naive_date() {
+        let r = rd(0, 1, 0);
+        let d = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let result = r.add_to_naive_date(d);
+        assert_eq!(result, NaiveDate::from_ymd_opt(2024, 2, 15).unwrap());
+    }
+
+    #[test]
+    fn test_add_to_naive_date_with_days() {
+        let r = rd(0, 0, 10);
+        let d = NaiveDate::from_ymd_opt(2024, 1, 25).unwrap();
+        let result = r.add_to_naive_date(d);
+        assert_eq!(result, NaiveDate::from_ymd_opt(2024, 2, 4).unwrap());
+    }
+
+    #[test]
+    fn test_add_to_naive_date_month_overflow() {
+        let r = rd(0, 1, 0);
+        let d = NaiveDate::from_ymd_opt(2024, 12, 15).unwrap();
+        let result = r.add_to_naive_date(d);
+        assert_eq!(result, NaiveDate::from_ymd_opt(2025, 1, 15).unwrap());
+    }
+
+    #[test]
+    fn test_add_to_naive_date_month_underflow() {
+        let r = rd(0, -1, 0);
+        let d = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let result = r.add_to_naive_date(d);
+        assert_eq!(result, NaiveDate::from_ymd_opt(2023, 12, 15).unwrap());
+    }
+
+    #[test]
+    fn test_add_to_naive_date_with_weekday() {
+        let wd = Weekday::new(4, Some(1)); // FR(+1)
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, Some(wd), None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        // 2024-01-15 is Monday -> next Friday = 2024-01-19
+        let d = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let result = r.add_to_naive_date(d);
+        assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 19).unwrap());
+    }
+
+    // --- add_to_naive_datetime with month overflow/underflow ---
+
+    #[test]
+    fn test_add_datetime_month_overflow() {
+        let r = rd(0, 1, 0);
+        let dt = ndt(2024, 12, 15, 10, 0, 0);
+        let result = r.add_to_naive_datetime(dt);
+        assert_eq!(result, ndt(2025, 1, 15, 10, 0, 0));
+    }
+
+    #[test]
+    fn test_add_datetime_month_underflow() {
+        let r = rd(0, -1, 0);
+        let dt = ndt(2024, 1, 15, 10, 0, 0);
+        let result = r.add_to_naive_datetime(dt);
+        assert_eq!(result, ndt(2023, 12, 15, 10, 0, 0));
+    }
+
+    // --- leapdays ---
+
+    #[test]
+    fn test_leapdays_in_leap_year() {
+        // leapdays=1 should add 1 day when month > 2 in a leap year
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 1, 0.0, 0.0, 0.0, 0.0, None, None, None, None, None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        let dt = ndt(2024, 3, 1, 0, 0, 0); // March 1, 2024 (leap year)
+        let result = r.add_to_naive_datetime(dt);
+        assert_eq!(result, ndt(2024, 3, 2, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_leapdays_in_non_leap_year() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 1, 0.0, 0.0, 0.0, 0.0, None, None, None, None, None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        let dt = ndt(2023, 3, 1, 0, 0, 0); // not a leap year
+        let result = r.add_to_naive_datetime(dt);
+        assert_eq!(result, ndt(2023, 3, 1, 0, 0, 0)); // no change
+    }
+
+    #[test]
+    fn test_leapdays_in_date() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 1, 0.0, 0.0, 0.0, 0.0, None, None, None, None, None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        let d = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
+        let result = r.add_to_naive_date(d);
+        assert_eq!(result, NaiveDate::from_ymd_opt(2024, 3, 2).unwrap());
+    }
+
+    // --- add_rd / sub_rd ---
+
+    #[test]
+    fn test_add_rd() {
+        let a = rd(1, 2, 3);
+        let b = rd(0, 3, 7);
+        let result = a.add_rd(&b);
+        assert_eq!(result.years, 1);
+        assert_eq!(result.months, 5);
+        assert_eq!(result.days, 10.0);
+    }
+
+    #[test]
+    fn test_sub_rd() {
+        let a = rd(2, 5, 10);
+        let b = rd(1, 2, 3);
+        let result = a.sub_rd(&b);
+        assert_eq!(result.years, 1);
+        assert_eq!(result.months, 3);
+        assert_eq!(result.days, 7.0);
+    }
+
+    // --- abs ---
+
+    #[test]
+    fn test_abs() {
+        let r = rd(-1, -2, -3);
+        let a = r.abs();
+        assert_eq!(a.years, 1);
+        assert_eq!(a.months, 2);
+        assert_eq!(a.days, 3.0);
+    }
+
+    // --- weeks / has_time ---
+
+    #[test]
+    fn test_weeks() {
+        let r = rd(0, 0, 14);
+        assert_eq!(r.weeks(), 2.0);
+    }
+
+    #[test]
+    fn test_weeks_partial() {
+        let r = rd(0, 0, 10);
+        assert_eq!(r.weeks(), 1.0); // trunc(10/7) = 1
+    }
+
+    #[test]
+    fn test_has_time_false() {
+        let r = rd(1, 2, 3);
+        assert!(!r.has_time());
+    }
+
+    #[test]
+    fn test_has_time_true() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 5.0, 0.0, 0.0, 0.0, None, None, None, None, None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        assert!(r.has_time());
+    }
+
+    #[test]
+    fn test_has_time_absolute() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, None, None, None,
+            Some(10), None, None, None,
+        )
+        .unwrap();
+        assert!(r.has_time());
+    }
+
+    // --- is_zero ---
+
+    #[test]
+    fn test_is_zero_true() {
+        let r = rd(0, 0, 0);
+        assert!(r.is_zero());
+    }
+
+    #[test]
+    fn test_is_zero_false() {
+        let r = rd(0, 0, 1);
+        assert!(!r.is_zero());
+    }
+
+    // --- fix cascade for large values ---
+
+    #[test]
+    fn test_fix_microseconds_cascade() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 2_500_000.0, None, None, None, None, None, None,
+            None, None, None, None,
+        )
+        .unwrap();
+        assert_eq!(r.seconds, 2.0);
+        assert_eq!(r.microseconds, 500_000.0);
+    }
+
+    #[test]
+    fn test_fix_seconds_cascade() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 150.0, 0.0, None, None, None, None, None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        assert_eq!(r.minutes, 2.0);
+        assert_eq!(r.seconds, 30.0);
+    }
+
+    #[test]
+    fn test_fix_hours_cascade() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 50.0, 0.0, 0.0, 0.0, None, None, None, None, None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        assert_eq!(r.days, 2.0);
+        assert_eq!(r.hours, 2.0);
+    }
+
+    #[test]
+    fn test_fix_negative_months_cascade() {
+        let r = rd(0, -14, 0);
+        assert_eq!(r.years, -1);
+        assert_eq!(r.months, -2);
+    }
+
+    // --- Display ---
+
+    #[test]
+    fn test_display_zero() {
+        let r = rd(0, 0, 0);
+        assert_eq!(format!("{}", r), "relativedelta()");
+    }
+
+    #[test]
+    fn test_display_relative() {
+        let r = rd(1, 2, 3);
+        let s = format!("{}", r);
+        assert!(s.contains("years=+1"));
+        assert!(s.contains("months=+2"));
+        assert!(s.contains("days=+3"));
+    }
+
+    #[test]
+    fn test_display_absolute() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, Some(2024), Some(3), Some(15), None, None,
+            None, Some(10), Some(30), Some(0), None,
+        )
+        .unwrap();
+        let s = format!("{}", r);
+        assert!(s.contains("year=2024"));
+        assert!(s.contains("month=3"));
+        assert!(s.contains("day=15"));
+        assert!(s.contains("hour=10"));
+        assert!(s.contains("minute=30"));
+    }
+
+    #[test]
+    fn test_display_with_weekday() {
+        let wd = Weekday::new(0, Some(1));
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, Some(wd), None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        let s = format!("{}", r);
+        assert!(s.contains("weekday=MO(+1)"));
+    }
+
+    // --- apply_weekday with negative n ---
+
+    #[test]
+    fn test_weekday_negative_n() {
+        let wd = Weekday::new(0, Some(-1)); // MO(-1) = last Monday
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, Some(wd), None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        // 2024-01-17 is Wednesday -> last Monday before = 2024-01-15
+        let dt = ndt(2024, 1, 17, 14, 0, 0);
+        let result = r.add_to_naive_datetime(dt);
+        assert_eq!(result, ndt(2024, 1, 15, 14, 0, 0));
+    }
+
+    #[test]
+    fn test_weekday_negative_2() {
+        let wd = Weekday::new(4, Some(-2)); // FR(-2) = 2nd-to-last Friday
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, Some(wd), None, None, None,
+            None, None, None,
+        )
+        .unwrap();
+        // 2024-01-20 is Saturday -> previous Friday = Jan 19, 2nd previous = Jan 12
+        let dt = ndt(2024, 1, 20, 0, 0, 0);
+        let result = r.add_to_naive_datetime(dt);
+        assert_eq!(result, ndt(2024, 1, 12, 0, 0, 0));
+    }
+
+    // --- absolute fields in add_to_naive_datetime ---
+
+    #[test]
+    fn test_absolute_year_month_day() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, Some(2025), Some(6), Some(15), None, None,
+            None, None, None, None, None,
+        )
+        .unwrap();
+        let dt = ndt(2024, 1, 1, 12, 0, 0);
+        let result = r.add_to_naive_datetime(dt);
+        assert_eq!(result, ndt(2025, 6, 15, 12, 0, 0));
+    }
+
+    #[test]
+    fn test_absolute_hour_minute_second() {
+        let r = RelativeDelta::new(
+            0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, None, None, None, None, None, None,
+            Some(14), Some(30), Some(45), None,
+        )
+        .unwrap();
+        let dt = ndt(2024, 1, 15, 0, 0, 0);
+        let result = r.add_to_naive_datetime(dt);
+        assert_eq!(result, ndt(2024, 1, 15, 14, 30, 45));
+    }
 }
