@@ -326,7 +326,20 @@ impl ParserInfo {
     }
 
     pub fn weekday(&self, name: &str) -> Option<usize> {
-        self.weekdays.get(&name.to_lowercase()).copied()
+        let lower = name.to_lowercase();
+        if let Some(&v) = self.weekdays.get(&lower) {
+            return Some(v);
+        }
+        // Prefix match for 4+ letter abbreviations: "Frid" → "fri" matches Friday.
+        // Safe: all 3-letter weekday abbreviations (mon–sun) are unique prefixes.
+        if lower.len() >= 4 {
+            for (key, &val) in &self.weekdays {
+                if key.len() == 3 && lower.starts_with(key) {
+                    return Some(val);
+                }
+            }
+        }
+        None
     }
 
     /// Returns 1-based month number.
@@ -790,6 +803,9 @@ impl Parser {
                             i += 4;
                         }
                     }
+                } else if let Some(skip) = era_pattern_len(&tokens, i) {
+                    // Era marker (AD, A.D., BC, B.C.) — skip
+                    i += skip - 1; // -1 because the loop adds 1
                 } else if info.ampm(&token).is_some() {
                     let ampm_val = info.ampm(&token).unwrap();
                     let valid = ampm_valid(res.hour, res.ampm, fuzzy)?;
@@ -937,12 +953,27 @@ impl Parser {
                 res.minute = Some(s[2..].parse::<u32>().unwrap_or(0));
             }
         } else if len_li == 6 || (len_li > 6 && tokens[idx].find('.') == Some(6)) {
-            // YYMMDD or HHMMSS[.ss]
+            // YYMMDD or HHMMSS[.ss], with YYYYMM fallback
             let s = &tokens[idx];
             if ymd.len() == 0 && !s.contains('.') {
-                ymd.append_str(&s[..2], None).map_err(|_| ())?;
-                ymd.append_str(&s[2..4], None).map_err(|_| ())?;
-                ymd.append_str(&s[4..], None).map_err(|_| ())?;
+                // Try YYMMDD first; if month/day would be invalid, fall back to YYYYMM
+                let mm: u32 = s[2..4].parse().unwrap_or(0);
+                let dd: u32 = s[4..6].parse().unwrap_or(0);
+                if (1..=12).contains(&mm) && (1..=31).contains(&dd) {
+                    // Valid YYMMDD
+                    ymd.append_str(&s[..2], None).map_err(|_| ())?;
+                    ymd.append_str(&s[2..4], None).map_err(|_| ())?;
+                    ymd.append_str(&s[4..], None).map_err(|_| ())?;
+                } else {
+                    // Fallback: try YYYYMM (e.g. "201712" → 2017-12)
+                    let mm2: u32 = s[4..6].parse().unwrap_or(0);
+                    if (1..=12).contains(&mm2) {
+                        ymd.append_str(&s[..4], Some('Y')).map_err(|_| ())?;
+                        ymd.append_str(&s[4..6], None).map_err(|_| ())?;
+                    } else {
+                        return Err(());
+                    }
+                }
             } else {
                 // Python uses int() which raises ValueError on non-digit slices.
                 res.hour = Some(s[..2].parse::<u32>().map_err(|_| ())?);
@@ -950,6 +981,24 @@ impl Parser {
                 let (sec, us) = parsems(&s[4..]);
                 res.second = Some(sec);
                 res.microsecond = Some(us);
+            }
+        } else if len_li == 10 && tokens[idx].chars().all(|c| c.is_ascii_digit()) {
+            // YYYYMMDDHH — e.g. "1991041310"
+            let s = &tokens[idx];
+            ymd.append_str(&s[..4], Some('Y')).map_err(|_| ())?;
+            ymd.append_str(&s[4..6], None).map_err(|_| ())?;
+            ymd.append_str(&s[6..8], None).map_err(|_| ())?;
+            res.hour = Some(s[8..10].parse::<u32>().unwrap_or(0));
+            // Check for trailing :MM[:SS]
+            if idx + 2 < len_l && tokens[idx + 1] == ":" {
+                res.minute = Some(tokens[idx + 2].parse::<u32>().unwrap_or(0));
+                idx += 2;
+                if idx + 2 < len_l && tokens[idx + 1] == ":" {
+                    let (s, us) = parsems(&tokens[idx + 2]);
+                    res.second = Some(s);
+                    res.microsecond = Some(us);
+                    idx += 2;
+                }
             }
         } else if matches!(len_li, 8 | 12 | 14) {
             // YYYYMMDD[HHMM[SS]]
@@ -1024,17 +1073,31 @@ impl Parser {
             }
             idx += 1;
         } else if idx + 1 >= len_l || info.jump(&tokens[idx + 1]) {
-            if idx + 2 < len_l && info.ampm(&tokens[idx + 2]).is_some() {
-                // 12 am
+            // Check if the jump word is an era marker (AD, BC, etc.)
+            let is_era_jump = idx + 1 < len_l && is_era(&tokens[idx + 1]);
+
+            if is_era_jump {
+                // Year + era suffix: "6AD", "1973 AD", etc.
+                ymd.append_val(value_f as i32, Some('Y')).map_err(|_| ())?;
+                ymd.century_specified = true;
+            } else if idx + 2 < len_l
+                && info.ampm(&tokens[idx + 2]).is_some()
+                && era_pattern_len(tokens, idx + 2).is_none()
+            {
+                // "12 am" — but not "1973 A.D."
                 let hour = value_f as u32;
                 res.hour = Some(adjust_ampm(hour, info.ampm(&tokens[idx + 2]).unwrap()));
                 idx += 1;
             } else {
-                ymd.append_val(value_f as i32, None).map_err(|_| ())?;
+                // Use append_str to preserve string length info (e.g. "0031" → 4 digits → year)
+                ymd.append_str(value_repr, None).map_err(|_| ())?;
             }
             idx += 1;
-        } else if info.ampm(&tokens[idx + 1]).is_some() && (0.0..24.0).contains(&value_f) {
-            // 12am
+        } else if info.ampm(&tokens[idx + 1]).is_some()
+            && era_pattern_len(tokens, idx + 1).is_none()
+            && (0.0..24.0).contains(&value_f)
+        {
+            // "12am" — but not "6A.D."
             let hour = value_f as u32;
             res.hour = Some(adjust_ampm(hour, info.ampm(&tokens[idx + 1]).unwrap()));
             idx += 1;
@@ -1317,6 +1380,42 @@ fn parsems(s: &str) -> (u32, u32) {
     } else {
         (s.parse().unwrap_or(0), 0)
     }
+}
+
+/// Check if a token is an era marker (AD, BC, CE, BCE).
+fn is_era(token: &str) -> bool {
+    token.eq_ignore_ascii_case("ad")
+        || token.eq_ignore_ascii_case("bc")
+        || token.eq_ignore_ascii_case("ce")
+        || token.eq_ignore_ascii_case("bce")
+}
+
+/// Check if tokens starting at `i` form an era dot-pattern like "A.D." or "B.C.".
+/// Returns the number of tokens consumed, or `None` if no era pattern.
+fn era_pattern_len(tokens: &[String], i: usize) -> Option<usize> {
+    if i >= tokens.len() {
+        return None;
+    }
+    // Single-token era: "AD", "BC", etc.
+    if is_era(&tokens[i]) {
+        return Some(1);
+    }
+    // Dot-separated era: "A.D." → ["A", ".", "D", "."] or "B.C." → ["B", ".", "C", "."]
+    let t = &tokens[i];
+    if t.len() == 1 && i + 2 < tokens.len() && tokens[i + 1] == "." {
+        let first = t.as_bytes()[0] | 0x20; // ASCII lowercase
+        let next = &tokens[i + 2];
+        if next.len() == 1 {
+            let second = next.as_bytes()[0] | 0x20;
+            if (first == b'a' && second == b'd') || (first == b'b' && second == b'c') {
+                if i + 3 < tokens.len() && tokens[i + 3] == "." {
+                    return Some(4); // "A.D." or "B.C." with trailing dot
+                }
+                return Some(3); // "A.D" or "B.C" without trailing dot
+            }
+        }
+    }
+    None
 }
 
 fn recombine_skipped(tokens: &[String], skipped_idxs: &[usize]) -> Vec<String> {
@@ -2221,5 +2320,204 @@ mod tests {
     #[test]
     fn parse_jump_then_ampm() {
         assert_eq!(pd("12 am"), ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    // --- 6-digit YYMMDD ---
+
+    #[test]
+    fn parse_yymmdd_6digit() {
+        assert_eq!(pd("030925"), ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    // --- 6-digit YYYYMM fallback (invalid day) ---
+
+    #[test]
+    fn parse_yyyymm_fallback() {
+        // "201712" — mm=17 invalid, so fallback to YYYYMM (2017-12)
+        assert_eq!(
+            p("201712"),
+            ndt(2017, 12, 25, 0, 0, 0) // day from default
+        );
+    }
+
+    // --- HHMMSS 6-digit after date ---
+
+    #[test]
+    fn parse_hhmmss_6digit_after_date() {
+        assert_eq!(pd("2003-09-25 104941"), ndt_us(2003, 9, 25, 10, 49, 41, 0));
+    }
+
+    // --- 10-digit YYYYMMDDHH ---
+
+    #[test]
+    fn parse_10digit_yyyymmddhh() {
+        assert_eq!(pd("1991041310"), ndt(1991, 4, 13, 10, 0, 0));
+    }
+
+    // --- 10-digit YYYYMMDDHH with :MM ---
+
+    #[test]
+    fn parse_10digit_with_minutes() {
+        assert_eq!(pd("1991041310:30"), ndt(1991, 4, 13, 10, 30, 0));
+    }
+
+    // --- 10-digit YYYYMMDDHH with :MM:SS ---
+
+    #[test]
+    fn parse_10digit_with_seconds() {
+        assert_eq!(pd("1991041310:30:45"), ndt(1991, 4, 13, 10, 30, 45));
+    }
+
+    // --- 12-digit YYYYMMDDHHMM ---
+
+    #[test]
+    fn parse_12digit_yyyymmddhhmm() {
+        assert_eq!(pd("200309251049"), ndt(2003, 9, 25, 10, 49, 0));
+    }
+
+    // --- 14-digit YYYYMMDDHHMMSS ---
+
+    #[test]
+    fn parse_14digit_yyyymmddhhmmss() {
+        assert_eq!(pd("20030925104928"), ndt(2003, 9, 25, 10, 49, 28));
+    }
+
+    // --- fuzzy_with_tokens returning skipped tokens ---
+
+    #[test]
+    fn parse_fuzzy_with_tokens() {
+        let parser = Parser::default();
+        let out = parser
+            .parse(
+                "Today is January 1, 2047 at 8:21:00AM",
+                Some(default_dt()),
+                None,
+                None,
+                true,
+                true,
+            )
+            .unwrap();
+        assert_eq!(out.naive, ndt(2047, 1, 1, 8, 21, 0));
+        let tokens = out.skipped_tokens.unwrap();
+        assert!(!tokens.is_empty());
+        assert!(tokens.iter().any(|t| t.contains("Today")));
+    }
+
+    // --- weekday resolution (day not explicitly set) ---
+
+    #[test]
+    fn parse_weekday_resolution() {
+        // "Monday" from default 2003-09-25 (Thu) → next Mon = 2003-09-29
+        assert_eq!(pd("Monday"), ndt(2003, 9, 29, 0, 0, 0));
+    }
+
+    // --- two values with first > 31 ---
+
+    #[test]
+    fn parse_two_values_year_month() {
+        assert_eq!(pd("2003 10"), ndt(2003, 10, 25, 0, 0, 0));
+    }
+
+    // --- two values with second > 31 ---
+
+    #[test]
+    fn parse_two_values_month_year() {
+        assert_eq!(pd("10 2003"), ndt(2003, 10, 25, 0, 0, 0));
+    }
+
+    // --- dayfirst with two values ---
+
+    #[test]
+    fn parse_dayfirst_two_values() {
+        let parser = Parser::default();
+        let out = parser
+            .parse("10/09", Some(default_dt()), Some(true), None, false, false)
+            .unwrap();
+        assert_eq!(out.naive, ndt(2003, 9, 10, 0, 0, 0));
+    }
+
+    // --- yearfirst with three values ---
+
+    #[test]
+    fn parse_yearfirst_three_values() {
+        let parser = Parser::default();
+        let out = parser
+            .parse("03/09/25", Some(default_dt()), None, Some(true), false, false)
+            .unwrap();
+        assert_eq!(out.naive, ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    // --- month with separator and third value as month name ---
+
+    #[test]
+    fn parse_day_sep_month_name_sep_year() {
+        assert_eq!(pd("25-Sep-2003"), ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    // --- date with month name in middle of separator chain ---
+
+    #[test]
+    fn parse_year_month_name_day() {
+        assert_eq!(pd("2003/Sep/25"), ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    // --- could_be_day: with known month and year ---
+
+    #[test]
+    fn parse_explicit_month_then_day() {
+        assert_eq!(pd("Feb 28 2003"), ndt(2003, 2, 28, 0, 0, 0));
+    }
+
+    // --- HH:MM where minutes contain a period (sub-seconds) ---
+
+    #[test]
+    fn parse_min_sec_combined() {
+        // "10:36:28.5" — seconds with fractional
+        assert_eq!(
+            pd("2003-09-25 10:36:28.5"),
+            ndt_us(2003, 9, 25, 10, 36, 28, 500_000)
+        );
+    }
+
+    // --- pertain: month "of" year ---
+
+    #[test]
+    fn parse_pertain_of_long_year() {
+        assert_eq!(pd("September of 2003"), ndt(2003, 9, 25, 0, 0, 0));
+    }
+
+    // --- century_specified flag (4-digit string) ---
+
+    #[test]
+    fn parse_four_digit_year_string() {
+        assert_eq!(pd("0031-01-01"), ndt(31, 1, 1, 0, 0, 0));
+    }
+
+    // --- default day clamping ---
+
+    #[test]
+    fn parse_month_clamps_day() {
+        // Default day is 31, Feb only has 28 days in 2003
+        let parser = Parser::default();
+        let default = NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2003, 1, 31).unwrap(),
+            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        );
+        let out = parser
+            .parse("Feb 2003", Some(default), None, None, false, false)
+            .unwrap();
+        assert_eq!(out.naive, ndt(2003, 2, 28, 0, 0, 0));
+    }
+
+    // --- ParserInfo custom config ---
+
+    #[test]
+    fn parse_custom_parserinfo() {
+        let info = ParserInfo::new(false, false);
+        let parser = Parser::new(info);
+        let out = parser
+            .parse("2003-09-25", Some(default_dt()), None, None, false, false)
+            .unwrap();
+        assert_eq!(out.naive, ndt(2003, 9, 25, 0, 0, 0));
     }
 }

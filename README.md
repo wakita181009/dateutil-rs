@@ -195,12 +195,12 @@ dateutil-rs/
 |--------|:----:|-------|
 | easter | ✅ | 3.2x–6.2x faster |
 | relativedelta | ✅ | 3.5x–18.7x faster |
-| parser (parse) | ✅ | 1.3x–3.5x faster; falls back to python-dateutil for custom parserinfo |
+| parser (parse) | ✅ | 1.3x–3.5x faster; custom parserinfo tables forwarded to Rust |
 | parser (isoparse) | ✅ | 5.1x–23.5x faster |
 | rrule | ✅ | 1.7x–9.1x faster |
 | tz | ✅ | 1.0x–94.3x faster (gettz cached) |
 | common (Weekday) | ✅ | |
-| utils (within_delta) | ✅ | `today()` / `default_tzinfo()` still delegate to python-dateutil |
+| utils | ✅ | `today()`, `default_tzinfo()`, `within_delta()` all Rust-native |
 
 ## Roadmap
 

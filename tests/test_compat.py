@@ -363,6 +363,46 @@ class TestParserCompat:
         assert py_result == rs_result
 
 
+@pytest.mark.skipif(not HAS_PARSER, reason="dateutil_rs.parser not available")
+class TestParserEdgeCases:
+    """Edge cases that dateutil_rs handles beyond python-dateutil."""
+
+    def test_four_letter_weekday(self):
+        """Prefix-match weekday names: 'Frid' → Friday."""
+        assert rs_parse("Frid Dec 30, 2016") == datetime(2016, 12, 30)
+
+    def test_unambiguous_YYYYMM(self):
+        """Fallback to YYYYMM when YYMMDD is invalid (month > 12)."""
+        result = rs_parse("201712", default=datetime(2000, 1, 1))
+        assert result == datetime(2017, 12, 1)
+
+    def test_first_century(self):
+        """4-digit token with leading zeros treated as year: '0031' → year 31."""
+        assert rs_parse("0031 Nov 03") == datetime(31, 11, 3)
+
+    def test_YYYYMMDDHH_with_time(self):
+        """10-digit concatenated YYYYMMDDHH followed by :MM:SS."""
+        assert rs_parse("1991041310:19:24") == datetime(1991, 4, 13, 10, 19, 24)
+
+    def test_era_ad_dot(self):
+        """'A.D.2001' — era marker with dots, year extracted."""
+        result = rs_parse("A.D.2001")
+        assert result.year == 2001
+
+    @pytest.mark.parametrize(
+        "dstr",
+        [" 6AD May 19", " 06AD May 19", " 006AD May 19", " 0006AD May 19"],
+    )
+    def test_ad_nospace(self, dstr):
+        """Number + AD era suffix treated as year."""
+        assert rs_parse(dstr) == datetime(6, 5, 19)
+
+    def test_on_era_trailing(self):
+        """Trailing 'A.D.' does not corrupt parsed time."""
+        result = rs_parse("2:15 PM on January 2nd 1973 A.D.")
+        assert result == datetime(1973, 1, 2, 14, 15)
+
+
 # ---------------------------------------------------------------------------
 # Utils — within_delta
 # ---------------------------------------------------------------------------
