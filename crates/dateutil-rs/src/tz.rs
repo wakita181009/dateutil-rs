@@ -10,7 +10,20 @@ pub use offset::TzOffset;
 pub use range::{TzRange, TzStr};
 pub use utc::TzUtc;
 
+use std::collections::HashMap;
+use std::sync::{OnceLock, RwLock};
+
 use chrono::{Duration, NaiveDateTime};
+
+// ============================================================================
+// gettz cache (thread-safe singleton, matches python-dateutil's _TzFactory)
+// ============================================================================
+
+static GETTZ_CACHE: OnceLock<RwLock<HashMap<String, Tz>>> = OnceLock::new();
+
+fn gettz_cache() -> &'static RwLock<HashMap<String, Tz>> {
+    GETTZ_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
 
 // ============================================================================
 // Tz — Unified timezone enum
@@ -101,7 +114,12 @@ const TZPATHS: &[&str] = &[
 #[cfg(not(target_os = "windows"))]
 const TZFILES: &[&str] = &["/etc/localtime", "localtime"];
 
-/// Get a timezone by name.
+/// Get a timezone by name, with caching.
+///
+/// Results are cached in a process-global `RwLock<HashMap>`, matching
+/// python-dateutil's `_TzFactory` singleton cache.  Repeated lookups
+/// for the same name return a clone from the cache instead of hitting
+/// the filesystem again.
 ///
 /// Matches python-dateutil's `dateutil.tz.gettz()` lookup order:
 /// 1. `None` / `""` / `":"` → `$TZ` env → TZFILES → `TzLocal`
@@ -112,6 +130,32 @@ const TZFILES: &[&str] = &["/etc/localtime", "localtime"];
 /// 6. System timezone name (e.g. `"JST"`) → `TzLocal`
 /// 7. POSIX TZ string (contains digits) → `TzStr`
 pub fn gettz(name: Option<&str>) -> Option<Tz> {
+    let cache_key = name.unwrap_or("").to_string();
+
+    // Fast path: check cache under a read lock.
+    {
+        if let Ok(cache) = gettz_cache().read() {
+            if let Some(tz) = cache.get(&cache_key) {
+                return Some(tz.clone());
+            }
+        }
+    }
+
+    // Cache miss — perform the actual (potentially expensive) lookup.
+    let result = gettz_uncached(name);
+
+    // Store successful lookups in the cache.
+    if let Some(ref tz) = result {
+        if let Ok(mut cache) = gettz_cache().write() {
+            cache.entry(cache_key).or_insert_with(|| tz.clone());
+        }
+    }
+
+    result
+}
+
+/// Uncached implementation of `gettz`.
+fn gettz_uncached(name: Option<&str>) -> Option<Tz> {
     let name = match name {
         None | Some("") | Some(":") => {
             // Try $TZ environment variable first
