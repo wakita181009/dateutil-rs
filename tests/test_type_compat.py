@@ -61,10 +61,16 @@ class TestRelativeDeltaAttrTypes:
             )
 
     def test_relative_fields(self):
-        py_rd = py_relativedelta(years=1, months=2, days=3, hours=4, minutes=5, seconds=6)
-        rs_rd = rs_relativedelta(years=1, months=2, days=3, hours=4, minutes=5, seconds=6)
+        py_rd = py_relativedelta(
+            years=1, months=2, days=3, hours=4, minutes=5, seconds=6
+        )
+        rs_rd = rs_relativedelta(
+            years=1, months=2, days=3, hours=4, minutes=5, seconds=6
+        )
         self._assert_attr_types_match(
-            py_rd, rs_rd, ["years", "months", "days", "hours", "minutes", "seconds", "microseconds"]
+            py_rd,
+            rs_rd,
+            ["years", "months", "days", "hours", "minutes", "seconds", "microseconds"],
         )
 
     def test_leapdays_type(self):
@@ -73,9 +79,21 @@ class TestRelativeDeltaAttrTypes:
         assert type(py_rd.leapdays) is type(rs_rd.leapdays)
 
     def test_absolute_fields_when_set(self):
-        py_rd = py_relativedelta(year=2024, month=6, day=15, hour=10, minute=30, second=0)
-        rs_rd = rs_relativedelta(year=2024, month=6, day=15, hour=10, minute=30, second=0)
-        for field in ["year", "month", "day", "hour", "minute", "second", "microsecond"]:
+        py_rd = py_relativedelta(
+            year=2024, month=6, day=15, hour=10, minute=30, second=0
+        )
+        rs_rd = rs_relativedelta(
+            year=2024, month=6, day=15, hour=10, minute=30, second=0
+        )
+        for field in [
+            "year",
+            "month",
+            "day",
+            "hour",
+            "minute",
+            "second",
+            "microsecond",
+        ]:
             py_val = getattr(py_rd, field)
             rs_val = getattr(rs_rd, field)
             # Both should be int (or None for microsecond if not set)
@@ -87,7 +105,15 @@ class TestRelativeDeltaAttrTypes:
     def test_absolute_fields_when_none(self):
         py_rd = py_relativedelta(days=1)
         rs_rd = rs_relativedelta(days=1)
-        for field in ["year", "month", "day", "hour", "minute", "second", "microsecond"]:
+        for field in [
+            "year",
+            "month",
+            "day",
+            "hour",
+            "minute",
+            "second",
+            "microsecond",
+        ]:
             py_val = getattr(py_rd, field)
             rs_val = getattr(rs_rd, field)
             assert py_val is None and rs_val is None, (
@@ -101,7 +127,9 @@ class TestRelativeDeltaAttrTypes:
         py_rd = py_relativedelta(dt1, dt2)
         rs_rd = rs_relativedelta(dt1=dt1, dt2=dt2)
         self._assert_attr_types_match(
-            py_rd, rs_rd, ["years", "months", "days", "hours", "minutes", "seconds", "microseconds"]
+            py_rd,
+            rs_rd,
+            ["years", "months", "days", "hours", "minutes", "seconds", "microseconds"],
         )
 
 
@@ -154,7 +182,11 @@ class TestRelativeDeltaOperatorTypes:
     def test_bool(self):
         """bool(relativedelta) → bool."""
         assert type(bool(py_relativedelta())) is type(bool(rs_relativedelta())) is bool
-        assert type(bool(py_relativedelta(days=1))) is type(bool(rs_relativedelta(days=1))) is bool
+        assert (
+            type(bool(py_relativedelta(days=1)))
+            is type(bool(rs_relativedelta(days=1)))
+            is bool
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +306,8 @@ class TestTzTypes:
         assert isinstance(rs_tzlocal(), datetime.tzinfo)
 
     @pytest.mark.skipif(
-        ZONEINFO_DIR is None or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
+        ZONEINFO_DIR is None
+        or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
         reason="America/New_York tzfile not found",
     )
     def test_tzfile_is_tzinfo(self):
@@ -334,7 +367,8 @@ class TestTzUtilReturnTypes:
     """datetime_exists / datetime_ambiguous return bool."""
 
     @pytest.mark.skipif(
-        ZONEINFO_DIR is None or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
+        ZONEINFO_DIR is None
+        or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
         reason="America/New_York tzfile not found",
     )
     def test_datetime_exists_returns_bool(self):
@@ -349,7 +383,8 @@ class TestTzUtilReturnTypes:
         assert type(rs_datetime_exists(dt_rs)) is bool
 
     @pytest.mark.skipif(
-        ZONEINFO_DIR is None or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
+        ZONEINFO_DIR is None
+        or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
         reason="America/New_York tzfile not found",
     )
     def test_datetime_ambiguous_returns_bool(self):
