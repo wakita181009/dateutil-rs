@@ -78,11 +78,11 @@ impl TzLocal {
         }
     }
 
-    pub fn tzname(&self, dt: Option<NaiveDateTime>, _fold: bool) -> Option<String> {
+    pub fn tzname(&self, dt: Option<NaiveDateTime>, fold: bool) -> Option<String> {
         // chrono doesn't provide timezone name directly.
         // Return a generic name based on offset.
         let dt = dt?;
-        let offset = self.utcoffset(Some(dt), false)?;
+        let offset = self.utcoffset(Some(dt), fold)?;
         let total_secs = offset.num_seconds();
         let hours = total_secs / 3600;
         let mins = (total_secs.abs() % 3600) / 60;

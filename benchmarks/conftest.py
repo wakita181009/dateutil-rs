@@ -91,6 +91,7 @@ def _import_rust():
         import dateutil_rs.easter
         import dateutil_rs.parser
         import dateutil_rs.relativedelta
+        import dateutil_rs.tz
         import dateutil_rs.utils
     except ImportError:
         return None
@@ -100,7 +101,7 @@ def _import_rust():
         parser=dateutil_rs.parser,
         relativedelta=dateutil_rs.relativedelta,
         rrule=None,
-        tz=None,
+        tz=dateutil_rs.tz,
         utils=dateutil_rs.utils,
     )
 
