@@ -67,7 +67,7 @@ dateutil-rs/
 ```toml
 [package]
 name = "dateutil-rs"
-version = "0.0.7"
+version = "0.0.8"
 edition = "2021"
 
 [lib]
