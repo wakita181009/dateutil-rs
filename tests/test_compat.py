@@ -1243,12 +1243,18 @@ class TestRRuleByMonthDayCompat:
     def test_yearly_bymonth_and_bymonthday(self):
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=3, bymonth=(1, 3),
-                bymonthday=(5, 7), dtstart=self.DTSTART,
+                PY_YEARLY,
+                count=3,
+                bymonth=(1, 3),
+                bymonthday=(5, 7),
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=3, bymonth=(1, 3),
-                bymonthday=(5, 7), dtstart=self.DTSTART,
+                RS_YEARLY,
+                count=3,
+                bymonth=(1, 3),
+                bymonthday=(5, 7),
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1264,19 +1270,25 @@ class TestRRuleByWeekDayCompat:
 
     def test_yearly_byweekday(self):
         self._assert_same(
-            py_rrule(PY_YEARLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART),
+            py_rrule(
+                PY_YEARLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART
+            ),
             rs_rrule(RS_YEARLY, count=3, byweekday=(RSTU, RSTH), dtstart=self.DTSTART),
         )
 
     def test_monthly_byweekday(self):
         self._assert_same(
-            py_rrule(PY_MONTHLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART),
+            py_rrule(
+                PY_MONTHLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART
+            ),
             rs_rrule(RS_MONTHLY, count=3, byweekday=(RSTU, RSTH), dtstart=self.DTSTART),
         )
 
     def test_weekly_byweekday(self):
         self._assert_same(
-            py_rrule(PY_WEEKLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART),
+            py_rrule(
+                PY_WEEKLY, count=3, byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART
+            ),
             rs_rrule(RS_WEEKLY, count=3, byweekday=(RSTU, RSTH), dtstart=self.DTSTART),
         )
 
@@ -1291,12 +1303,14 @@ class TestRRuleByWeekDayCompat:
         """1st Friday and -1st Friday of each month."""
         self._assert_same(
             py_rrule(
-                PY_MONTHLY, count=6,
+                PY_MONTHLY,
+                count=6,
                 byweekday=(PY_FR(1), PY_FR(-1)),
                 dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_MONTHLY, count=6,
+                RS_MONTHLY,
+                count=6,
                 byweekday=(RSFR(1), RSFR(-1)),
                 dtstart=self.DTSTART,
             ),
@@ -1305,12 +1319,18 @@ class TestRRuleByWeekDayCompat:
     def test_yearly_bymonth_and_byweekday(self):
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=3, bymonth=(1, 3),
-                byweekday=(PY_TU, PY_TH), dtstart=self.DTSTART,
+                PY_YEARLY,
+                count=3,
+                bymonth=(1, 3),
+                byweekday=(PY_TU, PY_TH),
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=3, bymonth=(1, 3),
-                byweekday=(RSTU, RSTH), dtstart=self.DTSTART,
+                RS_YEARLY,
+                count=3,
+                bymonth=(1, 3),
+                byweekday=(RSTU, RSTH),
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1318,25 +1338,35 @@ class TestRRuleByWeekDayCompat:
         """3rd Tuesday of Jan and Mar."""
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=3, bymonth=(1, 3),
-                byweekday=PY_TU(3), dtstart=self.DTSTART,
+                PY_YEARLY,
+                count=3,
+                bymonth=(1, 3),
+                byweekday=PY_TU(3),
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=3, bymonth=(1, 3),
-                byweekday=RSTU(3), dtstart=self.DTSTART,
+                RS_YEARLY,
+                count=3,
+                bymonth=(1, 3),
+                byweekday=RSTU(3),
+                dtstart=self.DTSTART,
             ),
         )
 
     def test_monthly_bymonthday_and_byweekday(self):
         self._assert_same(
             py_rrule(
-                PY_MONTHLY, count=3,
-                bymonthday=(1, 3), byweekday=(PY_TU, PY_TH),
+                PY_MONTHLY,
+                count=3,
+                bymonthday=(1, 3),
+                byweekday=(PY_TU, PY_TH),
                 dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_MONTHLY, count=3,
-                bymonthday=(1, 3), byweekday=(RSTU, RSTH),
+                RS_MONTHLY,
+                count=3,
+                bymonthday=(1, 3),
+                byweekday=(RSTU, RSTH),
                 dtstart=self.DTSTART,
             ),
         )
@@ -1353,8 +1383,12 @@ class TestRRuleByYearDayCompat:
 
     def test_yearly_byyearday(self):
         self._assert_same(
-            py_rrule(PY_YEARLY, count=4, byyearday=(1, 100, 200, 365), dtstart=self.DTSTART),
-            rs_rrule(RS_YEARLY, count=4, byyearday=(1, 100, 200, 365), dtstart=self.DTSTART),
+            py_rrule(
+                PY_YEARLY, count=4, byyearday=(1, 100, 200, 365), dtstart=self.DTSTART
+            ),
+            rs_rrule(
+                RS_YEARLY, count=4, byyearday=(1, 100, 200, 365), dtstart=self.DTSTART
+            ),
         )
 
     def test_yearly_byyearday_neg(self):
@@ -1382,12 +1416,18 @@ class TestRRuleByWeekNoCompat:
     def test_yearly_byweekno_and_byweekday(self):
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=3, byweekno=20,
-                byweekday=PY_MO, dtstart=self.DTSTART,
+                PY_YEARLY,
+                count=3,
+                byweekno=20,
+                byweekday=PY_MO,
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=3, byweekno=20,
-                byweekday=RSMO, dtstart=self.DTSTART,
+                RS_YEARLY,
+                count=3,
+                byweekno=20,
+                byweekday=RSMO,
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1395,12 +1435,18 @@ class TestRRuleByWeekNoCompat:
         """Week 53 — tricky edge case."""
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=3, byweekno=53,
-                byweekday=PY_MO, dtstart=self.DTSTART,
+                PY_YEARLY,
+                count=3,
+                byweekno=53,
+                byweekday=PY_MO,
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=3, byweekno=53,
-                byweekday=RSMO, dtstart=self.DTSTART,
+                RS_YEARLY,
+                count=3,
+                byweekno=53,
+                byweekday=RSMO,
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1463,24 +1509,36 @@ class TestRRuleByTimeCompat:
     def test_daily_byhour_and_byminute(self):
         self._assert_same(
             py_rrule(
-                PY_DAILY, count=6, byhour=(9, 17),
-                byminute=(0, 30), dtstart=self.DTSTART,
+                PY_DAILY,
+                count=6,
+                byhour=(9, 17),
+                byminute=(0, 30),
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_DAILY, count=6, byhour=(9, 17),
-                byminute=(0, 30), dtstart=self.DTSTART,
+                RS_DAILY,
+                count=6,
+                byhour=(9, 17),
+                byminute=(0, 30),
+                dtstart=self.DTSTART,
             ),
         )
 
     def test_hourly_byminute_and_bysecond(self):
         self._assert_same(
             py_rrule(
-                PY_HOURLY, count=3, byminute=(15, 45),
-                bysecond=(0,), dtstart=self.DTSTART,
+                PY_HOURLY,
+                count=3,
+                byminute=(15, 45),
+                bysecond=(0,),
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_HOURLY, count=3, byminute=(15, 45),
-                bysecond=(0,), dtstart=self.DTSTART,
+                RS_HOURLY,
+                count=3,
+                byminute=(15, 45),
+                bysecond=(0,),
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1498,13 +1556,17 @@ class TestRRuleBySetPosCompat:
         """Last day of the year that is TU or TH."""
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=3,
-                byweekday=(PY_TU, PY_TH), bysetpos=-1,
+                PY_YEARLY,
+                count=3,
+                byweekday=(PY_TU, PY_TH),
+                bysetpos=-1,
                 dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=3,
-                byweekday=(RSTU, RSTH), bysetpos=-1,
+                RS_YEARLY,
+                count=3,
+                byweekday=(RSTU, RSTH),
+                bysetpos=-1,
                 dtstart=self.DTSTART,
             ),
         )
@@ -1513,13 +1575,17 @@ class TestRRuleBySetPosCompat:
         """3rd instance of monthday 7 or 1 (i.e. 3rd occurrence in the set)."""
         self._assert_same(
             py_rrule(
-                PY_MONTHLY, count=3,
-                bymonthday=(7, 1), bysetpos=3,
+                PY_MONTHLY,
+                count=3,
+                bymonthday=(7, 1),
+                bysetpos=3,
                 dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_MONTHLY, count=3,
-                bymonthday=(7, 1), bysetpos=3,
+                RS_MONTHLY,
+                count=3,
+                bymonthday=(7, 1),
+                bysetpos=3,
                 dtstart=self.DTSTART,
             ),
         )
@@ -1528,14 +1594,18 @@ class TestRRuleBySetPosCompat:
         """Last weekday of month (MO-FR, bysetpos=-1)."""
         self._assert_same(
             py_rrule(
-                PY_MONTHLY, count=3,
+                PY_MONTHLY,
+                count=3,
                 byweekday=(PY_MO, PY_TU, PY_WE, PY_TH, PY_FR),
-                bysetpos=-1, dtstart=self.DTSTART,
+                bysetpos=-1,
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_MONTHLY, count=3,
+                RS_MONTHLY,
+                count=3,
                 byweekday=(RSMO, RSTU, RSWE, RSTH, RSFR),
-                bysetpos=-1, dtstart=self.DTSTART,
+                bysetpos=-1,
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1550,11 +1620,15 @@ class TestRRuleWkstCompat:
     def test_weekly_wkst_su(self):
         self._assert_same(
             py_rrule(
-                PY_WEEKLY, count=3, wkst=PY_SU,
+                PY_WEEKLY,
+                count=3,
+                wkst=PY_SU,
                 dtstart=datetime(1997, 9, 2, 9, 0),
             ),
             rs_rrule(
-                RS_WEEKLY, count=3, wkst=RSSU,
+                RS_WEEKLY,
+                count=3,
+                wkst=RSSU,
                 dtstart=datetime(1997, 9, 2, 9, 0),
             ),
         )
@@ -1562,12 +1636,18 @@ class TestRRuleWkstCompat:
     def test_weekly_wkst_su_byweekday(self):
         self._assert_same(
             py_rrule(
-                PY_WEEKLY, count=3, wkst=PY_SU,
-                byweekday=(PY_TU, PY_TH), dtstart=datetime(1997, 9, 2, 9, 0),
+                PY_WEEKLY,
+                count=3,
+                wkst=PY_SU,
+                byweekday=(PY_TU, PY_TH),
+                dtstart=datetime(1997, 9, 2, 9, 0),
             ),
             rs_rrule(
-                RS_WEEKLY, count=3, wkst=RSSU,
-                byweekday=(RSTU, RSTH), dtstart=datetime(1997, 9, 2, 9, 0),
+                RS_WEEKLY,
+                count=3,
+                wkst=RSSU,
+                byweekday=(RSTU, RSTH),
+                dtstart=datetime(1997, 9, 2, 9, 0),
             ),
         )
 
@@ -1750,8 +1830,7 @@ class TestRRuleStrCompat:
 
     def test_yearly_bymonth_byday(self):
         self._assert_same(
-            "DTSTART:19970902T090000\n"
-            "RRULE:FREQ=YEARLY;COUNT=3;BYMONTH=1,3;BYDAY=TU,TH"
+            "DTSTART:19970902T090000\nRRULE:FREQ=YEARLY;COUNT=3;BYMONTH=1,3;BYDAY=TU,TH"
         )
 
     def test_monthly_bysetpos(self):
@@ -1774,13 +1853,19 @@ class TestRRuleCombinedFiltersCompat:
         """Intersection of month, monthday, and weekday filters."""
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=3, bymonth=(1, 3),
-                bymonthday=(1, 3), byweekday=(PY_TU, PY_TH),
+                PY_YEARLY,
+                count=3,
+                bymonth=(1, 3),
+                bymonthday=(1, 3),
+                byweekday=(PY_TU, PY_TH),
                 dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=3, bymonth=(1, 3),
-                bymonthday=(1, 3), byweekday=(RSTU, RSTH),
+                RS_YEARLY,
+                count=3,
+                bymonth=(1, 3),
+                bymonthday=(1, 3),
+                byweekday=(RSTU, RSTH),
                 dtstart=self.DTSTART,
             ),
         )
@@ -1789,12 +1874,16 @@ class TestRRuleCombinedFiltersCompat:
         """Monthly with large interval + bymonthday."""
         self._assert_same(
             py_rrule(
-                PY_MONTHLY, count=3, interval=18,
+                PY_MONTHLY,
+                count=3,
+                interval=18,
                 bymonthday=(10, 11, 12, 13, 14, 15),
                 dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_MONTHLY, count=3, interval=18,
+                RS_MONTHLY,
+                count=3,
+                interval=18,
                 bymonthday=(10, 11, 12, 13, 14, 15),
                 dtstart=self.DTSTART,
             ),
@@ -1803,12 +1892,18 @@ class TestRRuleCombinedFiltersCompat:
     def test_yearly_bymonth_byyearday(self):
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=4, bymonth=(4, 7),
-                byyearday=(1, 100, 200, 365), dtstart=self.DTSTART,
+                PY_YEARLY,
+                count=4,
+                bymonth=(4, 7),
+                byyearday=(1, 100, 200, 365),
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=4, bymonth=(4, 7),
-                byyearday=(1, 100, 200, 365), dtstart=self.DTSTART,
+                RS_YEARLY,
+                count=4,
+                bymonth=(4, 7),
+                byyearday=(1, 100, 200, 365),
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1816,12 +1911,20 @@ class TestRRuleCombinedFiltersCompat:
         """All three time-based filters."""
         self._assert_same(
             py_rrule(
-                PY_YEARLY, count=4, byhour=(6, 18),
-                byminute=(0, 30), bysecond=(0,), dtstart=self.DTSTART,
+                PY_YEARLY,
+                count=4,
+                byhour=(6, 18),
+                byminute=(0, 30),
+                bysecond=(0,),
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_YEARLY, count=4, byhour=(6, 18),
-                byminute=(0, 30), bysecond=(0,), dtstart=self.DTSTART,
+                RS_YEARLY,
+                count=4,
+                byhour=(6, 18),
+                byminute=(0, 30),
+                bysecond=(0,),
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1829,12 +1932,18 @@ class TestRRuleCombinedFiltersCompat:
         """Daily occurrences filtered to specific month and weekday."""
         self._assert_same(
             py_rrule(
-                PY_DAILY, count=5, bymonth=(1,),
-                byweekday=(PY_MO, PY_FR), dtstart=self.DTSTART,
+                PY_DAILY,
+                count=5,
+                bymonth=(1,),
+                byweekday=(PY_MO, PY_FR),
+                dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_DAILY, count=5, bymonth=(1,),
-                byweekday=(RSMO, RSFR), dtstart=self.DTSTART,
+                RS_DAILY,
+                count=5,
+                bymonth=(1,),
+                byweekday=(RSMO, RSFR),
+                dtstart=self.DTSTART,
             ),
         )
 
@@ -1842,12 +1951,16 @@ class TestRRuleCombinedFiltersCompat:
         """Bi-weekly on specific days."""
         self._assert_same(
             py_rrule(
-                PY_WEEKLY, count=6, interval=2,
+                PY_WEEKLY,
+                count=6,
+                interval=2,
                 byweekday=(PY_MO, PY_WE, PY_FR),
                 dtstart=self.DTSTART,
             ),
             rs_rrule(
-                RS_WEEKLY, count=6, interval=2,
+                RS_WEEKLY,
+                count=6,
+                interval=2,
                 byweekday=(RSMO, RSWE, RSFR),
                 dtstart=self.DTSTART,
             ),
