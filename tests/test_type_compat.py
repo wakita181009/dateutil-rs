@@ -571,3 +571,301 @@ class TestWeekdayTypes:
         from dateutil_rs.relativedelta import MO as RS_MO
 
         assert type(str(PY_MO)) is type(str(RS_MO)) is str
+
+
+# ---------------------------------------------------------------------------
+# Utils — today, default_tzinfo
+# ---------------------------------------------------------------------------
+class TestUtilsTypes:
+    def test_today_returns_datetime(self):
+        from dateutil.utils import today as py_today
+        from dateutil_rs.utils import today as rs_today
+
+        assert type(py_today()) is type(rs_today()) is datetime.datetime
+
+    def test_today_with_tz_returns_datetime(self):
+        from dateutil.utils import today as py_today
+        from dateutil_rs.utils import today as rs_today
+
+        utc = datetime.timezone.utc
+        assert type(py_today(utc)) is type(rs_today(utc)) is datetime.datetime
+
+    def test_default_tzinfo_returns_datetime(self):
+        from dateutil.utils import default_tzinfo as py_default_tzinfo
+        from dateutil_rs.utils import default_tzinfo as rs_default_tzinfo
+
+        dt = datetime.datetime(2024, 1, 1)
+        utc = datetime.timezone.utc
+        py_result = py_default_tzinfo(dt, utc)
+        rs_result = rs_default_tzinfo(dt, utc)
+        assert type(py_result) is type(rs_result) is datetime.datetime
+
+
+# ---------------------------------------------------------------------------
+# RelativeDelta — additional operator types
+# ---------------------------------------------------------------------------
+class TestRelativeDeltaExtraOperatorTypes:
+    def test_sub_rd_rd(self):
+        """relativedelta - relativedelta → relativedelta."""
+        py_result = py_relativedelta(months=2) - py_relativedelta(days=1)
+        rs_result = rs_relativedelta(months=2) - rs_relativedelta(days=1)
+        assert isinstance(py_result, py_relativedelta)
+        assert isinstance(rs_result, rs_relativedelta)
+
+    def test_abs(self):
+        """abs(relativedelta) → relativedelta."""
+        py_result = abs(py_relativedelta(months=-2, days=-3))
+        rs_result = abs(rs_relativedelta(months=-2, days=-3))
+        assert isinstance(py_result, py_relativedelta)
+        assert isinstance(rs_result, rs_relativedelta)
+
+    def test_truediv(self):
+        """relativedelta / number → relativedelta."""
+        py_result = py_relativedelta(months=6) / 2
+        rs_result = rs_relativedelta(months=6) / 2
+        assert isinstance(py_result, py_relativedelta)
+        assert isinstance(rs_result, rs_relativedelta)
+
+    def test_rmul(self):
+        """int * relativedelta → relativedelta."""
+        py_result = 3 * py_relativedelta(months=1)
+        rs_result = 3 * rs_relativedelta(months=1)
+        assert isinstance(py_result, py_relativedelta)
+        assert isinstance(rs_result, rs_relativedelta)
+
+    def test_normalized(self):
+        """normalized() → relativedelta."""
+        py_result = py_relativedelta(months=15).normalized()
+        rs_result = rs_relativedelta(months=15).normalized()
+        assert isinstance(py_result, py_relativedelta)
+        assert isinstance(rs_result, rs_relativedelta)
+
+    def test_weeks_property_type(self):
+        py_rd = py_relativedelta(weeks=2)
+        rs_rd = rs_relativedelta(weeks=2)
+        assert type(py_rd.weeks) is type(rs_rd.weeks) is int
+
+
+# ---------------------------------------------------------------------------
+# Parser — parserinfo, isoparser class, parse with extra params
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(not HAS_PARSER, reason="parser not available")
+class TestParserExtraTypes:
+    def test_parse_with_default_returns_datetime(self):
+        default = datetime.datetime(2024, 1, 1)
+        py_result = py_parse("10:30", default=default)
+        rs_result = rs_parse("10:30", default=default)
+        assert type(py_result) is type(rs_result) is datetime.datetime
+
+    def test_isoparser_class_returns_datetime(self):
+        from dateutil.parser import isoparser as py_isoparser
+        from dateutil_rs.parser import isoparser as rs_isoparser
+
+        py_result = py_isoparser().isoparse("2024-01-15T10:30:00")
+        rs_result = rs_isoparser().isoparse("2024-01-15T10:30:00")
+        assert type(py_result) is type(rs_result) is datetime.datetime
+
+
+# ---------------------------------------------------------------------------
+# Timezone — additional class method return types
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(not HAS_TZ, reason="tz not available")
+class TestTzExtraMethodTypes:
+    DT_SUMMER = datetime.datetime(2024, 6, 15, 12, 0)
+    DT_WINTER = datetime.datetime(2024, 12, 15, 12, 0)
+
+    def test_tzlocal_utcoffset_returns_timedelta(self):
+        py_td = py_tzlocal().utcoffset(self.DT_SUMMER)
+        rs_td = rs_tzlocal().utcoffset(self.DT_SUMMER)
+        assert type(py_td) is type(rs_td) is datetime.timedelta
+
+    def test_tzlocal_dst_returns_timedelta(self):
+        py_td = py_tzlocal().dst(self.DT_SUMMER)
+        rs_td = rs_tzlocal().dst(self.DT_SUMMER)
+        assert type(py_td) is type(rs_td) is datetime.timedelta
+
+    def test_tzlocal_tzname_returns_str(self):
+        py_name = py_tzlocal().tzname(self.DT_SUMMER)
+        rs_name = rs_tzlocal().tzname(self.DT_SUMMER)
+        assert type(py_name) is type(rs_name) is str
+
+    @pytest.mark.skipif(
+        ZONEINFO_DIR is None
+        or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
+        reason="America/New_York tzfile not found",
+    )
+    def test_tzfile_utcoffset_returns_timedelta(self):
+        from dateutil.tz import tzfile as py_tzfile
+
+        path = os.path.join(ZONEINFO_DIR, "America/New_York")
+        py_td = py_tzfile(path).utcoffset(self.DT_SUMMER)
+        rs_td = rs_tzfile(path).utcoffset(self.DT_SUMMER)
+        assert type(py_td) is type(rs_td) is datetime.timedelta
+
+    @pytest.mark.skipif(
+        ZONEINFO_DIR is None
+        or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
+        reason="America/New_York tzfile not found",
+    )
+    def test_tzfile_dst_returns_timedelta(self):
+        from dateutil.tz import tzfile as py_tzfile
+
+        path = os.path.join(ZONEINFO_DIR, "America/New_York")
+        py_td = py_tzfile(path).dst(self.DT_SUMMER)
+        rs_td = rs_tzfile(path).dst(self.DT_SUMMER)
+        assert type(py_td) is type(rs_td) is datetime.timedelta
+
+    @pytest.mark.skipif(
+        ZONEINFO_DIR is None
+        or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
+        reason="America/New_York tzfile not found",
+    )
+    def test_tzfile_tzname_returns_str(self):
+        from dateutil.tz import tzfile as py_tzfile
+
+        path = os.path.join(ZONEINFO_DIR, "America/New_York")
+        py_name = py_tzfile(path).tzname(self.DT_SUMMER)
+        rs_name = rs_tzfile(path).tzname(self.DT_SUMMER)
+        assert type(py_name) is type(rs_name) is str
+
+
+@pytest.mark.skipif(not HAS_TZ, reason="tz not available")
+class TestTzResolveImaginaryTypes:
+    @pytest.mark.skipif(
+        ZONEINFO_DIR is None
+        or not os.path.isfile(os.path.join(ZONEINFO_DIR or "", "America/New_York")),
+        reason="America/New_York tzfile not found",
+    )
+    def test_resolve_imaginary_returns_datetime(self):
+        from dateutil.tz import resolve_imaginary as py_resolve_imaginary
+        from dateutil_rs.tz import resolve_imaginary as rs_resolve_imaginary
+
+        ny_py = py_gettz("America/New_York")
+        ny_rs = rs_gettz("America/New_York")
+        # 2024-03-10 02:30 is in the DST gap for America/New_York
+        dt_py = datetime.datetime(2024, 3, 10, 2, 30, tzinfo=ny_py)
+        dt_rs = datetime.datetime(2024, 3, 10, 2, 30, tzinfo=ny_rs)
+        assert type(py_resolve_imaginary(dt_py)) is datetime.datetime
+        assert type(rs_resolve_imaginary(dt_rs)) is datetime.datetime
+
+    def test_enfold_returns_datetime(self):
+        from dateutil.tz import enfold as py_enfold
+        from dateutil_rs.tz import enfold as rs_enfold
+
+        dt = datetime.datetime(2024, 6, 15, 12, 0)
+        assert type(py_enfold(dt)) is type(rs_enfold(dt)) is datetime.datetime
+
+    def test_utc_singleton_is_tzinfo(self):
+        from dateutil.tz import UTC as PY_UTC
+        from dateutil_rs.tz import UTC as RS_UTC
+
+        assert isinstance(PY_UTC, datetime.tzinfo)
+        assert isinstance(RS_UTC, datetime.tzinfo)
+
+
+# ---------------------------------------------------------------------------
+# RRule — additional method types
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(not HAS_RRULE, reason="rrule not available")
+class TestRRuleExtraTypes:
+    DTSTART = datetime.datetime(2024, 1, 1)
+
+    def test_xafter_yields_datetime(self):
+        py_rule = py_rrule(PY_DAILY, dtstart=self.DTSTART, count=10)
+        rs_rule = rs_rrule(RS_DAILY, dtstart=self.DTSTART, count=10)
+        dt = datetime.datetime(2024, 1, 2)
+        py_results = list(py_rule.xafter(dt, count=3))
+        rs_results = list(rs_rule.xafter(dt, count=3))
+        assert all(type(d) is datetime.datetime for d in py_results)
+        assert all(type(d) is datetime.datetime for d in rs_results)
+
+    def test_frequency_constants_are_int(self):
+        from dateutil.rrule import (
+            DAILY as PY_DAILY_,
+        )
+        from dateutil.rrule import (
+            HOURLY as PY_HOURLY,
+        )
+        from dateutil.rrule import (
+            MINUTELY as PY_MINUTELY,
+        )
+        from dateutil.rrule import (
+            MONTHLY as PY_MONTHLY_,
+        )
+        from dateutil.rrule import (
+            SECONDLY as PY_SECONDLY,
+        )
+        from dateutil.rrule import (
+            WEEKLY as PY_WEEKLY,
+        )
+        from dateutil.rrule import (
+            YEARLY as PY_YEARLY,
+        )
+        from dateutil_rs.rrule import (
+            DAILY as RS_DAILY_,
+        )
+        from dateutil_rs.rrule import (
+            HOURLY as RS_HOURLY,
+        )
+        from dateutil_rs.rrule import (
+            MINUTELY as RS_MINUTELY,
+        )
+        from dateutil_rs.rrule import (
+            MONTHLY as RS_MONTHLY_,
+        )
+        from dateutil_rs.rrule import (
+            SECONDLY as RS_SECONDLY,
+        )
+        from dateutil_rs.rrule import (
+            WEEKLY as RS_WEEKLY,
+        )
+        from dateutil_rs.rrule import (
+            YEARLY as RS_YEARLY,
+        )
+
+        for py_c, rs_c in [
+            (PY_YEARLY, RS_YEARLY),
+            (PY_MONTHLY_, RS_MONTHLY_),
+            (PY_WEEKLY, RS_WEEKLY),
+            (PY_DAILY_, RS_DAILY_),
+            (PY_HOURLY, RS_HOURLY),
+            (PY_MINUTELY, RS_MINUTELY),
+            (PY_SECONDLY, RS_SECONDLY),
+        ]:
+            assert type(py_c) is type(rs_c) is int
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="rrule not available")
+class TestRRuleSetExtraTypes:
+    DTSTART = datetime.datetime(2024, 1, 1)
+
+    def test_count_returns_int(self):
+        py_rset = py_rruleset()
+        py_rset.rrule(py_rrule(PY_DAILY, dtstart=self.DTSTART, count=5))
+        rs_rset = rs_rruleset()
+        rs_rset.rrule(rs_rrule(RS_DAILY, dtstart=self.DTSTART, count=5))
+        assert type(py_rset.count()) is type(rs_rset.count()) is int
+
+    def test_contains_returns_bool(self):
+        py_rset = py_rruleset()
+        py_rset.rrule(py_rrule(PY_DAILY, dtstart=self.DTSTART, count=5))
+        rs_rset = rs_rruleset()
+        rs_rset.rrule(rs_rrule(RS_DAILY, dtstart=self.DTSTART, count=5))
+        dt = datetime.datetime(2024, 1, 3)
+        assert type(dt in py_rset) is type(dt in rs_rset) is bool
+
+    def test_before_returns_datetime(self):
+        py_rset = py_rruleset()
+        py_rset.rrule(py_rrule(PY_DAILY, dtstart=self.DTSTART, count=5))
+        rs_rset = rs_rruleset()
+        rs_rset.rrule(rs_rrule(RS_DAILY, dtstart=self.DTSTART, count=5))
+        dt = datetime.datetime(2024, 1, 3, 12, 0)
+        assert type(py_rset.before(dt)) is type(rs_rset.before(dt)) is datetime.datetime
+
+    def test_after_returns_datetime(self):
+        py_rset = py_rruleset()
+        py_rset.rrule(py_rrule(PY_DAILY, dtstart=self.DTSTART, count=5))
+        rs_rset = rs_rruleset()
+        rs_rset.rrule(rs_rrule(RS_DAILY, dtstart=self.DTSTART, count=5))
+        dt = datetime.datetime(2024, 1, 2)
+        assert type(py_rset.after(dt)) is type(rs_rset.after(dt)) is datetime.datetime
