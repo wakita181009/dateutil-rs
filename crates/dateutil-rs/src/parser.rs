@@ -2322,11 +2322,12 @@ mod tests {
         assert_eq!(pd("12 am"), ndt(2003, 9, 25, 0, 0, 0));
     }
 
-    // --- 6-digit YYMMDD ---
+    // --- 6-digit compact (parsed as 3 two-digit values: MM/DD/YY in default mode) ---
 
     #[test]
-    fn parse_yymmdd_6digit() {
-        assert_eq!(pd("030925"), ndt(2003, 9, 25, 0, 0, 0));
+    fn parse_6digit_compact() {
+        // "030925" → values [03, 09, 25], default yearfirst=false → month=03, day=09, year=2025
+        assert_eq!(pd("030925"), ndt(2025, 3, 9, 0, 0, 0));
     }
 
     // --- 6-digit YYYYMM fallback (invalid day) ---
