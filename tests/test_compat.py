@@ -412,8 +412,6 @@ class TestWithinDeltaCompat:
 # Timezone
 # ---------------------------------------------------------------------------
 try:
-    from dateutil_rs._native import _TzOffset
-
     from dateutil.tz import (
         datetime_ambiguous as py_datetime_ambiguous,
     )
@@ -441,6 +439,7 @@ try:
     from dateutil.tz import (
         tzutc as py_tzutc,
     )
+    from dateutil_rs._native import _TzOffset
     from dateutil_rs.tz import (
         datetime_ambiguous as rs_datetime_ambiguous,
     )

@@ -5,10 +5,18 @@ When a custom parserinfo is supplied, its lookup tables are serialised
 and forwarded to the Rust parser so parsing is always Rust-accelerated.
 """
 
+from __future__ import annotations
+
 import time
+from collections.abc import Callable, Mapping
+from datetime import datetime, tzinfo
+from typing import Any, Literal, overload
 
 from dateutil_rs._native import ParserError, isoparse, isoparser
 from dateutil_rs._native import parse as _parse_rs
+
+_TzData = tzinfo | int | str | None
+_TzInfos = Mapping[str, _TzData] | Callable[[str, int], _TzData]
 
 # ---- UnknownTimezoneWarning ------------------------------------------------
 # Standalone definition — no python-dateutil dependency.
@@ -43,7 +51,7 @@ class parserinfo:
     """
 
     # m from a.m/p.m, t from ISO T separator
-    JUMP = [
+    JUMP: list[str] = [
         " ",
         ".",
         ",",
@@ -64,7 +72,7 @@ class parserinfo:
         "th",
     ]
 
-    WEEKDAYS = [
+    WEEKDAYS: list[tuple[str, str]] = [
         ("Mon", "Monday"),
         ("Tue", "Tuesday"),
         ("Wed", "Wednesday"),
@@ -73,7 +81,7 @@ class parserinfo:
         ("Sat", "Saturday"),
         ("Sun", "Sunday"),
     ]
-    MONTHS = [
+    MONTHS: list[tuple[str, ...]] = [
         ("Jan", "January"),
         ("Feb", "February"),
         ("Mar", "March"),
@@ -87,17 +95,17 @@ class parserinfo:
         ("Nov", "November"),
         ("Dec", "December"),
     ]
-    HMS = [
+    HMS: list[tuple[str, str, str]] = [
         ("h", "hour", "hours"),
         ("m", "minute", "minutes"),
         ("s", "second", "seconds"),
     ]
-    AMPM = [("am", "a"), ("pm", "p")]
-    UTCZONE = ["UTC", "GMT", "Z", "z"]
-    PERTAIN = ["of"]
-    TZOFFSET = {}
+    AMPM: list[tuple[str, str]] = [("am", "a"), ("pm", "p")]
+    UTCZONE: list[str] = ["UTC", "GMT", "Z", "z"]
+    PERTAIN: list[str] = ["of"]
+    TZOFFSET: dict[str, int] = {}
 
-    def __init__(self, dayfirst=False, yearfirst=False):
+    def __init__(self, dayfirst: bool = False, yearfirst: bool = False) -> None:
         self._jump = self._convert(self.JUMP)
         self._weekdays = self._convert(self.WEEKDAYS)
         self._months = self._convert(self.MONTHS)
@@ -112,8 +120,8 @@ class parserinfo:
         self._year = time.localtime().tm_year
         self._century = self._year // 100 * 100
 
-    def _convert(self, lst):
-        dct = {}
+    def _convert(self, lst: list[str] | list[tuple[str, ...]]) -> dict[str, int]:
+        dct: dict[str, int] = {}
         for i, v in enumerate(lst):
             if isinstance(v, tuple):
                 for v in v:
@@ -122,47 +130,47 @@ class parserinfo:
                 dct[v.lower()] = i
         return dct
 
-    def jump(self, name):
+    def jump(self, name: str) -> bool:
         return name.lower() in self._jump
 
-    def weekday(self, name):
+    def weekday(self, name: str) -> int | None:
         try:
             return self._weekdays[name.lower()]
         except KeyError:
             pass
         return None
 
-    def month(self, name):
+    def month(self, name: str) -> int | None:
         try:
             return self._months[name.lower()] + 1
         except KeyError:
             pass
         return None
 
-    def hms(self, name):
+    def hms(self, name: str) -> int | None:
         try:
             return self._hms[name.lower()]
         except KeyError:
             return None
 
-    def ampm(self, name):
+    def ampm(self, name: str) -> int | None:
         try:
             return self._ampm[name.lower()]
         except KeyError:
             return None
 
-    def pertain(self, name):
+    def pertain(self, name: str) -> bool:
         return name.lower() in self._pertain
 
-    def utczone(self, name):
+    def utczone(self, name: str) -> bool:
         return name.lower() in self._utczone
 
-    def tzoffset(self, name):
+    def tzoffset(self, name: str) -> int | None:
         if name in self._utczone:
             return 0
         return self.TZOFFSET.get(name)
 
-    def convertyear(self, year, century_specified=False):
+    def convertyear(self, year: int, century_specified: bool = False) -> int:
         """Converts two-digit years to year within [-50, 49]
         range of self._year (current local time)
         """
@@ -177,7 +185,7 @@ class parserinfo:
 
         return year
 
-    def validate(self, res):
+    def validate(self, res: Any) -> bool:
         if res.year is not None:
             res.year = self.convertyear(res.year, res.century_specified)
 
@@ -190,7 +198,7 @@ class parserinfo:
             res.tzoffset = 0
         return True
 
-    def _to_rust_config(self):
+    def _to_rust_config(self) -> dict[str, Any]:
         """Serialise the lookup tables to a dict for the Rust parser."""
         return {
             "dayfirst": self.dayfirst,
@@ -206,7 +214,41 @@ class parserinfo:
         }
 
 
-def parse(timestr, parserinfo=None, **kwargs):
+@overload
+def parse(
+    timestr: str,
+    parserinfo: parserinfo | None = None,
+    *,
+    dayfirst: bool | None = ...,
+    yearfirst: bool | None = ...,
+    ignoretz: bool = ...,
+    fuzzy: bool = ...,
+    fuzzy_with_tokens: Literal[False] = False,
+    default: datetime | None = ...,
+    tzinfos: _TzInfos | None = ...,
+) -> datetime: ...
+
+
+@overload
+def parse(
+    timestr: str,
+    parserinfo: parserinfo | None = None,
+    *,
+    dayfirst: bool | None = ...,
+    yearfirst: bool | None = ...,
+    ignoretz: bool = ...,
+    fuzzy: bool = ...,
+    fuzzy_with_tokens: Literal[True],
+    default: datetime | None = ...,
+    tzinfos: _TzInfos | None = ...,
+) -> tuple[datetime, tuple[str, ...]]: ...
+
+
+def parse(
+    timestr: str,
+    parserinfo: parserinfo | None = None,
+    **kwargs: Any,
+) -> datetime | tuple[datetime, tuple[str, ...]]:
     """Parse a date/time string.
 
     When *parserinfo* is ``None`` (the default), the fast Rust parser is

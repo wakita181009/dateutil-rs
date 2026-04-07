@@ -3,7 +3,6 @@
 Rust-accelerated implementation of dateutil.rrule.
 """
 
-# Re-export weekday for rrule.weekday(n) calls
 from dateutil_rs._native import (
     DAILY,
     FR,
