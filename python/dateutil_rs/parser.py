@@ -10,7 +10,6 @@ import time
 from dateutil_rs._native import ParserError, isoparse, isoparser
 from dateutil_rs._native import parse as _parse_rs
 
-
 # ---- UnknownTimezoneWarning ------------------------------------------------
 # Standalone definition — no python-dateutil dependency.
 
