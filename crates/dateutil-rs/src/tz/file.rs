@@ -394,20 +394,19 @@ impl TzFile {
         let timestamp = dt.and_utc().timestamp();
         let idx = self.find_transition(timestamp, false);
 
-        if fold {
-            // fold=1: if ambiguous, use the *next* transition's ttinfo
+        if !fold {
+            // fold=0: if ambiguous, use the *previous* transition's ttinfo
+            // (first occurrence = DST time, before the fall-back)
             if let Some(i) = idx {
-                if i + 1 < self.transitions.len() {
-                    let next_wall = self.transitions[i + 1].wall_time;
-                    let next_tt = &self.ttinfo_list[self.transitions[i + 1].ttinfo_idx];
+                if i > 0 {
+                    let prev_tt = &self.ttinfo_list[self.transitions[i - 1].ttinfo_idx];
                     let curr_tt = &self.ttinfo_list[self.transitions[i].ttinfo_idx];
-                    // If the current time is in the overlap period (fall-back)
-                    if curr_tt.is_dst && !next_tt.is_dst {
-                        let overlap_start = next_wall;
-                        let overlap_end =
-                            next_wall + (curr_tt.offset - next_tt.offset) as i64;
-                        if timestamp >= overlap_start && timestamp < overlap_end {
-                            return next_tt;
+                    // Fall-back: previous offset (DST) > current offset (standard)
+                    if prev_tt.offset > curr_tt.offset {
+                        let curr_wall = self.transitions[i].wall_time;
+                        let overlap = (prev_tt.offset - curr_tt.offset) as i64;
+                        if timestamp >= curr_wall && timestamp < curr_wall + overlap {
+                            return prev_tt;
                         }
                     }
                 }
@@ -443,19 +442,18 @@ impl TzFile {
         let timestamp = dt.and_utc().timestamp();
         let idx = self.find_transition(timestamp, false);
 
-        if fold {
-            // fold=1: if ambiguous, use the *next* transition's dst_offset
+        if !fold {
+            // fold=0: if ambiguous, use the *previous* transition's dst_offset
+            // (first occurrence = DST time)
             if let Some(i) = idx {
-                if i + 1 < self.transitions.len() {
-                    let next_wall = self.transitions[i + 1].wall_time;
-                    let next_tt = &self.ttinfo_list[self.transitions[i + 1].ttinfo_idx];
+                if i > 0 {
+                    let prev_tt = &self.ttinfo_list[self.transitions[i - 1].ttinfo_idx];
                     let curr_tt = &self.ttinfo_list[self.transitions[i].ttinfo_idx];
-                    if curr_tt.is_dst && !next_tt.is_dst {
-                        let overlap_start = next_wall;
-                        let overlap_end =
-                            next_wall + (curr_tt.offset - next_tt.offset) as i64;
-                        if timestamp >= overlap_start && timestamp < overlap_end {
-                            return self.transitions[i + 1].dst_offset;
+                    if prev_tt.offset > curr_tt.offset {
+                        let curr_wall = self.transitions[i].wall_time;
+                        let overlap = (prev_tt.offset - curr_tt.offset) as i64;
+                        if timestamp >= curr_wall && timestamp < curr_wall + overlap {
+                            return self.transitions[i - 1].dst_offset;
                         }
                     }
                 }
@@ -496,15 +494,17 @@ impl TzFile {
             None => return false,
         };
 
-        // Check if this time could also belong to the next transition period
-        if idx + 1 < self.transitions.len() {
+        // Check if the current transition was a fall-back (offset decreased).
+        // The ambiguous period starts at the current transition's wall_time
+        // and lasts for the difference in offsets.
+        if idx > 0 {
+            let prev_tt = &self.ttinfo_list[self.transitions[idx - 1].ttinfo_idx];
             let curr_tt = &self.ttinfo_list[self.transitions[idx].ttinfo_idx];
-            let next_tt = &self.ttinfo_list[self.transitions[idx + 1].ttinfo_idx];
-            // Fall-back: going from higher offset (DST) to lower offset (standard)
-            if curr_tt.offset > next_tt.offset {
-                let next_wall = self.transitions[idx + 1].wall_time;
-                let overlap = (curr_tt.offset - next_tt.offset) as i64;
-                return timestamp >= next_wall && timestamp < next_wall + overlap;
+            // Fall-back: previous offset (DST) > current offset (standard)
+            if prev_tt.offset > curr_tt.offset {
+                let curr_wall = self.transitions[idx].wall_time;
+                let overlap = (prev_tt.offset - curr_tt.offset) as i64;
+                return timestamp >= curr_wall && timestamp < curr_wall + overlap;
             }
         }
 

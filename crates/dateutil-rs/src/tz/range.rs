@@ -243,10 +243,12 @@ impl TzRange {
             let dst_diff = self.dst_base_offset();
             if dst_diff.num_seconds() > 0 {
                 // Normal DST: spring forward, fall back
-                // Ambiguous during fall-back: dstoff <= dt < dstoff + dst_diff
-                dstoff <= dt && dt < dstoff + dst_diff
+                // At fall-back, clocks go from dstoff back by dst_diff.
+                // Ambiguous range: [dstoff - dst_diff, dstoff)
+                dstoff - dst_diff <= dt && dt < dstoff
             } else {
                 // Negative DST (rare): ambiguous during spring transition
+                // dst_diff < 0, so dston + dst_diff < dston
                 dston + dst_diff <= dt && dt < dston
             }
         } else {
@@ -274,16 +276,18 @@ impl TzRange {
 
     fn isdst(&self, dt: NaiveDateTime, fold: bool) -> bool {
         if let Some((dston, dstoff)) = self.transitions(dt.date().year()) {
-            // Check ambiguity
             let dst_diff = self.dst_base_offset();
-            if dst_diff.num_seconds() > 0 && dstoff <= dt && dt < dstoff + dst_diff {
-                // In ambiguous period — fold=1 means second occurrence (standard time)
-                return !fold;
-            }
-            // Check gap
-            if dst_diff.num_seconds() > 0 && dston <= dt && dt < dston + dst_diff {
-                // In gap — fold=1 means DST
-                return fold;
+            if dst_diff.num_seconds() > 0 {
+                // Check ambiguity: fall-back overlap [dstoff - dst_diff, dstoff)
+                if dstoff - dst_diff <= dt && dt < dstoff {
+                    // In ambiguous period — fold=1 means second occurrence (standard time)
+                    return !fold;
+                }
+                // Check gap: spring-forward gap [dston, dston + dst_diff)
+                if dston <= dt && dt < dston + dst_diff {
+                    // In gap — fold=1 means DST
+                    return fold;
+                }
             }
             self.naive_isdst(dt, dston, dstoff)
         } else {
@@ -994,13 +998,12 @@ mod tests {
             None,
             None,
         );
-        // The ambiguous period is 02:00 <= dt < 03:00 (after clocks fall back)
-        let after_fallback = NaiveDate::from_ymd_opt(2020, 11, 1)
+        // The ambiguous period is [01:00, 02:00) (clocks fall back from 02:00 to 01:00)
+        let ambiguous = NaiveDate::from_ymd_opt(2020, 11, 1)
             .unwrap()
-            .and_hms_opt(2, 30, 0)
+            .and_hms_opt(1, 30, 0)
             .unwrap();
-        // 02:30 is in the overlap (clocks went from 02:00 back to 01:00, so 02:00-03:00 is ambiguous)
-        assert!(tz.is_ambiguous(after_fallback));
+        assert!(tz.is_ambiguous(ambiguous));
     }
 
     #[test]
@@ -1193,11 +1196,12 @@ mod tests {
     #[test]
     fn test_tzstr_is_ambiguous() {
         let tz = TzStr::parse("EST5EDT,M3.2.0/2,M11.1.0/2", false).unwrap();
-        let after_fallback = NaiveDate::from_ymd_opt(2020, 11, 1)
+        // Ambiguous period: [01:00, 02:00) — clocks fall back from 02:00 to 01:00
+        let ambiguous = NaiveDate::from_ymd_opt(2020, 11, 1)
             .unwrap()
-            .and_hms_opt(2, 30, 0)
+            .and_hms_opt(1, 30, 0)
             .unwrap();
-        assert!(tz.is_ambiguous(after_fallback));
+        assert!(tz.is_ambiguous(ambiguous));
     }
 
     #[test]
@@ -1289,10 +1293,10 @@ mod tests {
             None,
             None,
         );
-        // In the ambiguous period, fold=true should return standard time
+        // In the ambiguous period [01:00, 02:00), fold=true should return standard time
         let ambiguous = NaiveDate::from_ymd_opt(2020, 11, 1)
             .unwrap()
-            .and_hms_opt(2, 30, 0)
+            .and_hms_opt(1, 30, 0)
             .unwrap();
         // fold=false (first occurrence = DST)
         assert_eq!(

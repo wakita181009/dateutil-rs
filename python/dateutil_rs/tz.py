@@ -223,23 +223,14 @@ class tzfile(datetime.tzinfo):
         return self._inner.is_ambiguous(dt)
 
     def fromutc(self, dt):
-        # Standard fromutc: convert UTC dt to wall time
-        offset = self.utcoffset(dt)
-        if offset is None:
-            raise ValueError("utcoffset() returned None")
-        wall = dt + offset
-        # Check fold
-        wall = wall.replace(tzinfo=self)
-        if self.is_ambiguous(wall.replace(tzinfo=None)):
-            # Determine fold: check if the next transition gives a different offset
-            wall = wall.replace(fold=1)
-        return wall
+        y, mo, d, h, mi, s, us, fold = self._inner.fromutc_naive(dt)
+        return datetime.datetime(y, mo, d, h, mi, s, us, tzinfo=self, fold=int(fold))
 
     def __repr__(self):
         return f"tzfile('{self._filename}')"
 
     def __reduce__(self):
-        return (self.__class__, (self._filename,))
+        return self.__class__, (self._filename,)
 
 
 class tzlocal(datetime.tzinfo):
@@ -262,17 +253,14 @@ class tzlocal(datetime.tzinfo):
         return self._inner.is_ambiguous(dt)
 
     def fromutc(self, dt):
-        offset = self.utcoffset(dt)
-        if offset is None:
-            raise ValueError("utcoffset() returned None")
-        wall = (dt + offset).replace(tzinfo=self)
-        return wall
+        y, mo, d, h, mi, s, us, fold = self._inner.fromutc_naive(dt)
+        return datetime.datetime(y, mo, d, h, mi, s, us, tzinfo=self, fold=int(fold))
 
     def __repr__(self):
         return "tzlocal()"
 
     def __reduce__(self):
-        return (self.__class__, ())
+        return self.__class__, ()
 
 
 class tzrange(datetime.tzinfo):
@@ -311,11 +299,8 @@ class tzrange(datetime.tzinfo):
         return self._inner.is_ambiguous(dt)
 
     def fromutc(self, dt):
-        offset = self.utcoffset(dt)
-        if offset is None:
-            raise ValueError("utcoffset() returned None")
-        wall = (dt + offset).replace(tzinfo=self)
-        return wall
+        y, mo, d, h, mi, s, us, fold = self._inner.fromutc_naive(dt)
+        return datetime.datetime(y, mo, d, h, mi, s, us, tzinfo=self, fold=int(fold))
 
     def __repr__(self):
         return f"tzrange({self._stdabbr!r}, {self._dstabbr!r})"
@@ -343,17 +328,14 @@ class tzstr(datetime.tzinfo):
         return self._inner.is_ambiguous(dt)
 
     def fromutc(self, dt):
-        offset = self.utcoffset(dt)
-        if offset is None:
-            raise ValueError("utcoffset() returned None")
-        wall = (dt + offset).replace(tzinfo=self)
-        return wall
+        y, mo, d, h, mi, s, us, fold = self._inner.fromutc_naive(dt)
+        return datetime.datetime(y, mo, d, h, mi, s, us, tzinfo=self, fold=int(fold))
 
     def __repr__(self):
         return f"tzstr({self._s!r})"
 
     def __reduce__(self):
-        return (self.__class__, (self._s, self._posix_offset))
+        return self.__class__, (self._s, self._posix_offset)
 
 
 def gettz(name=None):

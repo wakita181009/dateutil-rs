@@ -665,7 +665,6 @@ class TestTzFileCompat:
         assert ny_py.tzname(dt) == ny_rs.tzname(dt)
 
     # Fall-back: Nov 3, 2024 01:30 is ambiguous
-    @pytest.mark.xfail(reason="Rust tzfile is_ambiguous() not yet correct")
     def test_is_ambiguous_fall_back(self, ny_py, ny_rs):
         dt = datetime(2024, 11, 3, 1, 30)
         assert ny_py.is_ambiguous(dt) == ny_rs.is_ambiguous(dt) is True
@@ -823,7 +822,6 @@ class TestTzStrCompat:
         rs_tz = rs_tzstr(tz_string)
         assert py_tz.tzname(dt) == rs_tz.tzname(dt)
 
-    @pytest.mark.xfail(reason="Rust tzstr is_ambiguous() not yet correct")
     def test_is_ambiguous_fall_back(self):
         """US Eastern fall back: Nov 3, 2024 01:30 is ambiguous."""
         tz_string = "EST5EDT,M3.2.0/2,M11.1.0/2"
@@ -930,7 +928,6 @@ class TestDatetimeExistsCompat:
         dt_rs = datetime(2024, 6, 15, 12, 0, tzinfo=rs_tz)
         assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) is True
 
-    @pytest.mark.xfail(reason="Rust datetime_exists() gap detection not yet correct")
     def test_spring_forward_gap(self):
         """Mar 10, 2024 02:30 doesn't exist in US/Eastern (spring forward)."""
         py_tz = py_gettz("America/New_York")
@@ -963,9 +960,6 @@ class TestDatetimeAmbiguousCompat:
         dt_rs = datetime(2024, 6, 15, 12, 0, tzinfo=rs_tz)
         assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) is False
 
-    @pytest.mark.xfail(
-        reason="Rust datetime_ambiguous() overlap detection not yet correct"
-    )
     def test_fall_back_ambiguous(self):
         """Nov 3, 2024 01:30 is ambiguous in US/Eastern (fall back)."""
         py_tz = py_gettz("America/New_York")

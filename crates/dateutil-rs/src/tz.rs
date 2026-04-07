@@ -428,6 +428,11 @@ pub mod python {
             Ok(self.inner.is_ambiguous(naive))
         }
 
+        /// Convert a UTC datetime to wall time, returning (wall_naive, fold).
+        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+            fromutc_result_to_tuple(dt, &self.inner)
+        }
+
         fn filename(&self) -> Option<String> {
             self.inner.filename().map(|s| s.to_string())
         }
@@ -488,6 +493,21 @@ pub mod python {
             Ok(self.inner.is_ambiguous(naive))
         }
 
+        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+            let (naive, _fold) = extract_dt_and_fold(dt)?;
+            let (wall, fold) = self.inner.fromutc(naive);
+            Ok((
+                wall.date().year(),
+                wall.date().month(),
+                wall.date().day(),
+                wall.time().hour(),
+                wall.time().minute(),
+                wall.time().second(),
+                wall.time().nanosecond() / 1000,
+                fold,
+            ))
+        }
+
         fn __repr__(&self) -> String {
             "tzlocal()".to_string()
         }
@@ -543,6 +563,21 @@ pub mod python {
         fn is_ambiguous(&self, dt: &Bound<'_, PyAny>) -> PyResult<bool> {
             let (naive, _fold) = extract_dt_and_fold(dt)?;
             Ok(self.inner.is_ambiguous(naive))
+        }
+
+        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+            let (naive, _fold) = extract_dt_and_fold(dt)?;
+            let (wall, fold) = self.inner.fromutc(naive);
+            Ok((
+                wall.date().year(),
+                wall.date().month(),
+                wall.date().day(),
+                wall.time().hour(),
+                wall.time().minute(),
+                wall.time().second(),
+                wall.time().nanosecond() / 1000,
+                fold,
+            ))
         }
 
         fn source(&self) -> String {
@@ -633,6 +668,21 @@ pub mod python {
         fn is_ambiguous(&self, dt: &Bound<'_, PyAny>) -> PyResult<bool> {
             let (naive, _fold) = extract_dt_and_fold(dt)?;
             Ok(self.inner.is_ambiguous(naive))
+        }
+
+        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+            let (naive, _fold) = extract_dt_and_fold(dt)?;
+            let (wall, fold) = self.inner.fromutc(naive);
+            Ok((
+                wall.date().year(),
+                wall.date().month(),
+                wall.date().day(),
+                wall.time().hour(),
+                wall.time().minute(),
+                wall.time().second(),
+                wall.time().nanosecond() / 1000,
+                fold,
+            ))
         }
 
         fn std_abbr(&self) -> String {
@@ -775,6 +825,54 @@ pub mod python {
             .unwrap_or(false);
 
         Ok((NaiveDateTime::new(date, time), fold))
+    }
+
+    /// Convert a Rust fromutc result to a Python-friendly tuple.
+    fn fromutc_result_to_tuple(
+        dt: &Bound<'_, PyAny>,
+        tz: &impl FromUtcRust,
+    ) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+        let (naive, _fold) = extract_dt_and_fold(dt)?;
+        let (wall, fold) = tz.fromutc_rust(naive);
+        Ok((
+            wall.date().year(),
+            wall.date().month(),
+            wall.date().day(),
+            wall.time().hour(),
+            wall.time().minute(),
+            wall.time().second(),
+            wall.time().nanosecond() / 1000,
+            fold,
+        ))
+    }
+
+    /// Trait to allow generic fromutc dispatch across tz types.
+    trait FromUtcRust {
+        fn fromutc_rust(&self, dt: NaiveDateTime) -> (NaiveDateTime, bool);
+    }
+
+    impl FromUtcRust for TzFile {
+        fn fromutc_rust(&self, dt: NaiveDateTime) -> (NaiveDateTime, bool) {
+            self.fromutc(dt)
+        }
+    }
+
+    impl FromUtcRust for TzLocal {
+        fn fromutc_rust(&self, dt: NaiveDateTime) -> (NaiveDateTime, bool) {
+            self.fromutc(dt)
+        }
+    }
+
+    impl FromUtcRust for TzStr {
+        fn fromutc_rust(&self, dt: NaiveDateTime) -> (NaiveDateTime, bool) {
+            self.fromutc(dt)
+        }
+    }
+
+    impl FromUtcRust for TzRange {
+        fn fromutc_rust(&self, dt: NaiveDateTime) -> (NaiveDateTime, bool) {
+            self.fromutc(dt)
+        }
     }
 
     fn duration_to_pydelta<'py>(py: Python<'py>, total_seconds: i64) -> PyResult<Bound<'py, PyDelta>> {
