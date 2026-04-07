@@ -13,18 +13,84 @@ pub fn within_delta(dt1: NaiveDateTime, dt2: NaiveDateTime, delta: TimeDelta) ->
     -delta <= difference && difference <= delta
 }
 
-/// PyO3 wrapper. With the `chrono` feature enabled on pyo3, NaiveDateTime and
-/// TimeDelta are automatically converted from/to Python datetime/timedelta.
-/// Timezone-aware datetimes will raise TypeError (NaiveDateTime rejects them).
+// ============================================================================
+// PyO3 bindings
+// ============================================================================
+
 #[cfg(feature = "python")]
-#[pyo3::prelude::pyfunction]
-#[pyo3(name = "within_delta")]
-pub fn within_delta_py(
-    dt1: NaiveDateTime,
-    dt2: NaiveDateTime,
-    delta: TimeDelta,
-) -> bool {
-    within_delta(dt1, dt2, delta)
+pub mod python {
+    use pyo3::prelude::*;
+
+    /// PyO3 wrapper for within_delta.
+    #[pyfunction]
+    #[pyo3(name = "within_delta")]
+    pub fn within_delta_py(
+        dt1: chrono::NaiveDateTime,
+        dt2: chrono::NaiveDateTime,
+        delta: chrono::TimeDelta,
+    ) -> bool {
+        super::within_delta(dt1, dt2, delta)
+    }
+
+    /// Returns a datetime representing the current day at midnight.
+    ///
+    /// Equivalent to Python's:
+    ///   dt = datetime.now(tzinfo)
+    ///   return datetime.combine(dt.date(), time(0, tzinfo=tzinfo))
+    #[pyfunction]
+    #[pyo3(name = "today", signature = (tzinfo=None))]
+    pub fn today_py<'py>(py: Python<'py>, tzinfo: Option<&Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyAny>> {
+        let datetime_mod = py.import("datetime")?;
+        let datetime_cls = datetime_mod.getattr("datetime")?;
+        let time_cls = datetime_mod.getattr("time")?;
+
+        // datetime.now(tzinfo)
+        let now = match tzinfo {
+            Some(tz) => datetime_cls.call_method1("now", (tz,))?,
+            None => datetime_cls.call_method0("now")?,
+        };
+
+        // dt.date()
+        let date = now.call_method0("date")?;
+
+        // time(0, tzinfo=tzinfo)
+        let midnight = {
+            let kwargs = pyo3::types::PyDict::new(py);
+            kwargs.set_item("tzinfo", tzinfo)?;
+            time_cls.call((0,), Some(&kwargs))?
+        };
+
+        // datetime.combine(date, midnight)
+        datetime_cls.call_method1("combine", (date, midnight))
+    }
+
+    /// Sets the tzinfo parameter on naive datetimes only.
+    ///
+    /// If dt already has a tzinfo, returns dt unchanged.
+    /// Otherwise, returns dt.replace(tzinfo=tzinfo).
+    #[pyfunction]
+    #[pyo3(name = "default_tzinfo")]
+    pub fn default_tzinfo_py<'py>(
+        py: Python<'py>,
+        dt: &Bound<'py, PyAny>,
+        tzinfo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let existing = dt.getattr("tzinfo")?;
+        if !existing.is_none() {
+            return Ok(dt.clone());
+        }
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("tzinfo", tzinfo)?;
+        dt.call_method("replace", (), Some(&kwargs))
+    }
+
+    /// Register utils functions with the parent module.
+    pub fn register(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
+        m.add_function(pyo3::wrap_pyfunction!(within_delta_py, m)?)?;
+        m.add_function(pyo3::wrap_pyfunction!(today_py, m)?)?;
+        m.add_function(pyo3::wrap_pyfunction!(default_tzinfo_py, m)?)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

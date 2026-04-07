@@ -34,8 +34,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // RelativeDelta class
     m.add_class::<relativedelta::RelativeDelta>()?;
 
-    // Utils function
-    m.add_function(wrap_pyfunction!(utils::within_delta_py, m)?)?;
+    // Utils functions
+    utils::python::register(m)?;
 
     // Parser functions and classes
     parser::python::register(m)?;
