@@ -97,26 +97,46 @@ const TZPATHS: &[&str] = &[
     "/etc/zoneinfo",
 ];
 
+/// Files to try when resolving local timezone (no name given).
+#[cfg(not(target_os = "windows"))]
+const TZFILES: &[&str] = &["/etc/localtime", "localtime"];
+
 /// Get a timezone by name.
 ///
-/// Lookup order:
-/// 1. `None` / empty → system local timezone
-/// 2. "UTC" / "GMT" → TzUtc
-/// 3. Absolute path → TzFile
-/// 4. IANA name (e.g. "America/New_York") → search TZPATHS
-/// 5. POSIX TZ string (contains digits) → TzStr
+/// Matches python-dateutil's `dateutil.tz.gettz()` lookup order:
+/// 1. `None` / `""` / `":"` → `$TZ` env → TZFILES → `TzLocal`
+/// 2. Strip leading `":"` prefix
+/// 3. Absolute path → `TzFile`
+/// 4. IANA name (e.g. `"America/New_York"`) → search TZPATHS (with space→underscore)
+/// 5. `"UTC"` / `"GMT"` → `TzUtc`
+/// 6. System timezone name (e.g. `"JST"`) → `TzLocal`
+/// 7. POSIX TZ string (contains digits) → `TzStr`
 pub fn gettz(name: Option<&str>) -> Option<Tz> {
     let name = match name {
-        None | Some("") => {
-            // Try $TZ environment variable
+        None | Some("") | Some(":") => {
+            // Try $TZ environment variable first
             if let Ok(tz_env) = std::env::var("TZ") {
-                if !tz_env.is_empty() {
+                if !tz_env.is_empty() && tz_env != ":" {
                     return gettz(Some(&tz_env));
                 }
             }
-            // Try /etc/localtime
-            if let Ok(tzf) = TzFile::from_path("/etc/localtime") {
-                return Some(Tz::File(tzf));
+            // Try TZFILES (absolute and relative paths in TZPATHS)
+            #[cfg(not(target_os = "windows"))]
+            for filepath in TZFILES {
+                if filepath.starts_with('/') {
+                    // Absolute path — try directly
+                    if let Ok(tzf) = TzFile::from_path(filepath) {
+                        return Some(Tz::File(tzf));
+                    }
+                } else {
+                    // Relative — search in TZPATHS
+                    for base in TZPATHS {
+                        let full = format!("{base}/{filepath}");
+                        if let Ok(tzf) = TzFile::from_path(&full) {
+                            return Some(Tz::File(tzf));
+                        }
+                    }
+                }
             }
             // Fall back to TzLocal
             return Some(Tz::Local(TzLocal::new()));
@@ -124,11 +144,11 @@ pub fn gettz(name: Option<&str>) -> Option<Tz> {
         Some(n) => n,
     };
 
-    let name = name.trim();
+    // Strip leading ":" (POSIX TZ convention)
+    let name = name.strip_prefix(':').unwrap_or(name).trim();
 
-    // UTC / GMT
-    if matches!(name.to_uppercase().as_str(), "UTC" | "GMT") {
-        return Some(Tz::Utc(TzUtc::new()));
+    if name.is_empty() {
+        return gettz(None);
     }
 
     // Absolute path
@@ -138,11 +158,20 @@ pub fn gettz(name: Option<&str>) -> Option<Tz> {
 
     // Search TZPATHS for IANA timezone name
     #[cfg(not(target_os = "windows"))]
-    for base in TZPATHS {
-        let path = format!("{base}/{name}");
-        if let Ok(tzf) = TzFile::from_path(&path) {
-            return Some(Tz::File(tzf));
+    {
+        if let Some(tz) = lookup_tzfile(name) {
+            return Some(tz);
         }
+    }
+
+    // UTC / GMT
+    if name.eq_ignore_ascii_case("UTC") || name.eq_ignore_ascii_case("GMT") {
+        return Some(Tz::Utc(TzUtc::new()));
+    }
+
+    // Check system timezone abbreviations (e.g. "JST", "EST")
+    if is_system_tzname(name) {
+        return Some(Tz::Local(TzLocal::new()));
     }
 
     // Try as a POSIX TZ string (if it contains a digit)
@@ -152,10 +181,62 @@ pub fn gettz(name: Option<&str>) -> Option<Tz> {
         }
     }
 
-    // TODO: Support timezone abbreviations (e.g., "EST", "CST") by checking
-    // system timezone names, similar to python-dateutil's time.tzname lookup.
-
     None
+}
+
+/// Search TZPATHS for a timezone file, trying space→underscore replacement.
+#[cfg(not(target_os = "windows"))]
+fn lookup_tzfile(name: &str) -> Option<Tz> {
+    use std::path::Path;
+
+    for base in TZPATHS {
+        let path = format!("{base}/{name}");
+        if Path::new(&path).is_file() {
+            if let Ok(tzf) = TzFile::from_path(&path) {
+                return Some(Tz::File(tzf));
+            }
+        }
+        // Try with spaces replaced by underscores
+        if name.contains(' ') {
+            let alt = format!("{base}/{}", name.replace(' ', "_"));
+            if Path::new(&alt).is_file() {
+                if let Ok(tzf) = TzFile::from_path(&alt) {
+                    return Some(Tz::File(tzf));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Check if `name` matches the system's current timezone abbreviation(s).
+fn is_system_tzname(name: &str) -> bool {
+    // Compare against POSIX tzname (standard and DST abbreviations).
+    // This mirrors python-dateutil's `name in time.tzname` check.
+    #[cfg(not(target_os = "windows"))]
+    {
+        extern "C" {
+            fn tzset();
+            static tzname: [*const std::ffi::c_char; 2];
+        }
+
+        // Safety: tzset() initializes the tzname globals. The pointers are
+        // valid NUL-terminated strings on all POSIX systems after tzset().
+        unsafe {
+            tzset();
+
+            for ptr in &tzname {
+                if !ptr.is_null() {
+                    if let Ok(s) = std::ffi::CStr::from_ptr(*ptr).to_str() {
+                        if s == name {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 // ============================================================================
@@ -932,6 +1013,36 @@ mod tests {
     fn test_gettz_invalid_name() {
         let tz = gettz(Some("Not/A/Real/Timezone"));
         assert!(tz.is_none());
+    }
+
+    #[test]
+    fn test_gettz_colon_prefix() {
+        // ":America/New_York" should strip the colon and resolve
+        if let Some(tz) = gettz(Some(":America/New_York")) {
+            let winter = NaiveDate::from_ymd_opt(2020, 1, 15)
+                .unwrap()
+                .and_hms_opt(12, 0, 0)
+                .unwrap();
+            assert_eq!(
+                tz.utcoffset(Some(winter), false),
+                Some(Duration::seconds(-18000))
+            );
+        }
+    }
+
+    #[test]
+    fn test_gettz_colon_only() {
+        // ":" alone should resolve to local timezone
+        let tz = gettz(Some(":"));
+        assert!(tz.is_some());
+    }
+
+    #[test]
+    fn test_gettz_system_tzname() {
+        // The system should know its own timezone abbreviations
+        // This test just verifies is_system_tzname doesn't panic
+        // and that unknown names don't match
+        assert!(!is_system_tzname("FAKE_TZ_THAT_DOES_NOT_EXIST"));
     }
 
     #[test]
