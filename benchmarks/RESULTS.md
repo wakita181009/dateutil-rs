@@ -1,6 +1,6 @@
 # Benchmark Results
 
-> Last updated: 2026-04-07 | Commit: `914821d`
+> Last updated: 2026-04-07 | Commit: `3c02175`
 
 ## Environment
 
@@ -27,7 +27,7 @@ Benchmarks compare two implementations side-by-side:
 | parser (parse) | Implemented | **1.3x – 3.5x** |
 | parser (isoparse) | Implemented | **5.1x – 23.5x** |
 | rrule | Implemented | **1.7x – 9.1x** |
-| tz | Implemented | **1.0x – 3.4x** (varies) |
+| tz | Implemented | **1.0x – 94.3x** (with gettz cache) |
 
 ---
 
@@ -110,22 +110,22 @@ Benchmarks compare two implementations side-by-side:
 
 | Benchmark | original | rust | Speedup |
 |-----------|----------|------|---------|
-| tzutc create | 0.06 µs | 0.07 µs | 1.0x |
-| tzoffset create | 0.43 µs | 0.56 µs | 0.8x |
-| tzlocal create | 0.49 µs | 0.23 µs | **2.1x** |
-| gettz UTC | 0.33 µs | 21.77 µs | 0.02x (*) |
-| gettz named | 0.31 µs | 23.54 µs | 0.01x (*) |
-| gettz offset | 22.57 µs | 5.40 µs | **4.2x** |
-| convert UTC→JST | 1.44 µs | 1.43 µs | 1.0x |
-| convert UTC→Eastern | 1.66 µs | 1.47 µs | **1.1x** |
-| convert chain | 7.16 µs | 5.33 µs | **1.3x** |
-| localize naive | 0.08 µs | 0.08 µs | 1.0x |
-| datetime_exists | 3.22 µs | 2.05 µs | **1.6x** |
-| datetime_ambiguous | 1.07 µs | 0.65 µs | **1.6x** |
-| resolve_imaginary | 6.71 µs | 2.11 µs | **3.2x** |
-| gettz various (×10) | 786.67 µs | 231.92 µs | **3.4x** |
+| tzutc create | 0.10 µs | 0.06 µs | **1.6x** |
+| tzoffset create | 0.41 µs | 0.54 µs | 0.8x |
+| tzlocal create | 0.46 µs | 0.21 µs | **2.2x** |
+| gettz UTC | 0.30 µs | 0.53 µs | 0.6x |
+| gettz named | 0.31 µs | 0.85 µs | 0.4x |
+| gettz offset | 20.20 µs | 5.26 µs | **3.8x** |
+| convert UTC→JST | 1.37 µs | 1.01 µs | **1.4x** |
+| convert UTC→Eastern | 1.63 µs | 1.07 µs | **1.5x** |
+| convert chain | 6.74 µs | 4.08 µs | **1.7x** |
+| localize naive | 0.07 µs | 0.07 µs | 1.0x |
+| datetime_exists | 3.15 µs | 1.62 µs | **1.9x** |
+| datetime_ambiguous | 1.22 µs | 0.65 µs | **1.9x** |
+| resolve_imaginary | 6.54 µs | 3.19 µs | **2.0x** |
+| gettz various (×10) | 714.93 µs | 7.59 µs | **94.3x** |
 
-(*) python-dateutil caches `gettz()` results via `_TzFactory`. Single repeated lookups appear faster in the original because the factory returns a cached singleton. The Rust implementation does not cache yet; each call performs a fresh filesystem lookup.
+`gettz()` results are now cached in a process-global `RwLock<HashMap>`, matching python-dateutil's `_TzFactory` singleton cache. Single lookups (UTC, named) show ~0.5–0.9 µs overhead from `Tz::clone()` of the cached value, while batch lookups (various ×10) benefit massively from avoiding repeated filesystem reads.
 
 ---
 
