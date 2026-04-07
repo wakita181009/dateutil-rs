@@ -2026,6 +2026,7 @@ class TestRRuleLazyIndexingCompat:
     def test_iter_infinite_rrule(self):
         """Iterating an infinite rrule and taking first N should work."""
         import itertools
+
         py_first5 = list(itertools.islice(py_rrule(PY_DAILY, dtstart=self.DTSTART), 5))
         rs_first5 = list(itertools.islice(rs_rrule(RS_DAILY, dtstart=self.DTSTART), 5))
         assert py_first5 == rs_first5
@@ -2033,6 +2034,7 @@ class TestRRuleLazyIndexingCompat:
     def test_iter_infinite_rruleset(self):
         """Iterating an infinite rruleset and taking first N should work."""
         import itertools
+
         py_set = py_rruleset()
         py_set.rrule(py_rrule(PY_DAILY, dtstart=self.DTSTART))
         rs_set = rs_rruleset()
@@ -2065,15 +2067,11 @@ class TestRRuleExclusionCompat:
         """rruleset with exrule should exclude matching dates."""
         py_set = py_rruleset()
         py_set.rrule(py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART))
-        py_set.exrule(
-            py_rrule(PY_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0))
-        )
+        py_set.exrule(py_rrule(PY_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0)))
 
         rs_set = rs_rruleset()
         rs_set.rrule(rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART))
-        rs_set.exrule(
-            rs_rrule(RS_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0))
-        )
+        rs_set.exrule(rs_rrule(RS_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0)))
 
         assert list(py_set) == list(rs_set)
 
@@ -2082,17 +2080,13 @@ class TestRRuleExclusionCompat:
         consumed and subsequent dates should still appear."""
         py_set = py_rruleset()
         py_set.rrule(py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART))
-        py_set.exrule(
-            py_rrule(PY_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0))
-        )
+        py_set.exrule(py_rrule(PY_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0)))
         py_set.exdate(datetime(1997, 9, 3, 9, 0))
         py_set.exdate(datetime(1997, 9, 5, 9, 0))
 
         rs_set = rs_rruleset()
         rs_set.rrule(rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART))
-        rs_set.exrule(
-            rs_rrule(RS_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0))
-        )
+        rs_set.exrule(rs_rrule(RS_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0)))
         rs_set.exdate(datetime(1997, 9, 3, 9, 0))
         rs_set.exdate(datetime(1997, 9, 5, 9, 0))
 
