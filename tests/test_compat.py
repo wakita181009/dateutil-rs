@@ -412,6 +412,8 @@ class TestWithinDeltaCompat:
 # Timezone
 # ---------------------------------------------------------------------------
 try:
+    from dateutil_rs._native import _TzOffset
+
     from dateutil.tz import (
         datetime_ambiguous as py_datetime_ambiguous,
     )
@@ -466,7 +468,6 @@ try:
     from dateutil_rs.tz import (
         tzutc as rs_tzutc,
     )
-    from dateutil_rs._native import _TzOffset
 
     HAS_TZ = True
 except ImportError:
@@ -505,7 +506,7 @@ class TestTzUtcCompat:
 
     def test_is_ambiguous(self):
         dt = datetime(2024, 6, 15, 12, 0)
-        assert py_tzutc().is_ambiguous(dt) == rs_tzutc().is_ambiguous(dt) == False
+        assert py_tzutc().is_ambiguous(dt) is rs_tzutc().is_ambiguous(dt) is False
 
     def test_utcoffset_is_zero(self):
         dt = datetime(2024, 1, 1)
@@ -551,7 +552,7 @@ class TestTzOffsetCompat:
         dt = datetime(2024, 6, 15, 12, 0)
         py_tz = py_tzoffset("EST", -18000)
         rs_tz = rs_tzoffset("EST", -18000)
-        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) == False
+        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) is False
 
 
 @pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
@@ -646,12 +647,7 @@ class TestTzFileCompat:
     @pytest.mark.parametrize(
         "dt",
         [
-            pytest.param(
-                datetime(2024, 6, 15, 12, 0),
-                marks=pytest.mark.xfail(
-                    reason="Rust tzfile dst() incorrect during DST"
-                ),
-            ),
+            datetime(2024, 6, 15, 12, 0),
             datetime(2024, 1, 15, 12, 0),  # winter no DST
         ],
     )
@@ -672,7 +668,7 @@ class TestTzFileCompat:
     @pytest.mark.xfail(reason="Rust tzfile is_ambiguous() not yet correct")
     def test_is_ambiguous_fall_back(self, ny_py, ny_rs):
         dt = datetime(2024, 11, 3, 1, 30)
-        assert ny_py.is_ambiguous(dt) == ny_rs.is_ambiguous(dt) == True
+        assert ny_py.is_ambiguous(dt) == ny_rs.is_ambiguous(dt) is True
 
     # Normal times are not ambiguous
     @pytest.mark.parametrize(
@@ -684,7 +680,7 @@ class TestTzFileCompat:
         ],
     )
     def test_not_ambiguous(self, dt, ny_py, ny_rs):
-        assert ny_py.is_ambiguous(dt) == ny_rs.is_ambiguous(dt) == False
+        assert ny_py.is_ambiguous(dt) == ny_rs.is_ambiguous(dt) is False
 
 
 @pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
@@ -723,27 +719,9 @@ class TestTzFileMultiZoneCompat:
     @pytest.mark.parametrize(
         "zone,dt",
         [
-            pytest.param(
-                "America/Chicago",
-                datetime(2024, 6, 15, 12, 0),
-                marks=pytest.mark.xfail(
-                    reason="Rust tzfile dst() incorrect during DST"
-                ),
-            ),
-            pytest.param(
-                "America/Los_Angeles",
-                datetime(2024, 6, 15, 12, 0),
-                marks=pytest.mark.xfail(
-                    reason="Rust tzfile dst() incorrect during DST"
-                ),
-            ),
-            pytest.param(
-                "Europe/London",
-                datetime(2024, 6, 15, 12, 0),
-                marks=pytest.mark.xfail(
-                    reason="Rust tzfile dst() incorrect during DST"
-                ),
-            ),
+            ("America/Chicago", datetime(2024, 6, 15, 12, 0)),
+            ("America/Los_Angeles", datetime(2024, 6, 15, 12, 0)),
+            ("Europe/London", datetime(2024, 6, 15, 12, 0)),
             ("Asia/Tokyo", datetime(2024, 6, 15, 12, 0)),
         ],
     )
@@ -852,14 +830,14 @@ class TestTzStrCompat:
         dt = datetime(2024, 11, 3, 1, 30)
         py_tz = py_tzstr(tz_string)
         rs_tz = rs_tzstr(tz_string)
-        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) == True
+        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) is True
 
     def test_not_ambiguous_normal(self):
         tz_string = "EST5EDT,M3.2.0/2,M11.1.0/2"
         dt = datetime(2024, 6, 15, 12, 0)
         py_tz = py_tzstr(tz_string)
         rs_tz = rs_tzstr(tz_string)
-        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) == False
+        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) is False
 
 
 @pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
@@ -950,7 +928,7 @@ class TestDatetimeExistsCompat:
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 6, 15, 12, 0, tzinfo=py_tz)
         dt_rs = datetime(2024, 6, 15, 12, 0, tzinfo=rs_tz)
-        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) == True
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) is True
 
     @pytest.mark.xfail(reason="Rust datetime_exists() gap detection not yet correct")
     def test_spring_forward_gap(self):
@@ -959,7 +937,7 @@ class TestDatetimeExistsCompat:
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 3, 10, 2, 30, tzinfo=py_tz)
         dt_rs = datetime(2024, 3, 10, 2, 30, tzinfo=rs_tz)
-        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) == False
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) is False
 
     def test_fall_back_exists(self):
         """Nov 3, 2024 01:30 exists (it's ambiguous but it exists)."""
@@ -967,7 +945,7 @@ class TestDatetimeExistsCompat:
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 11, 3, 1, 30, tzinfo=py_tz)
         dt_rs = datetime(2024, 11, 3, 1, 30, tzinfo=rs_tz)
-        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) == True
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) is True
 
 
 @pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
@@ -983,7 +961,7 @@ class TestDatetimeAmbiguousCompat:
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 6, 15, 12, 0, tzinfo=py_tz)
         dt_rs = datetime(2024, 6, 15, 12, 0, tzinfo=rs_tz)
-        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) == False
+        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) is False
 
     @pytest.mark.xfail(
         reason="Rust datetime_ambiguous() overlap detection not yet correct"
@@ -994,7 +972,7 @@ class TestDatetimeAmbiguousCompat:
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 11, 3, 1, 30, tzinfo=py_tz)
         dt_rs = datetime(2024, 11, 3, 1, 30, tzinfo=rs_tz)
-        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) == True
+        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) is True
 
     def test_spring_forward_not_ambiguous(self):
         """Mar 10, 2024 02:30 is NOT ambiguous (it's in a gap, not an overlap)."""
@@ -1002,4 +980,4 @@ class TestDatetimeAmbiguousCompat:
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 3, 10, 2, 30, tzinfo=py_tz)
         dt_rs = datetime(2024, 3, 10, 2, 30, tzinfo=rs_tz)
-        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) == False
+        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) is False
