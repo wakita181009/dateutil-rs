@@ -79,13 +79,13 @@ uv run pytest tests/ --cov=dateutil
 ### Linting
 
 ```bash
-uv run ruff check src/ tests/
-uv run ruff format --check src/ tests/
+uv run ruff check tests/ python/
+uv run ruff format --check tests/ python/
 ```
 
 ### Benchmarks
 
-Benchmarks compare three implementations: the original `python-dateutil` (PyPI), the local Python port, and the Rust extension (`dateutil_rs`) using pytest-benchmark.
+Benchmarks compare the original `python-dateutil` (PyPI) and the Rust extension (`dateutil_rs`) using pytest-benchmark.
 
 #### Easter
 
@@ -158,7 +158,6 @@ dateutil-rs/
 │   ├── rrule.py           # Delegates to python-dateutil (not yet Rust)
 │   ├── tz.py              # Delegates to python-dateutil (not yet Rust)
 │   └── utils.py           # Rust within_delta + python-dateutil fallback
-├── src/dateutil/          # Original python-dateutil v2.9.0 (reference only)
 ├── tests/                 # Test suite (~13k lines)
 ├── benchmarks/            # pytest-benchmark comparisons
 ├── .github/workflows/     # CI (lint + test matrix)

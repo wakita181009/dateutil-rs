@@ -39,18 +39,6 @@ dateutil-rs/
 │       ├── py.typed                # PEP 561 marker
 │       └── compat.py              # python-dateutil compatibility wrappers
 │
-├── src/                            # Original python-dateutil v2.9.0 (reference only)
-│   └── dateutil/
-│       ├── __init__.py
-│       ├── _common.py
-│       ├── easter.py
-│       ├── parser/
-│       ├── relativedelta.py
-│       ├── rrule.py
-│       ├── tz/
-│       ├── utils.py
-│       └── zoneinfo/
-│
 ├── tests/                          # Python tests (existing, from python-dateutil)
 ├── benchmarks/                     # Performance benchmarks (Python vs Rust)
 ├── .github/                        # CI workflows
@@ -62,7 +50,7 @@ dateutil-rs/
 
 - **No workspace Cargo.toml at root** — single crate, so `crates/dateutil-rs/Cargo.toml` is the only Cargo.toml.
 - **`crates/dateutil-rs/`** — Rust source lives here, following `crates/` convention for Rust code.
-- **`src/dateutil/`** — Original python-dateutil v2.9.0 reference code. Read-only; used for comparison tests, benchmarks, and as implementation reference. Not modified.
+- **`python-dateutil`** — The original python-dateutil v2.9.0 is installed as a library dependency (dev). Used for reference tests, compatibility tests, and benchmarks.
 - **`python/dateutil_rs/`** — maturin mixed layout. Thin Python layer that re-exports from the Rust native module.
 - **`pyproject.toml`** — Uses `maturin` as build backend with `manifest-path = "crates/dateutil-rs/Cargo.toml"`.
 
@@ -208,7 +196,7 @@ Phase 5 focuses on cross-platform polish and release readiness.
 ## Testing Strategy
 
 - **Rust unit tests:** `cargo test --manifest-path crates/dateutil-rs/Cargo.toml` — Tests pure Rust logic without Python.
-- **Python reference tests:** `PYTHONPATH=src uv run pytest tests/` — Tests the original python-dateutil code. Defines "correct behavior".
+- **Python reference tests:** `uv run pytest tests/` — Tests against the installed python-dateutil library. Defines "correct behavior".
 - **Python integration tests:** `uv run pytest` — After `maturin develop`, tests dateutil_rs against the same test expectations.
 - **Benchmarks:** `uv run pytest benchmarks/ --benchmark-enable` — Python-side comparison (dateutil vs dateutil_rs). Primary performance measurement.
 
@@ -217,9 +205,9 @@ Phase 5 focuses on cross-platform polish and release readiness.
 - `cargo test --manifest-path crates/dateutil-rs/Cargo.toml` — Run Rust tests (no Python needed)
 - `cargo clippy --manifest-path crates/dateutil-rs/Cargo.toml` — Rust linter
 - `maturin develop --manifest-path crates/dateutil-rs/Cargo.toml -F python` — Build Python extension
-- `PYTHONPATH=src uv run pytest tests/` — Run reference Python tests
+- `uv run pytest tests/` — Run reference Python tests
 - `uv run pytest benchmarks/ --benchmark-enable` — Run benchmarks
-- `uv run ruff check src/ tests/` — Python linter
+- `uv run ruff check tests/ python/` — Python linter
 
 ## Code Conventions
 

@@ -11,12 +11,11 @@
 
 ## Summary
 
-Benchmarks compare three implementations side-by-side:
+Benchmarks compare two implementations side-by-side:
 
 | Variant | Description |
 |---------|-------------|
 | **original** | `python-dateutil` from PyPI (v2.9.0.post0) |
-| **local** | Pure Python port in `src/dateutil/` |
 | **rust** | Rust implementation via PyO3 (`dateutil_rs`) |
 
 ### Implementation Status
@@ -88,24 +87,24 @@ Benchmarks compare three implementations side-by-side:
 
 ## RRule
 
-| Benchmark | original | local | Ratio |
-|-----------|----------|-------|-------|
-| daily 100 | 96.04 µs | 94.83 µs | 1.0x |
-| daily interval=3 | 101.79 µs | 101.25 µs | 1.0x |
-| weekly 52 | 95.92 µs | 94.96 µs | 1.0x |
-| weekly byday interval=2 | 123.58 µs | 123.29 µs | 1.0x |
-| monthly 120 | 408.67 µs | 408.33 µs | 1.0x |
-| monthly byday | 16.38 µs | 16.33 µs | 1.0x |
-| monthly bymonthday | 119.58 µs | 118.87 µs | 1.0x |
-| yearly 100 | 1,965.87 µs | 1,976.29 µs | 1.0x |
-| yearly bymonth | 624.38 µs | 622.71 µs | 1.0x |
-| hourly 1000 | 1,167.04 µs | 1,163.38 µs | 1.0x |
-| rruleset union | 119.54 µs | 118.71 µs | 1.0x |
-| rruleset exdate | 125.71 µs | 126.25 µs | 1.0x |
-| rruleset exrule | 578.63 µs | 573.29 µs | 1.0x |
-| rrulestr simple | 2.71 µs | 2.71 µs | 1.0x |
-| rrulestr complex | 5.83 µs | 5.79 µs | 1.0x |
-| rrulestr with dtstart | 14.54 µs | 13.92 µs | 1.0x |
+| Benchmark | original | rust | Speedup |
+|-----------|----------|------|---------|
+| daily 100 | 96.04 µs | — | — |
+| daily interval=3 | 101.79 µs | — | — |
+| weekly 52 | 95.92 µs | — | — |
+| weekly byday interval=2 | 123.58 µs | — | — |
+| monthly 120 | 408.67 µs | — | — |
+| monthly byday | 16.38 µs | — | — |
+| monthly bymonthday | 119.58 µs | — | — |
+| yearly 100 | 1,965.87 µs | — | — |
+| yearly bymonth | 624.38 µs | — | — |
+| hourly 1000 | 1,167.04 µs | — | — |
+| rruleset union | 119.54 µs | — | — |
+| rruleset exdate | 125.71 µs | — | — |
+| rruleset exrule | 578.63 µs | — | — |
+| rrulestr simple | 2.71 µs | — | — |
+| rrulestr complex | 5.83 µs | — | — |
+| rrulestr with dtstart | 14.54 µs | — | — |
 
 ## Timezone
 
