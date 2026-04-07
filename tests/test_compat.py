@@ -1965,3 +1965,135 @@ class TestRRuleCombinedFiltersCompat:
                 dtstart=self.DTSTART,
             ),
         )
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleLazyIndexingCompat:
+    """Test that positive indexing and slicing work lazily on infinite rules,
+    matching Python dateutil behavior."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def test_positive_index_zero(self):
+        """rule[0] on an infinite rrule should return the first occurrence."""
+        py_result = py_rrule(PY_DAILY, dtstart=self.DTSTART)[0]
+        rs_result = rs_rrule(RS_DAILY, dtstart=self.DTSTART)[0]
+        assert py_result == rs_result
+
+    def test_positive_index_five(self):
+        """rule[5] on an infinite rrule should return the 6th occurrence."""
+        py_result = py_rrule(PY_DAILY, dtstart=self.DTSTART)[5]
+        rs_result = rs_rrule(RS_DAILY, dtstart=self.DTSTART)[5]
+        assert py_result == rs_result
+
+    def test_positive_index_finite(self):
+        """rule[2] on a finite rrule should match."""
+        py_result = py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART)[2]
+        rs_result = rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART)[2]
+        assert py_result == rs_result
+
+    def test_negative_index_finite(self):
+        """rule[-1] on a finite rrule should match."""
+        py_result = py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART)[-1]
+        rs_result = rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART)[-1]
+        assert py_result == rs_result
+
+    def test_slice_positive_finite(self):
+        """rule[1:4] on a finite rrule should match."""
+        py_result = list(py_rrule(PY_DAILY, count=10, dtstart=self.DTSTART)[1:4])
+        rs_result = list(rs_rrule(RS_DAILY, count=10, dtstart=self.DTSTART)[1:4])
+        assert py_result == rs_result
+
+    def test_slice_positive_infinite(self):
+        """rule[:3] on an infinite rrule should return first 3 lazily."""
+        py_result = list(py_rrule(PY_DAILY, dtstart=self.DTSTART)[:3])
+        rs_result = list(rs_rrule(RS_DAILY, dtstart=self.DTSTART)[:3])
+        assert py_result == rs_result
+
+    def test_slice_with_step(self):
+        """rule[0:6:2] on an infinite rrule should return every other."""
+        py_result = list(py_rrule(PY_DAILY, dtstart=self.DTSTART)[0:6:2])
+        rs_result = list(rs_rrule(RS_DAILY, dtstart=self.DTSTART)[0:6:2])
+        assert py_result == rs_result
+
+    def test_index_out_of_range(self):
+        """rule[10] on a rule with count=3 should raise IndexError."""
+        with pytest.raises(IndexError):
+            py_rrule(PY_DAILY, count=3, dtstart=self.DTSTART)[10]
+        with pytest.raises(IndexError):
+            rs_rrule(RS_DAILY, count=3, dtstart=self.DTSTART)[10]
+
+    def test_iter_infinite_rrule(self):
+        """Iterating an infinite rrule and taking first N should work."""
+        import itertools
+        py_first5 = list(itertools.islice(py_rrule(PY_DAILY, dtstart=self.DTSTART), 5))
+        rs_first5 = list(itertools.islice(rs_rrule(RS_DAILY, dtstart=self.DTSTART), 5))
+        assert py_first5 == rs_first5
+
+    def test_iter_infinite_rruleset(self):
+        """Iterating an infinite rruleset and taking first N should work."""
+        import itertools
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, dtstart=self.DTSTART))
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, dtstart=self.DTSTART))
+
+        py_first5 = list(itertools.islice(py_set, 5))
+        rs_first5 = list(itertools.islice(rs_set, 5))
+        assert py_first5 == rs_first5
+
+
+@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
+class TestRRuleExclusionCompat:
+    """Test exclusion behavior matches Python dateutil."""
+
+    DTSTART = datetime(1997, 9, 2, 9, 0)
+
+    def test_exdate_basic(self):
+        """rruleset with exdate should exclude matching dates."""
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART))
+        py_set.exdate(datetime(1997, 9, 4, 9, 0))
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART))
+        rs_set.exdate(datetime(1997, 9, 4, 9, 0))
+
+        assert list(py_set) == list(rs_set)
+
+    def test_exrule_basic(self):
+        """rruleset with exrule should exclude matching dates."""
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART))
+        py_set.exrule(
+            py_rrule(PY_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0))
+        )
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART))
+        rs_set.exrule(
+            rs_rrule(RS_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0))
+        )
+
+        assert list(py_set) == list(rs_set)
+
+    def test_exrule_and_exdate_same_dt(self):
+        """When both exrule and exdate match the same dt, both should be
+        consumed and subsequent dates should still appear."""
+        py_set = py_rruleset()
+        py_set.rrule(py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART))
+        py_set.exrule(
+            py_rrule(PY_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0))
+        )
+        py_set.exdate(datetime(1997, 9, 3, 9, 0))
+        py_set.exdate(datetime(1997, 9, 5, 9, 0))
+
+        rs_set = rs_rruleset()
+        rs_set.rrule(rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART))
+        rs_set.exrule(
+            rs_rrule(RS_DAILY, count=1, dtstart=datetime(1997, 9, 3, 9, 0))
+        )
+        rs_set.exdate(datetime(1997, 9, 3, 9, 0))
+        rs_set.exdate(datetime(1997, 9, 5, 9, 0))
+
+        assert list(py_set) == list(rs_set)

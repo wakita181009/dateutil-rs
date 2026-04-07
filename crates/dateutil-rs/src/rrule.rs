@@ -1021,7 +1021,7 @@ impl Default for RRuleSet {
 
 struct HeapItem {
     dt: NaiveDateTime,
-    iter: Box<dyn Iterator<Item = NaiveDateTime>>,
+    iter: Box<dyn Iterator<Item = NaiveDateTime> + Send + Sync>,
 }
 
 impl PartialEq for HeapItem {
@@ -2002,6 +2002,46 @@ mod tests {
         set_infinite.rrule(infinite_rule);
         assert!(!set_infinite.is_finite());
     }
+
+    /// Bug #3: Lazy positive indexing on infinite rrule — iter().nth() works.
+    #[test]
+    fn test_infinite_rrule_lazy_nth() {
+        // No count, no until → infinite rule
+        let rule = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None,
+            None, None,
+            None, None, None, None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        assert!(!rule.is_finite());
+
+        // Lazy positive indexing via iterator should work
+        let mut it = rule.iter();
+        assert_eq!(it.next(), Some(dt(2020, 1, 1, 0, 0, 0)));
+        assert_eq!(it.next(), Some(dt(2020, 1, 2, 0, 0, 0)));
+        assert_eq!(it.next(), Some(dt(2020, 1, 3, 0, 0, 0)));
+    }
+
+    /// Bug #3: Lazy positive indexing on infinite rruleset.
+    #[test]
+    fn test_infinite_rruleset_lazy_iter() {
+        let rule = RRule::new(
+            DAILY, Some(dt(2020, 1, 1, 0, 0, 0)), 1, None,
+            None, None,
+            None, None, None, None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let mut rset = RRuleSet::new();
+        rset.rrule(rule);
+        assert!(!rset.is_finite());
+
+        // Lazy iteration should work
+        let mut it = rset.iter();
+        assert_eq!(it.next(), Some(dt(2020, 1, 1, 0, 0, 0)));
+        assert_eq!(it.next(), Some(dt(2020, 1, 2, 0, 0, 0)));
+        assert_eq!(it.next(), Some(dt(2020, 1, 3, 0, 0, 0)));
+    }
 }
 
 // ===========================================================================
@@ -2139,6 +2179,31 @@ pub mod python {
         }
     }
 
+    /// Lazy Python iterator over rruleset occurrences.
+    #[pyclass]
+    pub struct PyRRuleSetIter {
+        inner: std::sync::Mutex<RRuleSetIter>,
+        tzinfo: Option<Py<PyAny>>,
+    }
+
+    #[pymethods]
+    impl PyRRuleSetIter {
+        fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+            slf
+        }
+
+        fn __next__<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+            let mut inner = self.inner.lock().expect("PyRRuleSetIter mutex poisoned");
+            match inner.next() {
+                Some(dt) => {
+                    let tzinfo = self.tzinfo.as_ref().map(|t| t.bind(py));
+                    Ok(Some(naive_to_py_datetime(py, dt, tzinfo)?))
+                }
+                None => Ok(None),
+            }
+        }
+    }
+
     /// Python-exposed rrule class.
     #[pyclass(name = "rrule")]
     pub struct PyRRule {
@@ -2258,36 +2323,81 @@ pub mod python {
         }
 
         fn __getitem__<'py>(&self, py: Python<'py>, item: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-            if !self.inner.is_finite() {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "Cannot index an infinite rrule (no count or until). Use iter() or after() instead.",
-                ));
-            }
-            let results = self.inner.all();
             let tzinfo = self.tzinfo.as_ref().map(|t| t.bind(py));
 
             if let Ok(idx) = item.extract::<isize>() {
-                let actual_idx = if idx < 0 {
-                    (results.len() as isize + idx) as usize
+                if idx >= 0 {
+                    // Positive index: lazy iteration (matches Python behavior)
+                    let mut it = self.inner.iter();
+                    for _ in 0..idx {
+                        if it.next().is_none() {
+                            return Err(pyo3::exceptions::PyIndexError::new_err("index out of range"));
+                        }
+                    }
+                    match it.next() {
+                        Some(dt) => naive_to_py_datetime(py, dt, tzinfo),
+                        None => Err(pyo3::exceptions::PyIndexError::new_err("index out of range")),
+                    }
                 } else {
-                    idx as usize
-                };
-                if actual_idx >= results.len() {
-                    return Err(pyo3::exceptions::PyIndexError::new_err("index out of range"));
+                    // Negative index: must materialize all results
+                    if !self.inner.is_finite() {
+                        return Err(pyo3::exceptions::PyTypeError::new_err(
+                            "Negative indexing on an infinite rrule is not supported.",
+                        ));
+                    }
+                    let results = self.inner.all();
+                    let actual_idx = (results.len() as isize + idx) as usize;
+                    if actual_idx >= results.len() {
+                        return Err(pyo3::exceptions::PyIndexError::new_err("index out of range"));
+                    }
+                    naive_to_py_datetime(py, results[actual_idx], tzinfo)
                 }
-                naive_to_py_datetime(py, results[actual_idx], tzinfo)
             } else {
+                // Slice access
                 let slice = item.cast::<pyo3::types::PySlice>()?;
-                let indices = slice.indices(results.len() as isize)?;
-                let py_list = PyList::empty(py);
-                let mut i = indices.start;
-                while (indices.step > 0 && i < indices.stop)
-                    || (indices.step < 0 && i > indices.stop)
-                {
-                    py_list.append(naive_to_py_datetime(py, results[i as usize], tzinfo)?)?;
-                    i += indices.step;
+                let step: isize = slice.getattr("step")?.extract::<Option<isize>>()?.unwrap_or(1);
+                let start: Option<isize> = slice.getattr("start")?.extract()?;
+                let stop: Option<isize> = slice.getattr("stop")?.extract()?;
+
+                if step > 0 && start.unwrap_or(0) >= 0 && stop.is_some() && stop.unwrap() >= 0 {
+                    // Positive slice with explicit stop: lazy islice
+                    let s = start.unwrap_or(0) as usize;
+                    let e = stop.unwrap() as usize;
+                    let step = step as usize;
+                    let py_list = PyList::empty(py);
+                    let mut it = self.inner.iter();
+                    let mut pos = 0usize;
+                    while pos < e {
+                        match it.next() {
+                            Some(dt) => {
+                                if pos >= s && (pos - s) % step == 0 {
+                                    py_list.append(naive_to_py_datetime(py, dt, tzinfo)?)?;
+                                }
+                            }
+                            None => break,
+                        }
+                        pos += 1;
+                    }
+                    Ok(py_list.into_any())
+                } else {
+                    // Negative step/start/stop or open-ended: materialize
+                    if !self.inner.is_finite() {
+                        return Err(pyo3::exceptions::PyTypeError::new_err(
+                            "Slicing an infinite rrule requires explicit positive start, stop, and step.",
+                        ));
+                    }
+                    let results = self.inner.all();
+                    let indices = slice.indices(results.len() as isize)?;
+                    let py_list = PyList::empty(py);
+                    let mut i = indices.start;
+                    while (indices.step > 0 && i < indices.stop)
+                        || (indices.step < 0 && i > indices.stop)
+                    {
+                        py_list.append(naive_to_py_datetime(py, results[i as usize], tzinfo)?)?;
+                        i += indices.step;
+                    }
+                    Ok(py_list.into_any())
                 }
-                Ok(py_list.into_any())
             }
         }
 
@@ -2537,51 +2647,89 @@ pub mod python {
             Ok(())
         }
 
-        fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-            if !self.inner.is_finite() {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "Cannot iterate an infinite rruleset. Ensure all rrules have count or until.",
-                ));
+        fn __iter__(slf: PyRef<'_, Self>) -> PyRRuleSetIter {
+            PyRRuleSetIter {
+                inner: std::sync::Mutex::new(slf.inner.iter()),
+                tzinfo: slf.tzinfo.as_ref().map(|t| t.clone_ref(slf.py())),
             }
-            let results = self.inner.all();
-            let tzinfo = self.tzinfo.as_ref().map(|t| t.bind(py));
-            let py_list = PyList::empty(py);
-            for dt in &results {
-                py_list.append(naive_to_py_datetime(py, *dt, tzinfo)?)?;
-            }
-            py_list.call_method0("__iter__")
         }
 
         fn __getitem__<'py>(&self, py: Python<'py>, item: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-            if !self.inner.is_finite() {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "Cannot index an infinite rruleset. Ensure all rrules have count or until.",
-                ));
-            }
-            let results = self.inner.all();
             let tzinfo = self.tzinfo.as_ref().map(|t| t.bind(py));
+
             if let Ok(idx) = item.extract::<isize>() {
-                let actual_idx = if idx < 0 {
-                    (results.len() as isize + idx) as usize
+                if idx >= 0 {
+                    // Positive index: lazy iteration
+                    let mut it = self.inner.iter();
+                    for _ in 0..idx {
+                        if it.next().is_none() {
+                            return Err(pyo3::exceptions::PyIndexError::new_err("index out of range"));
+                        }
+                    }
+                    match it.next() {
+                        Some(dt) => naive_to_py_datetime(py, dt, tzinfo),
+                        None => Err(pyo3::exceptions::PyIndexError::new_err("index out of range")),
+                    }
                 } else {
-                    idx as usize
-                };
-                if actual_idx >= results.len() {
-                    return Err(pyo3::exceptions::PyIndexError::new_err("index out of range"));
+                    // Negative index: must materialize
+                    if !self.inner.is_finite() {
+                        return Err(pyo3::exceptions::PyTypeError::new_err(
+                            "Negative indexing on an infinite rruleset is not supported.",
+                        ));
+                    }
+                    let results = self.inner.all();
+                    let actual_idx = (results.len() as isize + idx) as usize;
+                    if actual_idx >= results.len() {
+                        return Err(pyo3::exceptions::PyIndexError::new_err("index out of range"));
+                    }
+                    naive_to_py_datetime(py, results[actual_idx], tzinfo)
                 }
-                naive_to_py_datetime(py, results[actual_idx], tzinfo)
             } else {
+                // Slice access
                 let slice = item.cast::<pyo3::types::PySlice>()?;
-                let indices = slice.indices(results.len() as isize)?;
-                let py_list = PyList::empty(py);
-                let mut i = indices.start;
-                while (indices.step > 0 && i < indices.stop)
-                    || (indices.step < 0 && i > indices.stop)
-                {
-                    py_list.append(naive_to_py_datetime(py, results[i as usize], tzinfo)?)?;
-                    i += indices.step;
+                let step: isize = slice.getattr("step")?.extract::<Option<isize>>()?.unwrap_or(1);
+                let start: Option<isize> = slice.getattr("start")?.extract()?;
+                let stop: Option<isize> = slice.getattr("stop")?.extract()?;
+
+                if step > 0 && start.unwrap_or(0) >= 0 && stop.is_some() && stop.unwrap() >= 0 {
+                    // Positive slice with explicit stop: lazy islice
+                    let s = start.unwrap_or(0) as usize;
+                    let e = stop.unwrap() as usize;
+                    let step = step as usize;
+                    let py_list = PyList::empty(py);
+                    let mut it = self.inner.iter();
+                    let mut pos = 0usize;
+                    while pos < e {
+                        match it.next() {
+                            Some(dt) => {
+                                if pos >= s && (pos - s) % step == 0 {
+                                    py_list.append(naive_to_py_datetime(py, dt, tzinfo)?)?;
+                                }
+                            }
+                            None => break,
+                        }
+                        pos += 1;
+                    }
+                    Ok(py_list.into_any())
+                } else {
+                    // Negative step/start/stop or open-ended: materialize
+                    if !self.inner.is_finite() {
+                        return Err(pyo3::exceptions::PyTypeError::new_err(
+                            "Slicing an infinite rruleset requires explicit positive start, stop, and step.",
+                        ));
+                    }
+                    let results = self.inner.all();
+                    let indices = slice.indices(results.len() as isize)?;
+                    let py_list = PyList::empty(py);
+                    let mut i = indices.start;
+                    while (indices.step > 0 && i < indices.stop)
+                        || (indices.step < 0 && i > indices.stop)
+                    {
+                        py_list.append(naive_to_py_datetime(py, results[i as usize], tzinfo)?)?;
+                        i += indices.step;
+                    }
+                    Ok(py_list.into_any())
                 }
-                Ok(py_list.into_any())
             }
         }
 
@@ -2595,10 +2743,20 @@ pub mod python {
         }
 
         fn __len__(&self) -> PyResult<usize> {
+            if !self.inner.is_finite() {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "length of unsized rruleset",
+                ));
+            }
             Ok(self.inner.count_all())
         }
 
         fn count(&self) -> PyResult<usize> {
+            if !self.inner.is_finite() {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "length of unsized rruleset",
+                ));
+            }
             Ok(self.inner.count_all())
         }
 
