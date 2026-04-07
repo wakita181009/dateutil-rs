@@ -37,7 +37,13 @@ dateutil-rs/
 │   └── dateutil_rs/
 │       ├── __init__.py             # Re-exports from Rust native module
 │       ├── py.typed                # PEP 561 marker
-│       └── compat.py              # python-dateutil compatibility wrappers
+│       ├── common.py              # Weekday constants
+│       ├── easter.py              # Easter functions
+│       ├── parser.py              # parse/isoparse (Rust + parserinfo fallback)
+│       ├── relativedelta.py       # RelativeDelta
+│       ├── rrule.py               # rrule/rruleset/rrulestr
+│       ├── tz.py                  # Timezone classes + gettz (cached)
+│       └── utils.py               # Utility functions
 │
 ├── tests/                          # Python tests (existing, from python-dateutil)
 ├── benchmarks/                     # Performance benchmarks (Python vs Rust)
@@ -61,7 +67,7 @@ dateutil-rs/
 ```toml
 [package]
 name = "dateutil-rs"
-version = "0.1.0"
+version = "0.0.7"
 edition = "2021"
 
 [lib]
@@ -72,7 +78,8 @@ crate-type = ["rlib"]
 
 [dependencies]
 chrono = "0.4"
-pyo3 = { version = "0.24", features = ["extension-module"], optional = true }
+thiserror = "2"
+pyo3 = { version = "0.28", features = ["extension-module", "chrono"], optional = true }
 
 [features]
 default = []
@@ -100,64 +107,58 @@ module-name = "dateutil_rs._native"
 
 ## Architecture Overview
 
-### Source Python Modules → Target Rust Modules
+### Source Python Modules → Rust Modules (all implemented)
 
-| Python Module | Lines | Rust Module | Priority | Complexity |
-|---|---|---|---|---|
-| `dateutil.parser` (_parser.py + isoparser.py) | ~2,029 | `dateutil_rs::parser` | P0 | High |
-| `dateutil.rrule` | ~1,737 | `dateutil_rs::rrule` | P1 | High |
-| `dateutil.tz` (tz.py + _common.py + _factories.py) | ~2,348 | `dateutil_rs::tz` | P1 | High |
-| `dateutil.relativedelta` | ~599 | `dateutil_rs::relativedelta` | P0 | Medium |
-| `dateutil.easter` | ~89 | `dateutil_rs::easter` | P2 | Low |
-| `dateutil.utils` | ~71 | `dateutil_rs::utils` | P2 | Low |
-| `dateutil.zoneinfo` | ~167 | `dateutil_rs::zoneinfo` | P2 | Medium |
-| `dateutil._common` (weekday) | ~43 | `dateutil_rs::common` | P0 | Low |
+| Python Module | Rust Module | Status | Speedup |
+|---|---|---|---|
+| `dateutil.parser` (_parser.py + isoparser.py) | `dateutil_rs::parser` | ✅ | 1.3x–23.5x |
+| `dateutil.rrule` | `dateutil_rs::rrule` | ✅ | 1.7x–9.1x |
+| `dateutil.tz` (tz.py + _common.py + _factories.py) | `dateutil_rs::tz` | ✅ | 1.0x–94.3x |
+| `dateutil.relativedelta` | `dateutil_rs::relativedelta` | ✅ | 3.5x–18.7x |
+| `dateutil.easter` | `dateutil_rs::easter` | ✅ | 3.2x–6.2x |
+| `dateutil.utils` | `dateutil_rs::utils` | ✅ (partial) | — |
+| `dateutil._common` (weekday) | `dateutil_rs::common` | ✅ | — |
 
 ### Implementation Phases
 
-**Phase 1 — Core Types & Foundations**
+**Phase 1 — Core Types & Foundations** ✅
 - `common::Weekday` (MO–SU with N-th occurrence support)
-- `easter::easter()` (3 calendar methods). Handle year <= 0 explicitly (match Python's ValueError).
-- `utils::within_delta()` only. `today()` and `default_tzinfo()` deferred to Phase 3 (depend on timezone types).
-- PyO3 bindings for Phase 1 modules (incremental — each phase ships bindings)
-- Rust project scaffolding (Cargo.toml, module structure, CI)
-- Python-side benchmarks (extend existing pytest-benchmark to compare dateutil vs dateutil_rs). Criterion deferred to Phase 5.
+- `easter::easter()` (3 calendar methods)
+- `utils::within_delta()`
+- PyO3 bindings, project scaffolding, CI, benchmarks
 
-**Phase 2 — Parser & RelativeDelta**
+**Phase 2 — Parser & RelativeDelta** ✅
 - `relativedelta::RelativeDelta` (relative/absolute date arithmetic)
 - `parser::parse()` (generic date/time string parsing)
 - `parser::isoparse()` (ISO-8601 strict parsing)
 - `parser::ParserInfo` (customizable parsing rules)
 
-**Phase 3 — Timezone Support**
+**Phase 3 — Timezone Support** ✅
 - `tz::TzUtc`, `tz::TzOffset` (fixed offsets)
 - `tz::TzFile` (POSIX tzfile binary format)
 - `tz::TzStr`, `tz::TzRange` (TZ environment string)
 - `tz::TzLocal` (system local timezone)
-- `tz::gettz()` (convenience lookup)
-- `utils::today()`, `utils::default_tzinfo()` (deferred from Phase 1, depend on tz types)
-- `zoneinfo` (bundled IANA timezone database)
+- `tz::gettz()` (convenience lookup with process-global `RwLock<HashMap>` cache)
+- `datetime_exists()`, `datetime_ambiguous()`, `resolve_imaginary()`
 
-**Phase 4 — Recurrence Rules**
+**Phase 4 — Recurrence Rules** ✅
 - `rrule::RRule` (RFC 5545 recurrence rules)
-- `rrule::RRuleSet` (composite rule sets with exdates)
+- `rrule::RRuleSet` (composite rule sets with exdates/exrules)
 - `rrule::rrulestr()` (RFC string parsing)
 - Frequency/weekday constants
 
-**Phase 5 — Polish & Release**
-Note: PyO3 bindings are built incrementally in Phases 1-4 (each phase ships its own bindings).
-Phase 5 focuses on cross-platform polish and release readiness.
-- Cross-platform wheel builds (manylinux, macOS, Windows) via GitHub Actions
-- Full Python-side compatibility test suite (dateutil_rs vs dateutil reference)
+**Phase 5 — Polish & Release** (in progress)
+- Cross-platform wheel builds (manylinux, macOS) via GitHub Actions ✅
+- Python-side compatibility test suite ✅
 - Criterion benchmarks for Rust-internal regression testing
-- Documentation and README
-- Publish to crates.io and PyPI
+- Publish to PyPI ✅ (crates.io pending)
 
 ## Key Design Decisions
 
 - **Chrono crate** for core date/time types (`NaiveDateTime`, `DateTime<Tz>`, etc.)
 - **PyO3 + maturin** for Python bindings
-- **chrono-tz** or **iana-time-zone** for timezone database
+- **System zoneinfo** — reads TZif files from `/usr/share/zoneinfo` (no bundled database)
+- **gettz cache** — process-global `OnceLock<RwLock<HashMap<String, Tz>>>` for timezone lookup caching (matches python-dateutil's `_TzFactory`)
 - Thread-safe by default (Rust ownership model replaces Python's lock-based caching)
 - Iterator-based API for rrule (matching Python's iterable interface)
 - `#[cfg(feature = "python")]` to gate PyO3 bindings — pure Rust usage without Python dependency
