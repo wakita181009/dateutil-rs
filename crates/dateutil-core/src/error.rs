@@ -9,6 +9,8 @@ pub enum Error {
     Weekday(#[from] WeekdayError),
     #[error("{0}")]
     RelativeDelta(#[from] RelativeDeltaError),
+    #[error("{0}")]
+    Parse(#[from] ParseError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -31,4 +33,14 @@ pub enum WeekdayError {
 pub enum RelativeDeltaError {
     #[error("invalid year day: {0}")]
     InvalidYearDay(i32),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ParseError {
+    #[error("unknown string format: {0}")]
+    UnknownFormat(String),
+    #[error("string does not contain a date: {0}")]
+    NoDate(String),
+    #[error("{0}")]
+    ValueError(String),
 }

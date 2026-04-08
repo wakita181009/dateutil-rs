@@ -11,6 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 chrono = "0.4"
+phf = { version = "0.13", features = ["macros"] }
 thiserror = "2"
 
 [dev-dependencies]
