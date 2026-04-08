@@ -24,11 +24,6 @@ impl EasterMethod {
     }
 }
 
-// Compatibility constants matching python-dateutil
-pub const EASTER_JULIAN: i32 = 1;
-pub const EASTER_ORTHODOX: i32 = 2;
-pub const EASTER_WESTERN: i32 = 3;
-
 /// Compute the date of Easter for a given year and method.
 ///
 /// # Errors
