@@ -15,6 +15,13 @@ chrono = "0.4"
 thiserror = "2"
 pyo3 = { version = "0.28", features = ["extension-module", "chrono"], optional = true }
 
+[dev-dependencies]
+criterion = { version = "0.8", features = ["html_reports"] }
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
 [features]
 default = []
 python = ["pyo3"]

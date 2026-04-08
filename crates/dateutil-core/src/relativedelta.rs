@@ -12,6 +12,7 @@ fn is_leap_year(year: i32) -> bool {
 
 #[inline]
 fn days_in_month(year: i32, month: u32) -> u32 {
+    debug_assert!((1..=12).contains(&month), "month out of range: {month}");
     const DAYS: [u32; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     if month == 2 && is_leap_year(year) {
         29
@@ -126,37 +127,48 @@ impl AbsoluteFields {
     }
 
     #[inline]
-    fn set(&mut self, flag: u8, value: i32) {
-        self.flags |= flag;
-        match flag {
-            Self::YEAR => self.year = value,
-            Self::MONTH => self.month = value,
-            Self::DAY => self.day = value,
-            Self::HOUR => self.hour = value,
-            Self::MINUTE => self.minute = value,
-            Self::SECOND => self.second = value,
-            Self::MICROSECOND => self.microsecond = value,
-            _ => {}
-        }
+    fn year_or(&self, default: i32) -> i32 {
+        if self.has(Self::YEAR) { self.year } else { default }
+    }
+    #[inline]
+    fn month_or(&self, default: i32) -> i32 {
+        if self.has(Self::MONTH) { self.month } else { default }
+    }
+    #[inline]
+    fn day_or(&self, default: i32) -> i32 {
+        if self.has(Self::DAY) { self.day } else { default }
+    }
+    #[inline]
+    fn hour_or(&self, default: i32) -> i32 {
+        if self.has(Self::HOUR) { self.hour } else { default }
+    }
+    #[inline]
+    fn minute_or(&self, default: i32) -> i32 {
+        if self.has(Self::MINUTE) { self.minute } else { default }
+    }
+    #[inline]
+    fn second_or(&self, default: i32) -> i32 {
+        if self.has(Self::SECOND) { self.second } else { default }
+    }
+    #[inline]
+    fn microsecond_or(&self, default: i32) -> i32 {
+        if self.has(Self::MICROSECOND) { self.microsecond } else { default }
     }
 
     #[inline]
-    fn get_or(&self, flag: u8, default: i32) -> i32 {
-        if self.has(flag) {
-            match flag {
-                Self::YEAR => self.year,
-                Self::MONTH => self.month,
-                Self::DAY => self.day,
-                Self::HOUR => self.hour,
-                Self::MINUTE => self.minute,
-                Self::SECOND => self.second,
-                Self::MICROSECOND => self.microsecond,
-                _ => default,
-            }
-        } else {
-            default
-        }
-    }
+    fn set_year(&mut self, v: i32) { self.flags |= Self::YEAR; self.year = v; }
+    #[inline]
+    fn set_month(&mut self, v: i32) { self.flags |= Self::MONTH; self.month = v; }
+    #[inline]
+    fn set_day(&mut self, v: i32) { self.flags |= Self::DAY; self.day = v; }
+    #[inline]
+    fn set_hour(&mut self, v: i32) { self.flags |= Self::HOUR; self.hour = v; }
+    #[inline]
+    fn set_minute(&mut self, v: i32) { self.flags |= Self::MINUTE; self.minute = v; }
+    #[inline]
+    fn set_second(&mut self, v: i32) { self.flags |= Self::SECOND; self.second = v; }
+    #[inline]
+    fn set_microsecond(&mut self, v: i32) { self.flags |= Self::MICROSECOND; self.microsecond = v; }
 
     #[inline]
     fn has_time(&self) -> bool {
@@ -170,20 +182,15 @@ impl AbsoluteFields {
 
     fn merge_prefer_other(&self, other: &Self) -> Self {
         let mut result = *self;
-        // other's set fields overwrite self's
-        for &flag in &[
-            Self::YEAR,
-            Self::MONTH,
-            Self::DAY,
-            Self::HOUR,
-            Self::MINUTE,
-            Self::SECOND,
-            Self::MICROSECOND,
-        ] {
-            if other.has(flag) {
-                result.set(flag, other.get_or(flag, 0));
-            }
-        }
+        let mask = other.flags;
+        if mask & Self::YEAR != 0 { result.year = other.year; }
+        if mask & Self::MONTH != 0 { result.month = other.month; }
+        if mask & Self::DAY != 0 { result.day = other.day; }
+        if mask & Self::HOUR != 0 { result.hour = other.hour; }
+        if mask & Self::MINUTE != 0 { result.minute = other.minute; }
+        if mask & Self::SECOND != 0 { result.second = other.second; }
+        if mask & Self::MICROSECOND != 0 { result.microsecond = other.microsecond; }
+        result.flags |= mask;
         result
     }
 
@@ -262,13 +269,13 @@ impl RelativeDeltaBuilder {
     pub fn microseconds(mut self, v: i64) -> Self { self.microseconds = v; self }
     pub fn leapdays(mut self, v: i32) -> Self { self.leapdays = v; self }
 
-    pub fn year(mut self, v: i32) -> Self { self.abs.set(AbsoluteFields::YEAR, v); self }
-    pub fn month(mut self, v: i32) -> Self { self.abs.set(AbsoluteFields::MONTH, v); self }
-    pub fn day(mut self, v: i32) -> Self { self.abs.set(AbsoluteFields::DAY, v); self }
-    pub fn hour(mut self, v: i32) -> Self { self.abs.set(AbsoluteFields::HOUR, v); self }
-    pub fn minute(mut self, v: i32) -> Self { self.abs.set(AbsoluteFields::MINUTE, v); self }
-    pub fn second(mut self, v: i32) -> Self { self.abs.set(AbsoluteFields::SECOND, v); self }
-    pub fn microsecond(mut self, v: i32) -> Self { self.abs.set(AbsoluteFields::MICROSECOND, v); self }
+    pub fn year(mut self, v: i32) -> Self { self.abs.set_year(v); self }
+    pub fn month(mut self, v: i32) -> Self { self.abs.set_month(v); self }
+    pub fn day(mut self, v: i32) -> Self { self.abs.set_day(v); self }
+    pub fn hour(mut self, v: i32) -> Self { self.abs.set_hour(v); self }
+    pub fn minute(mut self, v: i32) -> Self { self.abs.set_minute(v); self }
+    pub fn second(mut self, v: i32) -> Self { self.abs.set_second(v); self }
+    pub fn microsecond(mut self, v: i32) -> Self { self.abs.set_microsecond(v); self }
 
     pub fn weekday(mut self, v: Weekday) -> Self { self.weekday = Some(v); self }
     pub fn yearday(mut self, v: i32) -> Self { self.yearday = Some(v); self }
@@ -300,7 +307,7 @@ impl RelativeDeltaBuilder {
 
 impl RelativeDelta {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         years: i32,
         months: i32,
         days: i32,
@@ -321,13 +328,13 @@ impl RelativeDelta {
         microsecond: Option<i32>,
     ) -> Result<Self, RelativeDeltaError> {
         let mut abs = AbsoluteFields::default();
-        if let Some(v) = year { abs.set(AbsoluteFields::YEAR, v); }
-        if let Some(v) = month { abs.set(AbsoluteFields::MONTH, v); }
-        if let Some(v) = day { abs.set(AbsoluteFields::DAY, v); }
-        if let Some(v) = hour { abs.set(AbsoluteFields::HOUR, v); }
-        if let Some(v) = minute { abs.set(AbsoluteFields::MINUTE, v); }
-        if let Some(v) = second { abs.set(AbsoluteFields::SECOND, v); }
-        if let Some(v) = microsecond { abs.set(AbsoluteFields::MICROSECOND, v); }
+        if let Some(v) = year { abs.set_year(v); }
+        if let Some(v) = month { abs.set_month(v); }
+        if let Some(v) = day { abs.set_day(v); }
+        if let Some(v) = hour { abs.set_hour(v); }
+        if let Some(v) = minute { abs.set_minute(v); }
+        if let Some(v) = second { abs.set_second(v); }
+        if let Some(v) = microsecond { abs.set_microsecond(v); }
 
         let mut leapdays = leapdays;
 
@@ -349,13 +356,13 @@ impl RelativeDelta {
             let mut found = false;
             for (idx, &ydays) in YDAY_IDX.iter().enumerate() {
                 if yday <= ydays {
-                    abs.set(AbsoluteFields::MONTH, (idx + 1) as i32);
+                    abs.set_month((idx + 1) as i32);
                     let d = if idx == 0 {
                         yday
                     } else {
                         yday - YDAY_IDX[idx - 1]
                     };
-                    abs.set(AbsoluteFields::DAY, d);
+                    abs.set_day(d);
                     found = true;
                     break;
                 }
@@ -432,13 +439,10 @@ impl RelativeDelta {
     #[inline]
     pub fn add_to_naive_datetime(&self, other: NaiveDateTime) -> NaiveDateTime {
         let (year, month, day) = self.resolve_date(other.year(), other.month(), other.day());
-        let hour = self.abs.get_or(AbsoluteFields::HOUR, other.hour() as i32) as u32;
-        let minute = self.abs.get_or(AbsoluteFields::MINUTE, other.minute() as i32) as u32;
-        let second = self.abs.get_or(AbsoluteFields::SECOND, other.second() as i32) as u32;
-        let usec = self
-            .abs
-            .get_or(AbsoluteFields::MICROSECOND, (other.nanosecond() / 1000) as i32)
-            as u32;
+        let hour = self.abs.hour_or(other.hour() as i32) as u32;
+        let minute = self.abs.minute_or(other.minute() as i32) as u32;
+        let second = self.abs.second_or(other.second() as i32) as u32;
+        let usec = self.abs.microsecond_or((other.nanosecond() / 1000) as i32) as u32;
 
         let date = NaiveDate::from_ymd_opt(year, month as u32, day).unwrap();
         let time = NaiveTime::from_hms_micro_opt(hour, minute, second, usec).unwrap();
@@ -557,26 +561,19 @@ impl RelativeDelta {
 
     #[inline]
     fn resolve_date(&self, base_year: i32, base_month: u32, base_day: u32) -> (i32, i32, u32) {
-        let mut year = self.abs.get_or(AbsoluteFields::YEAR, base_year) + self.years;
-        let mut month = self.abs.get_or(AbsoluteFields::MONTH, base_month as i32);
+        let mut year = self.abs.year_or(base_year) + self.years;
+        let mut month = self.abs.month_or(base_month as i32);
 
         if self.months != 0 {
-            month += self.months;
-            if month > 12 {
-                year += (month - 1) / 12;
-                month = (month - 1) % 12 + 1;
-            } else if month < 1 {
-                year += (month - 12) / 12;
-                month = month.rem_euclid(12);
-                if month == 0 {
-                    month = 12;
-                    year -= 1;
-                }
-            }
+            // Convert to 0-based, apply delta, convert back.
+            // div_euclid/rem_euclid handle negative values correctly.
+            let total = (month - 1) + self.months;
+            year += total.div_euclid(12);
+            month = total.rem_euclid(12) + 1;
         }
 
         let dim = days_in_month(year, month as u32);
-        let day = dim.min(self.abs.get_or(AbsoluteFields::DAY, base_day as i32) as u32);
+        let day = dim.min(self.abs.day_or(base_day as i32) as u32);
 
         (year, month, day)
     }
@@ -663,11 +660,12 @@ mod tests {
     }
 
     fn rd(years: i32, months: i32, days: i32) -> RelativeDelta {
-        RelativeDelta::new(
-            years, months, days, 0, 0, 0, 0, 0, None, None, None, None, None, None, None, None,
-            None, None,
-        )
-        .unwrap()
+        RelativeDelta::builder()
+            .years(years)
+            .months(months)
+            .days(days)
+            .build()
+            .unwrap()
     }
 
     #[test]
@@ -858,14 +856,67 @@ mod tests {
         let no_time = rd(1, 0, 0);
         assert!(!no_time.has_time());
 
-        let with_time = RelativeDelta::new(
-            0, 0, 0, 0, 1, 0, 0, 0, None, None, None, None, None, None, None, None, None, None,
-        )
-        .unwrap();
+        let with_time = RelativeDelta::builder().hours(1).build().unwrap();
         assert!(with_time.has_time());
 
         let with_abs_time = RelativeDelta::builder().hour(12).build().unwrap();
         assert!(with_abs_time.has_time());
+    }
+
+    // --- P0 regression tests (negative months) ---
+
+    #[test]
+    fn test_subtract_1_month_from_january() {
+        // Jan 15 - 1 month = Dec 15 of previous year
+        let base = dt(2024, 1, 15, 0, 0, 0);
+        let delta = rd(0, -1, 0);
+        let result = delta.add_to_naive_datetime(base);
+        assert_eq!(result, dt(2023, 12, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_subtract_13_months() {
+        // Jan 15 2024 - 13 months = Dec 15 2022
+        let base = dt(2024, 1, 15, 0, 0, 0);
+        let delta = rd(0, -13, 0);
+        let result = delta.add_to_naive_datetime(base);
+        assert_eq!(result, dt(2022, 12, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_subtract_12_months() {
+        // Mar 15 2024 - 12 months = Mar 15 2023
+        let base = dt(2024, 3, 15, 0, 0, 0);
+        let delta = rd(0, -12, 0);
+        let result = delta.add_to_naive_datetime(base);
+        assert_eq!(result, dt(2023, 3, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_subtract_25_months() {
+        // Mar 15 2024 - 25 months = Feb 15 2022
+        let base = dt(2024, 3, 15, 0, 0, 0);
+        let delta = rd(0, -25, 0);
+        let result = delta.add_to_naive_datetime(base);
+        assert_eq!(result, dt(2022, 2, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_add_large_positive_months() {
+        // Jan 15 2024 + 25 months = Feb 15 2026
+        let base = dt(2024, 1, 15, 0, 0, 0);
+        let delta = rd(0, 25, 0);
+        let result = delta.add_to_naive_datetime(base);
+        assert_eq!(result, dt(2026, 2, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_negative_months_date_only() {
+        // Same bug for NaiveDate path
+        let base = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let delta = rd(0, -13, 0);
+        let result = delta.add_to_naive_date(base);
+        assert_eq!(result, NaiveDate::from_ymd_opt(2022, 12, 15).unwrap());
     }
 
     #[test]

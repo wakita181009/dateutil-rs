@@ -23,25 +23,24 @@ pub fn easter(year: i32, method: i32) -> Result<NaiveDate, EasterError> {
         return Err(EasterError::InvalidYear(year));
     }
 
-    let y = year;
-    let g = y.rem_euclid(19);
+    let g = year.rem_euclid(19);
     let mut e = 0;
 
     let (i, j) = if method < 3 {
         let i = (19 * g + 15).rem_euclid(30);
-        let j = (y + y / 4 + i).rem_euclid(7);
+        let j = (year + year / 4 + i).rem_euclid(7);
         if method == 2 {
             e = 10;
-            if y > 1600 {
-                e = e + y / 100 - 16 - (y / 100 - 16) / 4;
+            if year > 1600 {
+                e = e + year / 100 - 16 - (year / 100 - 16) / 4;
             }
         }
         (i, j)
     } else {
-        let c = y / 100;
+        let c = year / 100;
         let h = (c - c / 4 - (8 * c + 13) / 25 + 19 * g + 15).rem_euclid(30);
         let i = h - (h / 28) * (1 - (h / 28) * (29 / (h + 1)) * ((21 - g) / 11));
-        let j = (y + y / 4 + i + 2 - c + c / 4).rem_euclid(7);
+        let j = (year + year / 4 + i + 2 - c + c / 4).rem_euclid(7);
         (i, j)
     };
 
@@ -49,8 +48,8 @@ pub fn easter(year: i32, method: i32) -> Result<NaiveDate, EasterError> {
     let d = 1 + (p + 27 + (p + 6) / 40).rem_euclid(31);
     let m = 3 + (p + 26) / 30;
 
-    NaiveDate::from_ymd_opt(y, m as u32, d as u32).ok_or(EasterError::DateOutOfRange {
-        year: y,
+    NaiveDate::from_ymd_opt(year, m as u32, d as u32).ok_or(EasterError::DateOutOfRange {
+        year,
         month: m as u32,
         day: d as u32,
     })
