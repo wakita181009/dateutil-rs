@@ -383,15 +383,16 @@ pub fn parse_to_result<'a>(
     let mut i = 0;
 
     while i < len {
-        let token_found = try_parse_token(
+        let consumed = try_parse_token(
             &tokens, i, len, &mut res, &mut ymd, &mut skipped_tokens, dayfirst,
         );
 
-        if !token_found {
+        if consumed == 0 {
             skipped_tokens.push(tokens[i].clone());
+            i += 1;
+        } else {
+            i += consumed;
         }
-
-        i += 1;
     }
 
     // Resolve YMD
@@ -423,6 +424,7 @@ pub fn parse_to_result<'a>(
 }
 
 #[inline]
+/// Returns the number of tokens consumed (0 = not matched).
 fn try_parse_token<'a>(
     tokens: &[Cow<'a, str>],
     i: usize,
@@ -431,7 +433,7 @@ fn try_parse_token<'a>(
     ymd: &mut Ymd,
     _skipped: &mut Vec<Cow<'a, str>>,
     _dayfirst: bool,
-) -> bool {
+) -> usize {
     let token = &tokens[i];
 
     // Try as number — integer first (fast path avoids expensive f64 parse)
@@ -445,7 +447,6 @@ fn try_parse_token<'a>(
     if let Some((value_i, value)) = num {
         // Check for HH:MM:SS pattern (number followed by ":" or HMS word)
         if i + 1 < len && tokens[i + 1] == ":" {
-            // Time component — handled by caller advancing through ":"
             return try_parse_time_component(tokens, i, len, res, value);
         }
 
@@ -453,7 +454,7 @@ fn try_parse_token<'a>(
         if i + 1 < len {
             if let Some(hms_idx) = lookup_hms(&tokens[i + 1]) {
                 assign_hms(res, hms_idx, value);
-                return true;
+                return 2; // number + HMS word
             }
         }
 
@@ -461,7 +462,7 @@ fn try_parse_token<'a>(
         if token.contains('.') && res.second.is_some() && res.microsecond.is_none() {
             let frac = value - value.floor();
             res.microsecond = Some((frac * 1_000_000.0).round() as u32);
-            return true;
+            return 1;
         }
 
         // Date component
@@ -472,29 +473,29 @@ fn try_parse_token<'a>(
                 ymd.century_specified = true;
             }
             ymd.push(value_i);
-            return true;
+            return 1;
         }
 
         // Try as hour if no hour set
         if res.hour.is_none() && (0..24).contains(&value_i) {
             res.hour = Some(value_i as u32);
-            return true;
+            return 1;
         }
 
-        return false;
+        return 0;
     }
 
     // Try as weekday
     if let Some(wd) = lookup_weekday(token) {
         res.weekday = Some(wd);
-        return true;
+        return 1;
     }
 
     // Try as month
     if let Some(mo) = lookup_month(token) {
         ymd.mstridx = Some(ymd.count);
         ymd.push(mo as i32);
-        return true;
+        return 1;
     }
 
     // Try as AM/PM
@@ -506,11 +507,13 @@ fn try_parse_token<'a>(
                 res.hour = Some(0);
             }
         }
-        return true;
+        return 1;
     }
 
     // Timezone offset: "+0530", "-05:00", or tokenized as ["+", "05", ":", "30"]
-    if (token == "+" || token == "-") && i + 1 < len {
+    // Guard: only treat standalone +/- as tz offset after time has been parsed,
+    // otherwise date separators like "-" in "2024-01-15" would be misinterpreted.
+    if (token == "+" || token == "-") && i + 1 < len && res.hour.is_some() {
         // Reconstruct offset from subsequent tokens into stack buffer (no heap alloc)
         let mut buf = [0u8; 16];
         buf[0] = token.as_bytes()[0]; // '+' or '-'
@@ -537,13 +540,13 @@ fn try_parse_token<'a>(
                     res.tzname = Some(prev.clone());
                 }
             }
-            return true;
+            return j - i; // consume sign + all lookahead tokens
         }
     }
     if (token.starts_with('+') || token.starts_with('-')) && token.len() >= 3 {
         if let Some(offset) = parse_tzoffset(token) {
             res.tzoffset = Some(offset);
-            return true;
+            return 1;
         }
     }
 
@@ -551,17 +554,17 @@ fn try_parse_token<'a>(
     if lookup_utczone(token) {
         res.tzname = Some("UTC".into());
         res.tzoffset = Some(0);
-        return true;
+        return 1;
     }
 
     // Jump word
     if lookup_jump(token) {
-        return true;
+        return 1;
     }
 
     // Pertain word
     if lookup_pertain(token) {
-        return true;
+        return 1;
     }
 
     // Timezone name (alphabetic, not matched above)
@@ -573,12 +576,13 @@ fn try_parse_token<'a>(
         {
             if let Some(offset) = parse_tzoffset(&tokens[i + 1]) {
                 res.tzoffset = Some(offset);
+                return 2; // tzname + offset token
             }
         }
-        return true;
+        return 1;
     }
 
-    false
+    0
 }
 
 #[inline]
@@ -588,15 +592,17 @@ fn try_parse_time_component(
     len: usize,
     res: &mut ParseResult<'_>,
     value: f64,
-) -> bool {
+) -> usize {
     // Pattern: HH:MM or HH:MM:SS or HH:MM:SS.ffffff
     if res.hour.is_none() {
         res.hour = Some(value as u32);
+        let mut consumed = 1; // the hour number
 
         // Look for :MM
         if i + 2 < len && tokens[i + 1] == ":" {
             if let Ok(min) = tokens[i + 2].parse::<f64>() {
                 res.minute = Some(min as u32);
+                consumed = 3; // hour + ":" + minute
                 // Look for :SS
                 if i + 4 < len && tokens[i + 3] == ":" {
                     if let Ok(sec_str) = tokens[i + 4].parse::<f64>() {
@@ -605,13 +611,14 @@ fn try_parse_time_component(
                         if frac > 0.0 {
                             res.microsecond = Some((frac * 1_000_000.0).round() as u32);
                         }
+                        consumed = 5; // + ":" + second
                     }
                 }
             }
         }
-        return true;
+        return consumed;
     }
-    false
+    0
 }
 
 #[inline]
@@ -805,6 +812,34 @@ mod tests {
     #[test]
     fn test_parse_no_date() {
         assert!(parse("hello world", false, false).is_err());
+    }
+
+    #[test]
+    fn test_time_only_no_date_leak() {
+        let (res, _) = parse_to_result("3:30 PM", false, false).unwrap();
+        assert_eq!(res.hour, Some(15));
+        assert_eq!(res.minute, Some(30));
+        assert!(res.day.is_none(), "minute '30' leaked into day: {:?}", res.day);
+    }
+
+    #[test]
+    fn test_time_with_tz_no_date_leak() {
+        let (res, _) = parse_to_result("10:30:45-05:00", false, false).unwrap();
+        assert_eq!(res.hour, Some(10));
+        assert_eq!(res.minute, Some(30));
+        assert_eq!(res.second, Some(45));
+        assert_eq!(res.tzoffset, Some(-(5 * 3600)));
+        assert!(res.year.is_none(), "tz digits leaked into year: {:?}", res.year);
+        assert!(res.month.is_none(), "tz digits leaked into month: {:?}", res.month);
+    }
+
+    #[test]
+    fn test_date_separator_not_tz() {
+        let (res, _) = parse_to_result("2024-01-15", false, false).unwrap();
+        assert_eq!(res.year, Some(2024));
+        assert_eq!(res.month, Some(1));
+        assert_eq!(res.day, Some(15));
+        assert!(res.tzoffset.is_none(), "date separator '-' set tzoffset: {:?}", res.tzoffset);
     }
 
     #[test]
