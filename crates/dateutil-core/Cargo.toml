@@ -1,0 +1,21 @@
+[package]
+name = "dateutil-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Performance-optimized date utility library for Rust"
+
+[lib]
+name = "dateutil_core"
+crate-type = ["rlib"]
+
+[dependencies]
+chrono = "0.4"
+thiserror = "2"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "benchmarks"
+harness = false
