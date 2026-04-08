@@ -1,21 +1,21 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 use dateutil_core::common::Weekday;
-use dateutil_core::easter::{easter, EASTER_WESTERN};
+use dateutil_core::easter::{easter, EasterMethod};
 use dateutil_core::relativedelta::RelativeDelta;
 
 fn bench_easter(c: &mut Criterion) {
     c.bench_function("easter_western_1000_years", |b| {
         b.iter(|| {
             for year in 1000..2000 {
-                black_box(easter(black_box(year), EASTER_WESTERN).unwrap());
+                black_box(easter(black_box(year), EasterMethod::Western).unwrap());
             }
         })
     });
 
     c.bench_function("easter_western_single", |b| {
         b.iter(|| {
-            black_box(easter(black_box(2024), EASTER_WESTERN).unwrap());
+            black_box(easter(black_box(2024), EasterMethod::Western).unwrap());
         })
     });
 }

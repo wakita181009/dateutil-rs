@@ -485,16 +485,19 @@ impl RelativeDelta {
 
     pub fn add_rd(&self, other: &RelativeDelta) -> Self {
         let total_months = (self.years + other.years) * 12 + self.months + other.months;
+        let combined_time = self.time + other.time;
         Self {
             years: total_months / 12,
             months: total_months % 12,
-            days: self.days + other.days,
+            days: self.days + other.days + combined_time.extra_days(),
             leapdays: if other.leapdays != 0 {
                 other.leapdays
             } else {
                 self.leapdays
             },
-            time: self.time + other.time,
+            time: RelativeTime {
+                total_us: combined_time.total_us % 86_400_000_000,
+            },
             abs: self.abs.merge_prefer_other(&other.abs),
             weekday: other.weekday.or(self.weekday),
         }
@@ -502,16 +505,19 @@ impl RelativeDelta {
 
     pub fn sub_rd(&self, other: &RelativeDelta) -> Self {
         let total_months = (self.years - other.years) * 12 + self.months - other.months;
+        let combined_time = self.time - other.time;
         Self {
             years: total_months / 12,
             months: total_months % 12,
-            days: self.days - other.days,
+            days: self.days - other.days + combined_time.extra_days(),
             leapdays: if self.leapdays != 0 {
                 self.leapdays
             } else {
                 other.leapdays
             },
-            time: self.time - other.time,
+            time: RelativeTime {
+                total_us: combined_time.total_us % 86_400_000_000,
+            },
             abs: self.abs.merge_prefer_other(&other.abs),
             weekday: self.weekday.or(other.weekday),
         }
@@ -638,12 +644,20 @@ fn normalize_n(n: Option<i32>) -> Option<i32> {
 
 impl fmt::Display for RelativeDelta {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "relativedelta(years={}, months={}, days={}, hours={}, minutes={}, seconds={}, microseconds={})",
-            self.years, self.months, self.days, self.time.hours(), self.time.minutes(),
-            self.time.seconds(), self.time.microseconds()
-        )
+        let mut parts = Vec::new();
+        if self.years != 0 { parts.push(format!("years={}", self.years)); }
+        if self.months != 0 { parts.push(format!("months={}", self.months)); }
+        if self.days != 0 { parts.push(format!("days={}", self.days)); }
+        if self.leapdays != 0 { parts.push(format!("leapdays={}", self.leapdays)); }
+        let h = self.time.hours();
+        let m = self.time.minutes();
+        let s = self.time.seconds();
+        let us = self.time.microseconds();
+        if h != 0 { parts.push(format!("hours={h}")); }
+        if m != 0 { parts.push(format!("minutes={m}")); }
+        if s != 0 { parts.push(format!("seconds={s}")); }
+        if us != 0 { parts.push(format!("microseconds={us}")); }
+        write!(f, "relativedelta({})", parts.join(", "))
     }
 }
 
@@ -843,12 +857,21 @@ mod tests {
     }
 
     #[test]
-    fn test_display() {
+    fn test_display_nonzero_only() {
         let delta = rd(1, 2, 3);
-        let s = delta.to_string();
-        assert!(s.contains("years=1"));
-        assert!(s.contains("months=2"));
-        assert!(s.contains("days=3"));
+        assert_eq!(delta.to_string(), "relativedelta(years=1, months=2, days=3)");
+    }
+
+    #[test]
+    fn test_display_empty() {
+        let delta = rd(0, 0, 0);
+        assert_eq!(delta.to_string(), "relativedelta()");
+    }
+
+    #[test]
+    fn test_display_time() {
+        let delta = RelativeDelta::builder().hours(1).minutes(30).build().unwrap();
+        assert_eq!(delta.to_string(), "relativedelta(hours=1, minutes=30)");
     }
 
     #[test]
@@ -861,6 +884,31 @@ mod tests {
 
         let with_abs_time = RelativeDelta::builder().hour(12).build().unwrap();
         assert!(with_abs_time.has_time());
+    }
+
+    #[test]
+    fn test_add_rd_time_overflow_to_days() {
+        // 23h + 2h = 25h → 1 day + 1h
+        let a = RelativeDelta::builder().hours(23).build().unwrap();
+        let b = RelativeDelta::builder().hours(2).build().unwrap();
+        let result = a.add_rd(&b);
+        assert_eq!(result.days(), 1);
+        assert_eq!(result.hours(), 1);
+    }
+
+    #[test]
+    fn test_sub_rd_time_underflow_to_days() {
+        // 1h - 3h = -2h → -1 day + 22h? No: total_us = -7200s, extra_days=0, time=-2h
+        // Actually: -2h total_us = -7_200_000_000. extra_days = -7200000000/86400000000 = 0.
+        // So days=0, hours=-2. But for sub where base has days:
+        let a = RelativeDelta::builder().days(1).hours(1).build().unwrap();
+        let b = RelativeDelta::builder().hours(3).build().unwrap();
+        let result = a.sub_rd(&b);
+        // days=1, time = 1h - 3h = -2h. extra_days=0. So days=1, hours=-2.
+        // net: 1 day - 2 hours = 22 hours. Representation: days=1, time=-2h.
+        // This is consistent — add_to_datetime will compute 1*86400 + (-2*3600) = 79200s = 22h.
+        assert_eq!(result.days(), 1);
+        assert_eq!(result.hours(), -2);
     }
 
     // --- P0 regression tests (negative months) ---

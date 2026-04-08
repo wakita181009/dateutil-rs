@@ -1,24 +1,40 @@
 use crate::error::EasterError;
 use chrono::NaiveDate;
 
+/// Easter calculation method.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EasterMethod {
+    /// Original Julian calendar, valid after 326 AD
+    Julian = 1,
+    /// Julian converted to Gregorian, valid 1583-4099
+    Orthodox = 2,
+    /// Revised Gregorian method, valid 1583-4099
+    Western = 3,
+}
+
+impl EasterMethod {
+    /// Convert from i32 for compatibility with python-dateutil constants.
+    pub fn from_i32(v: i32) -> Result<Self, EasterError> {
+        match v {
+            1 => Ok(Self::Julian),
+            2 => Ok(Self::Orthodox),
+            3 => Ok(Self::Western),
+            _ => Err(EasterError::InvalidMethod(v)),
+        }
+    }
+}
+
+// Compatibility constants matching python-dateutil
 pub const EASTER_JULIAN: i32 = 1;
 pub const EASTER_ORTHODOX: i32 = 2;
 pub const EASTER_WESTERN: i32 = 3;
 
 /// Compute the date of Easter for a given year and method.
 ///
-/// # Methods
-/// - `EASTER_JULIAN` (1): Original Julian calendar, valid after 326 AD
-/// - `EASTER_ORTHODOX` (2): Julian converted to Gregorian, valid 1583-4099
-/// - `EASTER_WESTERN` (3): Revised Gregorian method, valid 1583-4099
-///
 /// # Errors
-/// Returns `Err` if method is not 1-3, year <= 0, or computed date is invalid.
+/// Returns `Err` if year <= 0 or computed date is invalid.
 #[inline]
-pub fn easter(year: i32, method: i32) -> Result<NaiveDate, EasterError> {
-    if !(1..=3).contains(&method) {
-        return Err(EasterError::InvalidMethod(method));
-    }
+pub fn easter(year: i32, method: EasterMethod) -> Result<NaiveDate, EasterError> {
     if year <= 0 {
         return Err(EasterError::InvalidYear(year));
     }
@@ -26,10 +42,10 @@ pub fn easter(year: i32, method: i32) -> Result<NaiveDate, EasterError> {
     let g = year.rem_euclid(19);
     let mut e = 0;
 
-    let (i, j) = if method < 3 {
+    let (i, j) = if (method as i32) < 3 {
         let i = (19 * g + 15).rem_euclid(30);
         let j = (year + year / 4 + i).rem_euclid(7);
-        if method == 2 {
+        if method == EasterMethod::Orthodox {
             e = 10;
             if year > 1600 {
                 e = e + year / 100 - 16 - (year / 100 - 16) / 4;
@@ -62,7 +78,7 @@ mod tests {
     #[test]
     fn test_western_2024() {
         assert_eq!(
-            easter(2024, EASTER_WESTERN).unwrap(),
+            easter(2024, EasterMethod::Western).unwrap(),
             NaiveDate::from_ymd_opt(2024, 3, 31).unwrap()
         );
     }
@@ -70,7 +86,7 @@ mod tests {
     #[test]
     fn test_orthodox_2024() {
         assert_eq!(
-            easter(2024, EASTER_ORTHODOX).unwrap(),
+            easter(2024, EasterMethod::Orthodox).unwrap(),
             NaiveDate::from_ymd_opt(2024, 5, 5).unwrap()
         );
     }
@@ -78,19 +94,19 @@ mod tests {
     #[test]
     fn test_julian_326() {
         assert_eq!(
-            easter(326, EASTER_JULIAN).unwrap(),
+            easter(326, EasterMethod::Julian).unwrap(),
             NaiveDate::from_ymd_opt(326, 4, 3).unwrap()
         );
     }
 
     #[test]
-    fn test_invalid_method() {
+    fn test_invalid_method_from_i32() {
         assert!(matches!(
-            easter(2024, 4),
+            EasterMethod::from_i32(4),
             Err(EasterError::InvalidMethod(4))
         ));
         assert!(matches!(
-            easter(2024, 0),
+            EasterMethod::from_i32(0),
             Err(EasterError::InvalidMethod(0))
         ));
     }
@@ -98,11 +114,11 @@ mod tests {
     #[test]
     fn test_invalid_year() {
         assert!(matches!(
-            easter(0, EASTER_WESTERN),
+            easter(0, EasterMethod::Western),
             Err(EasterError::InvalidYear(0))
         ));
         assert!(matches!(
-            easter(-1, EASTER_WESTERN),
+            easter(-1, EasterMethod::Western),
             Err(EasterError::InvalidYear(-1))
         ));
     }
@@ -129,7 +145,7 @@ mod tests {
         ];
         for (y, m, d) in expected {
             assert_eq!(
-                easter(y, EASTER_WESTERN).unwrap(),
+                easter(y, EasterMethod::Western).unwrap(),
                 NaiveDate::from_ymd_opt(y, m, d).unwrap(),
                 "Failed for year {y}"
             );
@@ -158,7 +174,7 @@ mod tests {
         ];
         for (y, m, d) in expected {
             assert_eq!(
-                easter(y, EASTER_ORTHODOX).unwrap(),
+                easter(y, EasterMethod::Orthodox).unwrap(),
                 NaiveDate::from_ymd_opt(y, m, d).unwrap(),
                 "Failed for year {y}"
             );
@@ -181,7 +197,7 @@ mod tests {
         ];
         for (y, m, d) in expected {
             assert_eq!(
-                easter(y, EASTER_JULIAN).unwrap(),
+                easter(y, EasterMethod::Julian).unwrap(),
                 NaiveDate::from_ymd_opt(y, m, d).unwrap(),
                 "Failed for year {y}"
             );
