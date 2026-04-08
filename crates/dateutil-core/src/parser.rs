@@ -1,10 +1,11 @@
 mod isoparser;
-mod tokenizer;
+pub mod tokenizer;
 
 pub use isoparser::isoparse;
 
 use crate::error::ParseError;
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime};
+use std::borrow::Cow;
 
 // ---------------------------------------------------------------------------
 // PHF lookup tables — compile-time perfect hash, zero runtime allocation
@@ -65,11 +66,12 @@ static UTCZONE: phf::Set<&'static str> = phf::phf_set! { "utc", "gmt", "z" };
 // Lookup helpers — avoid allocation by lowercasing into a stack buffer
 // ---------------------------------------------------------------------------
 
-/// Lowercase a token into a stack buffer (max 16 bytes). Returns None if too long.
+/// Lowercase a token into a stack buffer (max 16 bytes).
+/// Returns None if too long or contains non-ASCII bytes (safety guard for unsafe lower_str).
 #[inline]
 fn lowercase_buf(s: &str) -> Option<[u8; 16]> {
     let bytes = s.as_bytes();
-    if bytes.len() > 16 {
+    if bytes.len() > 16 || !bytes.iter().all(|b| b.is_ascii()) {
         return None;
     }
     let mut buf = [0u8; 16];
@@ -81,10 +83,12 @@ fn lowercase_buf(s: &str) -> Option<[u8; 16]> {
 
 #[inline]
 fn lower_str<'a>(s: &str, buf: &'a [u8; 16]) -> &'a str {
-    // SAFETY: we only lowercased ASCII bytes, result is valid UTF-8
+    // SAFETY: lowercase_buf() validates all bytes are ASCII before lowercasing,
+    // so the result is guaranteed valid UTF-8.
     unsafe { std::str::from_utf8_unchecked(&buf[..s.len()]) }
 }
 
+#[inline]
 fn lookup_jump(s: &str) -> bool {
     if let Some(buf) = lowercase_buf(s) {
         JUMP.contains(lower_str(s, &buf))
@@ -93,6 +97,7 @@ fn lookup_jump(s: &str) -> bool {
     }
 }
 
+#[inline]
 fn lookup_weekday(s: &str) -> Option<usize> {
     let buf = lowercase_buf(s)?;
     let low = lower_str(s, &buf);
@@ -109,21 +114,25 @@ fn lookup_weekday(s: &str) -> Option<usize> {
     None
 }
 
+#[inline]
 fn lookup_month(s: &str) -> Option<usize> {
     let buf = lowercase_buf(s)?;
     MONTHS.get(lower_str(s, &buf)).copied()
 }
 
+#[inline]
 fn lookup_hms(s: &str) -> Option<usize> {
     let buf = lowercase_buf(s)?;
     HMS.get(lower_str(s, &buf)).copied()
 }
 
+#[inline]
 fn lookup_ampm(s: &str) -> Option<usize> {
     let buf = lowercase_buf(s)?;
     AMPM.get(lower_str(s, &buf)).copied()
 }
 
+#[inline]
 fn lookup_pertain(s: &str) -> bool {
     if let Some(buf) = lowercase_buf(s) {
         PERTAIN.contains(lower_str(s, &buf))
@@ -132,6 +141,7 @@ fn lookup_pertain(s: &str) -> bool {
     }
 }
 
+#[inline]
 fn lookup_utczone(s: &str) -> bool {
     if let Some(buf) = lowercase_buf(s) {
         UTCZONE.contains(lower_str(s, &buf))
@@ -146,7 +156,7 @@ fn lookup_utczone(s: &str) -> bool {
 
 /// Result of parsing a date/time string.
 #[derive(Debug, Default, Clone)]
-pub struct ParseResult {
+pub struct ParseResult<'a> {
     pub year: Option<i32>,
     pub month: Option<u32>,
     pub day: Option<u32>,
@@ -155,12 +165,12 @@ pub struct ParseResult {
     pub minute: Option<u32>,
     pub second: Option<u32>,
     pub microsecond: Option<u32>,
-    pub tzname: Option<String>,
+    pub tzname: Option<Cow<'a, str>>,
     pub tzoffset: Option<i32>,
     century_specified: bool,
 }
 
-impl ParseResult {
+impl ParseResult<'_> {
     fn field_count(&self) -> usize {
         let mut n = 0;
         if self.year.is_some() { n += 1; }
@@ -359,27 +369,26 @@ pub fn parse(timestr: &str, dayfirst: bool, yearfirst: bool) -> Result<NaiveDate
 }
 
 /// Parse returning the raw ParseResult (for advanced usage).
-pub fn parse_to_result(
-    timestr: &str,
+pub fn parse_to_result<'a>(
+    timestr: &'a str,
     dayfirst: bool,
     yearfirst: bool,
-) -> Result<(ParseResult, Vec<String>), ParseError> {
+) -> Result<(ParseResult<'a>, Vec<Cow<'a, str>>), ParseError> {
     let tokens = tokenizer::tokenize(timestr);
     let mut res = ParseResult::default();
     let mut ymd = Ymd::default();
-    let mut skipped_tokens = Vec::new();
+    let mut skipped_tokens: Vec<Cow<'a, str>> = Vec::new();
 
     let len = tokens.len();
     let mut i = 0;
 
     while i < len {
-        let token = &tokens[i];
         let token_found = try_parse_token(
             &tokens, i, len, &mut res, &mut ymd, &mut skipped_tokens, dayfirst,
         );
 
         if !token_found {
-            skipped_tokens.push(token.to_string());
+            skipped_tokens.push(tokens[i].clone());
         }
 
         i += 1;
@@ -413,21 +422,27 @@ pub fn parse_to_result(
     Ok((res, skipped_tokens))
 }
 
-fn try_parse_token(
-    tokens: &[String],
+#[inline]
+fn try_parse_token<'a>(
+    tokens: &[Cow<'a, str>],
     i: usize,
     len: usize,
-    res: &mut ParseResult,
+    res: &mut ParseResult<'a>,
     ymd: &mut Ymd,
-    _skipped: &mut Vec<String>,
+    _skipped: &mut Vec<Cow<'a, str>>,
     _dayfirst: bool,
 ) -> bool {
     let token = &tokens[i];
 
-    // Try as number
-    if let Ok(value) = token.parse::<f64>() {
-        let value_i = value as i32;
-
+    // Try as number — integer first (fast path avoids expensive f64 parse)
+    let num: Option<(i32, f64)> = if let Ok(vi) = token.parse::<i32>() {
+        Some((vi, vi as f64))
+    } else if let Ok(vf) = token.parse::<f64>() {
+        Some((vf as i32, vf))
+    } else {
+        None
+    };
+    if let Some((value_i, value)) = num {
         // Check for HH:MM:SS pattern (number followed by ":" or HMS word)
         if i + 1 < len && tokens[i + 1] == ":" {
             // Time component — handled by caller advancing through ":"
@@ -496,20 +511,30 @@ fn try_parse_token(
 
     // Timezone offset: "+0530", "-05:00", or tokenized as ["+", "05", ":", "30"]
     if (token == "+" || token == "-") && i + 1 < len {
-        // Reconstruct offset from subsequent tokens: sign + HH [: MM]
-        let sign_str = token.as_str();
-        let mut offset_str = String::from(sign_str);
+        // Reconstruct offset from subsequent tokens into stack buffer (no heap alloc)
+        let mut buf = [0u8; 16];
+        buf[0] = token.as_bytes()[0]; // '+' or '-'
+        let mut blen = 1usize;
         let mut j = i + 1;
-        while j < len && (tokens[j].chars().all(|c| c.is_ascii_digit()) || tokens[j] == ":") {
-            offset_str.push_str(&tokens[j]);
-            j += 1;
+        while j < len && blen < 16 {
+            let tj = tokens[j].as_bytes();
+            if tj.iter().all(|b| b.is_ascii_digit()) || tokens[j] == ":" {
+                if blen + tj.len() > 16 { break; }
+                buf[blen..blen + tj.len()].copy_from_slice(tj);
+                blen += tj.len();
+                j += 1;
+            } else {
+                break;
+            }
         }
-        if let Some(offset) = parse_tzoffset(&offset_str) {
+        // SAFETY: all bytes are ASCII (sign, digits, colons)
+        let offset_str = unsafe { std::str::from_utf8_unchecked(&buf[..blen]) };
+        if let Some(offset) = parse_tzoffset(offset_str) {
             res.tzoffset = Some(offset);
             if i > 0 && !tokens[i - 1].chars().next().is_some_and(|c| c.is_ascii_digit()) {
                 let prev = &tokens[i - 1];
                 if !lookup_jump(prev) && prev != ":" {
-                    res.tzname = Some(prev.to_string());
+                    res.tzname = Some(prev.clone());
                 }
             }
             return true;
@@ -541,7 +566,7 @@ fn try_parse_token(
 
     // Timezone name (alphabetic, not matched above)
     if token.chars().all(|c| c.is_alphabetic()) && res.tzname.is_none() && res.hour.is_some() {
-        res.tzname = Some(token.to_string());
+        res.tzname = Some(token.clone());
         // Check next for offset
         if i + 1 < len
             && (tokens[i + 1].starts_with('+') || tokens[i + 1].starts_with('-'))
@@ -556,11 +581,12 @@ fn try_parse_token(
     false
 }
 
+#[inline]
 fn try_parse_time_component(
-    tokens: &[String],
+    tokens: &[Cow<'_, str>],
     i: usize,
     len: usize,
-    res: &mut ParseResult,
+    res: &mut ParseResult<'_>,
     value: f64,
 ) -> bool {
     // Pattern: HH:MM or HH:MM:SS or HH:MM:SS.ffffff
@@ -588,7 +614,8 @@ fn try_parse_time_component(
     false
 }
 
-fn assign_hms(res: &mut ParseResult, hms_idx: usize, value: f64) {
+#[inline]
+fn assign_hms(res: &mut ParseResult<'_>, hms_idx: usize, value: f64) {
     match hms_idx {
         0 => res.hour = Some(value as u32),
         1 => res.minute = Some(value as u32),
@@ -603,6 +630,7 @@ fn assign_hms(res: &mut ParseResult, hms_idx: usize, value: f64) {
     }
 }
 
+#[inline]
 fn parse_tzoffset(s: &str) -> Option<i32> {
     let (sign, rest) = if let Some(r) = s.strip_prefix('+') {
         (1, r)
@@ -612,14 +640,28 @@ fn parse_tzoffset(s: &str) -> Option<i32> {
         return None;
     };
 
-    let rest = rest.replace(':', "");
-    if rest.len() < 2 || !rest.chars().all(|c| c.is_ascii_digit()) {
+    // Validate: only digits and colons allowed
+    if !rest.bytes().all(|b| b.is_ascii_digit() || b == b':') {
         return None;
     }
 
-    let (hours, minutes) = if rest.len() <= 2 {
+    // Count digits for minimum check
+    let digit_count = rest.bytes().filter(|b| b.is_ascii_digit()).count();
+    if digit_count < 2 {
+        return None;
+    }
+
+    // Parse based on format — zero allocation (no String::replace)
+    let (hours, minutes) = if let Some(colon_pos) = rest.find(':') {
+        // HH:MM or H:MM
+        let h = rest[..colon_pos].parse::<i32>().ok()?;
+        let m = rest[colon_pos + 1..].parse::<i32>().ok()?;
+        (h, m)
+    } else if rest.len() <= 2 {
+        // HH only
         (rest.parse::<i32>().ok()?, 0)
     } else {
+        // HHMM — last 2 digits are minutes
         let h = rest[..rest.len() - 2].parse::<i32>().ok()?;
         let m = rest[rest.len() - 2..].parse::<i32>().ok()?;
         (h, m)
@@ -628,7 +670,7 @@ fn parse_tzoffset(s: &str) -> Option<i32> {
     Some(sign * (hours * 3600 + minutes * 60))
 }
 
-fn build_naive(_timestr: &str, res: &ParseResult) -> Result<NaiveDateTime, ParseError> {
+fn build_naive(_timestr: &str, res: &ParseResult<'_>) -> Result<NaiveDateTime, ParseError> {
     let now = chrono::Local::now().naive_local();
 
     let year = res.year.unwrap_or(now.year());

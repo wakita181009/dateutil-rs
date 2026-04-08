@@ -1,3 +1,16 @@
 [workspace]
 members = ["crates/dateutil-core", "crates/dateutil-rs"]
 resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
+debug = true
+strip = false
+
+[profile.dev.package."*"]
+opt-level = 3

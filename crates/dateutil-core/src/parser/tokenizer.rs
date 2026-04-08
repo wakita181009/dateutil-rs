@@ -1,12 +1,14 @@
+use smallvec::SmallVec;
+use std::borrow::Cow;
+
 /// Zero-copy tokenizer for date/time strings.
 ///
-/// Returns `Vec<String>` for now (some tokens need mutation like comma→dot),
-/// but the tokenizer avoids intermediate VecDeque and char-by-char String::push.
-/// Instead it tracks byte ranges in the input and only allocates final tokens.
-pub fn tokenize(s: &str) -> Vec<String> {
+/// Returns `SmallVec<[Cow<'_, str>; 16]>` — most tokens borrow directly from the input,
+/// only tokens requiring mutation (comma→dot decimal normalization) are owned.
+pub fn tokenize(s: &str) -> SmallVec<[Cow<'_, str>; 16]> {
     let bytes = s.as_bytes();
     let len = bytes.len();
-    let mut tokens: Vec<String> = Vec::with_capacity(16);
+    let mut tokens: SmallVec<[Cow<'_, str>; 16]> = SmallVec::new();
     let mut pos = 0;
 
     while pos < len {
@@ -18,7 +20,7 @@ pub fn tokenize(s: &str) -> Vec<String> {
         }
 
         if b.is_ascii_whitespace() {
-            tokens.push(" ".into());
+            tokens.push(Cow::Borrowed(" "));
             pos += 1;
             // Skip consecutive whitespace
             while pos < len && bytes[pos].is_ascii_whitespace() {
@@ -42,17 +44,17 @@ pub fn tokenize(s: &str) -> Vec<String> {
                     break;
                 }
             }
-            let mut token = s[start..pos].to_string();
-            // If it ends with '.' or ',' and has letters after, split
-            if has_dot && token.ends_with(['.', ',']) {
-                token.pop();
+            // Trim trailing dot/comma (sentence-ending punctuation, not decimal)
+            if has_dot && pos > start && (bytes[pos - 1] == b'.' || bytes[pos - 1] == b',') {
                 pos -= 1;
             }
-            // Replace comma with dot for decimal numbers
-            if has_dot && !token.contains('.') {
-                token = token.replace(',', ".");
+            let slice = &s[start..pos];
+            // Replace comma with dot for decimal numbers (e.g., "1,5" → "1.5")
+            if slice.contains(',') && !slice.contains('.') {
+                tokens.push(Cow::Owned(slice.replace(',', ".")));
+            } else {
+                tokens.push(Cow::Borrowed(slice));
             }
-            tokens.push(token);
             continue;
         }
 
@@ -66,7 +68,6 @@ pub fn tokenize(s: &str) -> Vec<String> {
             if pos < len && bytes[pos] == b'.' {
                 let dot_start = pos;
                 pos += 1;
-                let _is_abbrev = true;
                 while pos < len {
                     let c = bytes[pos];
                     if c.is_ascii_alphabetic() || c == b'.' {
@@ -80,27 +81,25 @@ pub fn tokenize(s: &str) -> Vec<String> {
                 if full.contains('.') {
                     for part in full.split('.') {
                         if !part.is_empty() {
-                            tokens.push(part.to_string());
+                            tokens.push(Cow::Borrowed(part));
                         }
-                        tokens.push(".".into());
+                        tokens.push(Cow::Borrowed("."));
                     }
                     // Remove trailing dot if we added one extra
-                    if full.ends_with('.') {
-                        // Already correct
-                    } else {
-                        tokens.pop(); // remove extra trailing "."
+                    if !full.ends_with('.') {
+                        tokens.pop();
                     }
                     continue;
                 } else {
                     pos = dot_start; // backtrack, not an abbreviation
                 }
             }
-            tokens.push(s[start..pos].to_string());
+            tokens.push(Cow::Borrowed(&s[start..pos]));
             continue;
         }
 
-        // Single character token (punctuation)
-        tokens.push(s[pos..pos + 1].to_string());
+        // Single character token (punctuation) — borrow directly from input
+        tokens.push(Cow::Borrowed(&s[pos..pos + 1]));
         pos += 1;
     }
 
@@ -111,17 +110,21 @@ pub fn tokenize(s: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
+    fn strs<'a>(tokens: &'a [Cow<'_, str>]) -> Vec<&'a str> {
+        tokens.iter().map(|c| &**c).collect()
+    }
+
     #[test]
     fn test_basic_date() {
         let tokens = tokenize("2024-01-15");
-        assert_eq!(tokens, vec!["2024", "-", "01", "-", "15"]);
+        assert_eq!(strs(&tokens), vec!["2024", "-", "01", "-", "15"]);
     }
 
     #[test]
     fn test_datetime() {
         let tokens = tokenize("2024-01-15 10:30:45");
         assert_eq!(
-            tokens,
+            strs(&tokens),
             vec!["2024", "-", "01", "-", "15", " ", "10", ":", "30", ":", "45"]
         );
     }
@@ -129,20 +132,20 @@ mod tests {
     #[test]
     fn test_month_name() {
         let tokens = tokenize("January 15, 2024");
-        assert_eq!(tokens, vec!["January", " ", "15", ",", " ", "2024"]);
+        assert_eq!(strs(&tokens), vec!["January", " ", "15", ",", " ", "2024"]);
     }
 
     #[test]
     fn test_decimal_seconds() {
         let tokens = tokenize("10:30:45.123");
-        assert_eq!(tokens, vec!["10", ":", "30", ":", "45.123"]);
+        assert_eq!(strs(&tokens), vec!["10", ":", "30", ":", "45.123"]);
     }
 
     #[test]
     fn test_tz_offset() {
         let tokens = tokenize("2024-01-15T10:30:45+05:30");
         assert_eq!(
-            tokens,
+            strs(&tokens),
             vec!["2024", "-", "01", "-", "15", "T", "10", ":", "30", ":", "45", "+", "05", ":", "30"]
         );
     }
@@ -155,6 +158,6 @@ mod tests {
     #[test]
     fn test_whitespace_collapse() {
         let tokens = tokenize("Jan  15   2024");
-        assert_eq!(tokens, vec!["Jan", " ", "15", " ", "2024"]);
+        assert_eq!(strs(&tokens), vec!["Jan", " ", "15", " ", "2024"]);
     }
 }

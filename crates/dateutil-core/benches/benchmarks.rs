@@ -2,7 +2,159 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 use dateutil_core::common::Weekday;
 use dateutil_core::easter::{easter, EasterMethod};
+use dateutil_core::parser;
+use dateutil_core::parser::tokenizer;
 use dateutil_core::relativedelta::RelativeDelta;
+
+fn bench_tokenizer(c: &mut Criterion) {
+    c.bench_function("tokenize_simple_date", |b| {
+        b.iter(|| {
+            black_box(tokenizer::tokenize(black_box("2024-01-15")));
+        })
+    });
+
+    c.bench_function("tokenize_datetime", |b| {
+        b.iter(|| {
+            black_box(tokenizer::tokenize(black_box("2024-01-15 10:30:45")));
+        })
+    });
+
+    c.bench_function("tokenize_complex", |b| {
+        b.iter(|| {
+            black_box(tokenizer::tokenize(black_box(
+                "Monday, January 15, 2024 3:30:45.123456 PM UTC+05:30",
+            )));
+        })
+    });
+
+    c.bench_function("tokenize_tz_offset", |b| {
+        b.iter(|| {
+            black_box(tokenizer::tokenize(black_box("2024-01-15T10:30:45+05:30")));
+        })
+    });
+}
+
+fn bench_parser(c: &mut Criterion) {
+    c.bench_function("parse_iso_date", |b| {
+        b.iter(|| {
+            black_box(parser::parse(black_box("2024-01-15"), false, false).unwrap());
+        })
+    });
+
+    c.bench_function("parse_datetime", |b| {
+        b.iter(|| {
+            black_box(parser::parse(black_box("2024-01-15 10:30:45"), false, false).unwrap());
+        })
+    });
+
+    c.bench_function("parse_month_name", |b| {
+        b.iter(|| {
+            black_box(parser::parse(black_box("January 15, 2024"), false, false).unwrap());
+        })
+    });
+
+    c.bench_function("parse_complex", |b| {
+        b.iter(|| {
+            black_box(
+                parser::parse(black_box("Monday, January 15, 2024 3:30:45.123456 PM UTC"), false, false)
+                    .unwrap(),
+            );
+        })
+    });
+
+    c.bench_function("parse_worst_case", |b| {
+        b.iter(|| {
+            black_box(
+                parser::parse_to_result(
+                    black_box("Monday, January 15, 2024 3:30:45.123456 PM EST -05:00"),
+                    false, false,
+                ).unwrap(),
+            );
+        })
+    });
+
+    c.bench_function("parse_tz_positive_offset", |b| {
+        b.iter(|| {
+            black_box(
+                parser::parse_to_result(black_box("2024-01-15 10:30:45+05:30"), false, false)
+                    .unwrap(),
+            );
+        })
+    });
+
+    c.bench_function("parse_tz_negative_offset", |b| {
+        b.iter(|| {
+            black_box(
+                parser::parse_to_result(black_box("2024-01-15 10:30:45-0800"), false, false)
+                    .unwrap(),
+            );
+        })
+    });
+
+    c.bench_function("parse_ampm", |b| {
+        b.iter(|| {
+            black_box(parser::parse(black_box("January 15, 2024 3:30 PM"), false, false).unwrap());
+        })
+    });
+
+    c.bench_function("isoparse_full", |b| {
+        b.iter(|| {
+            black_box(parser::isoparse(black_box("2024-01-15T10:30:45.123456")).unwrap());
+        })
+    });
+
+    c.bench_function("isoparse_compact", |b| {
+        b.iter(|| {
+            black_box(parser::isoparse(black_box("20240115T103045")).unwrap());
+        })
+    });
+
+    c.bench_function("isoparse_date_only", |b| {
+        b.iter(|| {
+            black_box(parser::isoparse(black_box("2024-01-15")).unwrap());
+        })
+    });
+}
+
+fn bench_parser_throughput(c: &mut Criterion) {
+    let inputs = [
+        "2024-01-15",
+        "2024-01-15 10:30:45",
+        "January 15, 2024",
+        "Monday, January 15, 2024 3:30 PM",
+        "15 Jan 2024 10:30:45 UTC",
+        "01/15/2024",
+        "2024-01-15T10:30:45+05:30",
+        "March 3, 2025 2:15:30.500 PM",
+    ];
+
+    c.bench_function("parse_throughput_8_inputs", |b| {
+        b.iter(|| {
+            for input in &inputs {
+                black_box(parser::parse(black_box(input), false, false).unwrap());
+            }
+        })
+    });
+
+    let iso_inputs = [
+        "2024-01-15",
+        "2024-01-15T10:30:45",
+        "2024-01-15T10:30:45.123456",
+        "20240115T103045",
+        "20240115",
+        "2024-01",
+        "2024-01-15T10:30:45Z",
+        "2024-01-15T10:30:45+05:30",
+    ];
+
+    c.bench_function("isoparse_throughput_8_inputs", |b| {
+        b.iter(|| {
+            for input in &iso_inputs {
+                black_box(parser::isoparse(black_box(input)).unwrap());
+            }
+        })
+    });
+}
 
 fn bench_easter(c: &mut Criterion) {
     c.bench_function("easter_western_1000_years", |b| {
@@ -72,5 +224,13 @@ fn bench_relativedelta(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_easter, bench_weekday, bench_relativedelta);
+criterion_group!(
+    benches,
+    bench_tokenizer,
+    bench_parser,
+    bench_parser_throughput,
+    bench_easter,
+    bench_weekday,
+    bench_relativedelta,
+);
 criterion_main!(benches);

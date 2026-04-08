@@ -223,7 +223,7 @@ impl AbsoluteFields {
 /// - Packed `RelativeTime` (single i64) for hours/minutes/seconds/microseconds
 /// - Bitflag-based `AbsoluteFields` for optional absolute values
 /// - Normalized months (years * 12 + months) to avoid cascading overflow
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct RelativeDelta {
     /// Relative months, normalized: always -11..=11, excess folded into years
     months: i32,
@@ -456,7 +456,7 @@ impl RelativeDelta {
         let delta = TimeDelta::microseconds(day_us + self.time.total_us);
         ret += delta;
 
-        if let Some(ref wd) = self.weekday {
+        if let Some(wd) = self.weekday {
             ret = apply_weekday(ret, wd);
         }
         ret
@@ -474,7 +474,7 @@ impl RelativeDelta {
         }
         ret += TimeDelta::days(extra_days);
 
-        if let Some(ref wd) = self.weekday {
+        if let Some(wd) = self.weekday {
             let dt = ret.and_hms_opt(0, 0, 0).unwrap();
             ret = apply_weekday(dt, wd).date();
         }
@@ -586,7 +586,7 @@ impl RelativeDelta {
 }
 
 #[inline]
-fn apply_weekday(dt: NaiveDateTime, wd: &Weekday) -> NaiveDateTime {
+fn apply_weekday(dt: NaiveDateTime, wd: Weekday) -> NaiveDateTime {
     let weekday = wd.weekday() as i64;
     let nth = match wd.n() {
         Some(0) | None => 1i64,
@@ -644,20 +644,27 @@ fn normalize_n(n: Option<i32>) -> Option<i32> {
 
 impl fmt::Display for RelativeDelta {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut parts = Vec::new();
-        if self.years != 0 { parts.push(format!("years={}", self.years)); }
-        if self.months != 0 { parts.push(format!("months={}", self.months)); }
-        if self.days != 0 { parts.push(format!("days={}", self.days)); }
-        if self.leapdays != 0 { parts.push(format!("leapdays={}", self.leapdays)); }
-        let h = self.time.hours();
-        let m = self.time.minutes();
-        let s = self.time.seconds();
-        let us = self.time.microseconds();
-        if h != 0 { parts.push(format!("hours={h}")); }
-        if m != 0 { parts.push(format!("minutes={m}")); }
-        if s != 0 { parts.push(format!("seconds={s}")); }
-        if us != 0 { parts.push(format!("microseconds={us}")); }
-        write!(f, "relativedelta({})", parts.join(", "))
+        write!(f, "relativedelta(")?;
+        let mut first = true;
+        macro_rules! part {
+            ($name:expr, $val:expr) => {
+                if $val != 0 {
+                    if !first { write!(f, ", ")?; }
+                    write!(f, "{}={}", $name, $val)?;
+                    #[allow(unused_assignments)]
+                    { first = false; }
+                }
+            };
+        }
+        part!("years", self.years);
+        part!("months", self.months);
+        part!("days", self.days);
+        part!("leapdays", self.leapdays);
+        part!("hours", self.time.hours());
+        part!("minutes", self.time.minutes());
+        part!("seconds", self.time.seconds());
+        part!("microseconds", self.time.microseconds());
+        write!(f, ")")
     }
 }
 

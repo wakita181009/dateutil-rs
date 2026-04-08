@@ -12,7 +12,7 @@ pub fn isoparse(s: &str) -> Result<NaiveDateTime, ParseError> {
     }
 
     // Split on T or space separator
-    let (date_part, time_part) = if let Some(t_pos) = s.find('T').or_else(|| s.find(' ')) {
+    let (date_part, time_part) = if let Some(t_pos) = s.bytes().position(|b| b == b'T' || b == b' ') {
         (&s[..t_pos], Some(&s[t_pos + 1..]))
     } else {
         (s, None)
@@ -31,6 +31,7 @@ pub fn isoparse(s: &str) -> Result<NaiveDateTime, ParseError> {
     Ok(NaiveDateTime::new(date, time))
 }
 
+#[inline]
 fn parse_iso_date(s: &str) -> Result<NaiveDate, ParseError> {
     let bytes = s.as_bytes();
 
@@ -70,6 +71,7 @@ fn parse_iso_date(s: &str) -> Result<NaiveDate, ParseError> {
     }
 }
 
+#[inline]
 fn parse_iso_time(s: &str) -> Result<NaiveTime, ParseError> {
     let bytes = s.as_bytes();
     if bytes.is_empty() {
@@ -115,21 +117,21 @@ fn parse_iso_time(s: &str) -> Result<NaiveTime, ParseError> {
         .ok_or_else(|| ParseError::ValueError(format!("invalid time: {s}")))
 }
 
+#[inline]
 fn parse_seconds_with_frac(s: &str) -> Result<(u32, u32), ParseError> {
     if let Some(dot_pos) = s.find('.') {
         let sec = parse_int(&s[..dot_pos])? as u32;
         let frac_str = &s[dot_pos + 1..];
-        // Pad or truncate to 6 digits
-        let us = if frac_str.len() >= 6 {
+        // Convert fractional digits to microseconds via arithmetic (no String allocation)
+        let us = if frac_str.is_empty() {
+            0u32
+        } else if frac_str.len() >= 6 {
             parse_int(&frac_str[..6])? as u32
         } else {
-            let mut padded = frac_str.to_string();
-            while padded.len() < 6 {
-                padded.push('0');
-            }
-            padded.parse::<u32>().map_err(|_| {
-                ParseError::ValueError(format!("invalid fractional seconds: {frac_str}"))
-            })?
+            let raw = parse_int(frac_str)? as u32;
+            // Multiply by 10^(6-len) to left-align: "123" → 123_000
+            const SCALE: [u32; 5] = [100_000, 10_000, 1_000, 100, 10];
+            raw * SCALE[frac_str.len() - 1]
         };
         Ok((sec, us))
     } else {
@@ -140,6 +142,7 @@ fn parse_seconds_with_frac(s: &str) -> Result<(u32, u32), ParseError> {
     }
 }
 
+#[inline]
 fn strip_tz_suffix(s: &str) -> &str {
     // Remove trailing Z, +HH:MM, -HH:MM, +HHMM, -HHMM
     let bytes = s.as_bytes();
@@ -158,8 +161,20 @@ fn strip_tz_suffix(s: &str) -> &str {
     s
 }
 
+/// Fast integer parse optimized for short ASCII digit strings (ISO date/time fields).
 #[inline]
 fn parse_int(s: &str) -> Result<i32, ParseError> {
+    let bytes = s.as_bytes();
+    if !bytes.is_empty() && bytes.len() <= 6 {
+        let mut n: i32 = 0;
+        for &b in bytes {
+            if !b.is_ascii_digit() {
+                return Err(ParseError::ValueError(format!("expected integer: {s}")));
+            }
+            n = n * 10 + (b - b'0') as i32;
+        }
+        return Ok(n);
+    }
     s.parse::<i32>()
         .map_err(|_| ParseError::ValueError(format!("expected integer: {s}")))
 }
