@@ -157,4 +157,77 @@ mod tests {
         set.insert(MO);
         assert_eq!(set.len(), 2);
     }
+
+    #[test]
+    fn test_weekday_with_n_to_none() {
+        let wd = MO.with_n(Some(3));
+        let reset = wd.with_n(None);
+        assert_eq!(reset.n(), None);
+        assert_eq!(reset.to_string(), "MO");
+    }
+
+    #[test]
+    fn test_weekday_large_n() {
+        let wd = Weekday::new(0, Some(53)).unwrap();
+        assert_eq!(wd.to_string(), "MO(+53)");
+        let wd_neg = Weekday::new(6, Some(-100)).unwrap();
+        assert_eq!(wd_neg.to_string(), "SU(-100)");
+    }
+
+    #[test]
+    fn test_weekday_negative_one_n() {
+        // Last occurrence (e.g., last Friday of month)
+        let wd = FR.with_n(Some(-1));
+        assert_eq!(wd.n(), Some(-1));
+        assert_eq!(wd.to_string(), "FR(-1)");
+    }
+
+    #[test]
+    fn test_weekday_clone_copy() {
+        let wd = MO.with_n(Some(2));
+        let cloned = wd;
+        assert_eq!(wd, cloned); // Copy semantics — both usable
+    }
+
+    #[test]
+    fn test_weekday_boundary_values() {
+        // Weekday 0 (Monday) and 6 (Sunday) are boundaries
+        let mon = Weekday::new(0, Some(1)).unwrap();
+        let sun = Weekday::new(6, Some(-1)).unwrap();
+        assert_eq!(mon.weekday(), 0);
+        assert_eq!(sun.weekday(), 6);
+    }
+
+    #[test]
+    fn test_weekday_all_invalid() {
+        for i in 7..=255 {
+            assert!(Weekday::new(i, None).is_err());
+        }
+    }
+
+    #[test]
+    fn test_weekday_eq_different_n() {
+        let a = MO.with_n(Some(1));
+        let b = MO.with_n(Some(2));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn test_weekday_eq_none_vs_zero() {
+        let a = MO.with_n(None);
+        let b = MO.with_n(Some(0));
+        // Display is the same but PartialEq differs (n field differs)
+        assert_eq!(a.to_string(), b.to_string());
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn test_weekday_hash_with_n() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(MO.with_n(Some(1)));
+        set.insert(MO.with_n(Some(2)));
+        set.insert(MO.with_n(Some(1)));
+        assert_eq!(set.len(), 2);
+    }
 }

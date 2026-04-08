@@ -160,4 +160,105 @@ mod tests {
         let tokens = tokenize("Jan  15   2024");
         assert_eq!(strs(&tokens), vec!["Jan", " ", "15", " ", "2024"]);
     }
+
+    #[test]
+    fn test_null_bytes() {
+        let tokens = tokenize("2024\x0001\x0015");
+        // Null bytes should be skipped
+        assert_eq!(strs(&tokens), vec!["2024", "01", "15"]);
+    }
+
+    #[test]
+    fn test_comma_decimal_separator() {
+        // European decimal: "45,123" → "45.123" (comma at offset >= 2 from start)
+        let tokens = tokenize("10:30:45,123");
+        assert_eq!(strs(&tokens), vec!["10", ":", "30", ":", "45.123"]);
+    }
+
+    #[test]
+    fn test_comma_not_decimal_if_short() {
+        // Comma in short number is not treated as decimal (it's punctuation)
+        let tokens = tokenize("5,2024");
+        // "5" then "," then "2024"
+        assert_eq!(strs(&tokens), vec!["5", ",", "2024"]);
+    }
+
+    #[test]
+    fn test_trailing_dot_stripped() {
+        // "2024." — trailing dot is sentence punctuation, not decimal
+        let tokens = tokenize("2024.");
+        assert_eq!(strs(&tokens), vec!["2024", "."]);
+    }
+
+    #[test]
+    fn test_only_punctuation() {
+        let tokens = tokenize("---");
+        assert_eq!(strs(&tokens), vec!["-", "-", "-"]);
+    }
+
+    #[test]
+    fn test_single_char() {
+        let tokens = tokenize("T");
+        assert_eq!(strs(&tokens), vec!["T"]);
+    }
+
+    #[test]
+    fn test_am_dot_abbreviation() {
+        // "a.m." should be split into alphabetic + dot tokens
+        let tokens = tokenize("10:30 a.m.");
+        // Expect: "10", ":", "30", " ", "a", ".", "m", "."
+        assert!(strs(&tokens).contains(&"a"));
+        assert!(strs(&tokens).contains(&"m"));
+    }
+
+    #[test]
+    fn test_mixed_alpha_num() {
+        let tokens = tokenize("Jan15");
+        assert_eq!(strs(&tokens), vec!["Jan", "15"]);
+    }
+
+    #[test]
+    fn test_numbers_with_leading_zeros() {
+        let tokens = tokenize("01-02-2024");
+        assert_eq!(strs(&tokens), vec!["01", "-", "02", "-", "2024"]);
+    }
+
+    #[test]
+    fn test_plus_minus_tokens() {
+        let tokens = tokenize("+05:30");
+        assert_eq!(strs(&tokens), vec!["+", "05", ":", "30"]);
+    }
+
+    #[test]
+    fn test_long_string() {
+        let s = "Wednesday, January 15, 2024 at 10:30:45.123456 PM UTC+05:30";
+        let tokens = tokenize(s);
+        assert!(!tokens.is_empty());
+        // Should not panic, and first token should be the weekday
+        assert_eq!(&*tokens[0], "Wednesday");
+    }
+
+    #[test]
+    fn test_tabs_and_newlines() {
+        let tokens = tokenize("Jan\t15\n2024");
+        assert_eq!(strs(&tokens), vec!["Jan", " ", "15", " ", "2024"]);
+    }
+
+    #[test]
+    fn test_consecutive_separators() {
+        let tokens = tokenize("2024//01//15");
+        assert_eq!(strs(&tokens), vec!["2024", "/", "/", "01", "/", "/", "15"]);
+    }
+
+    #[test]
+    fn test_decimal_seconds_with_many_digits() {
+        let tokens = tokenize("45.123456789");
+        assert_eq!(strs(&tokens), vec!["45.123456789"]);
+    }
+
+    #[test]
+    fn test_zero_value() {
+        let tokens = tokenize("0");
+        assert_eq!(strs(&tokens), vec!["0"]);
+    }
 }

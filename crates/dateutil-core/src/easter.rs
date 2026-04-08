@@ -69,6 +69,7 @@ pub fn easter(year: i32, method: EasterMethod) -> Result<NaiveDate, EasterError>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Datelike;
 
     #[test]
     fn test_western_2024() {
@@ -172,6 +173,102 @@ mod tests {
                 easter(y, EasterMethod::Orthodox).unwrap(),
                 NaiveDate::from_ymd_opt(y, m, d).unwrap(),
                 "Failed for year {y}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_western_year_1583() {
+        // First valid year for Western method
+        let d = easter(1583, EasterMethod::Western).unwrap();
+        assert_eq!(d, NaiveDate::from_ymd_opt(1583, 4, 10).unwrap());
+    }
+
+    #[test]
+    fn test_western_year_4099() {
+        let d = easter(4099, EasterMethod::Western).unwrap();
+        assert_eq!(d, NaiveDate::from_ymd_opt(4099, 4, 19).unwrap());
+    }
+
+    #[test]
+    fn test_year_1_all_methods() {
+        // Smallest valid year
+        assert!(easter(1, EasterMethod::Julian).is_ok());
+        assert!(easter(1, EasterMethod::Orthodox).is_ok());
+        assert!(easter(1, EasterMethod::Western).is_ok());
+    }
+
+    #[test]
+    fn test_year_9999() {
+        // Very large year — should not panic
+        assert!(easter(9999, EasterMethod::Western).is_ok());
+        assert!(easter(9999, EasterMethod::Orthodox).is_ok());
+        assert!(easter(9999, EasterMethod::Julian).is_ok());
+    }
+
+    #[test]
+    fn test_invalid_year_i32_min() {
+        assert!(matches!(
+            easter(i32::MIN, EasterMethod::Western),
+            Err(EasterError::InvalidYear(i32::MIN))
+        ));
+    }
+
+    #[test]
+    fn test_orthodox_boundary_1600() {
+        // Orthodox has special logic for year > 1600
+        let before = easter(1600, EasterMethod::Orthodox).unwrap();
+        let after = easter(1601, EasterMethod::Orthodox).unwrap();
+        assert!(before.month() >= 3 && before.month() <= 5);
+        assert!(after.month() >= 3 && after.month() <= 5);
+    }
+
+    #[test]
+    fn test_easter_always_march_or_april_western() {
+        // Western Easter is always in March or April
+        for y in 1990..=2100 {
+            let d = easter(y, EasterMethod::Western).unwrap();
+            assert!(
+                d.month() == 3 || d.month() == 4,
+                "Western Easter {y} in month {}", d.month()
+            );
+        }
+    }
+
+    #[test]
+    fn test_easter_orthodox_march_to_may() {
+        // Orthodox Easter (Gregorian) can fall in March, April, or May
+        for y in 1990..=2100 {
+            let d = easter(y, EasterMethod::Orthodox).unwrap();
+            assert!(
+                (3..=5).contains(&d.month()),
+                "Orthodox Easter {y} in month {}", d.month()
+            );
+        }
+    }
+
+    #[test]
+    fn test_method_from_i32_valid() {
+        assert_eq!(EasterMethod::from_i32(1).unwrap(), EasterMethod::Julian);
+        assert_eq!(EasterMethod::from_i32(2).unwrap(), EasterMethod::Orthodox);
+        assert_eq!(EasterMethod::from_i32(3).unwrap(), EasterMethod::Western);
+    }
+
+    #[test]
+    fn test_method_from_i32_negative() {
+        assert!(EasterMethod::from_i32(-1).is_err());
+        assert!(EasterMethod::from_i32(i32::MIN).is_err());
+    }
+
+    #[test]
+    fn test_easter_is_always_sunday() {
+        // Easter should always fall on a Sunday
+        for y in 2000..=2050 {
+            let d = easter(y, EasterMethod::Western).unwrap();
+            assert_eq!(
+                d.weekday(),
+                chrono::Weekday::Sun,
+                "Western Easter {y} is not Sunday: {:?}", d.weekday()
             );
         }
     }

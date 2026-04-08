@@ -243,6 +243,7 @@ pub struct RelativeDeltaBuilder {
     years: i32,
     months: i32,
     days: i32,
+    weeks: i32,
     leapdays: i32,
     hours: i32,
     minutes: i32,
@@ -262,7 +263,7 @@ impl RelativeDeltaBuilder {
     pub fn years(mut self, v: i32) -> Self { self.years = v; self }
     pub fn months(mut self, v: i32) -> Self { self.months = v; self }
     pub fn days(mut self, v: i32) -> Self { self.days = v; self }
-    pub fn weeks(mut self, v: i32) -> Self { self.days += v * 7; self }
+    pub fn weeks(mut self, v: i32) -> Self { self.weeks = v; self }
     pub fn hours(mut self, v: i32) -> Self { self.hours = v; self }
     pub fn minutes(mut self, v: i32) -> Self { self.minutes = v; self }
     pub fn seconds(mut self, v: i32) -> Self { self.seconds = v; self }
@@ -285,7 +286,7 @@ impl RelativeDeltaBuilder {
         RelativeDelta::new(
             self.years,
             self.months,
-            self.days,
+            self.days + self.weeks * 7,
             self.leapdays,
             self.hours,
             self.minutes,
@@ -645,25 +646,24 @@ fn normalize_n(n: Option<i32>) -> Option<i32> {
 impl fmt::Display for RelativeDelta {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "relativedelta(")?;
+        let parts: &[(&str, i64)] = &[
+            ("years", self.years as i64),
+            ("months", self.months as i64),
+            ("days", self.days as i64),
+            ("leapdays", self.leapdays as i64),
+            ("hours", self.time.hours() as i64),
+            ("minutes", self.time.minutes() as i64),
+            ("seconds", self.time.seconds() as i64),
+            ("microseconds", self.time.microseconds()),
+        ];
         let mut first = true;
-        macro_rules! part {
-            ($name:expr, $val:expr) => {
-                if $val != 0 {
-                    if !first { write!(f, ", ")?; }
-                    write!(f, "{}={}", $name, $val)?;
-                    #[allow(unused_assignments)]
-                    { first = false; }
-                }
-            };
+        for &(name, val) in parts {
+            if val != 0 {
+                if !first { write!(f, ", ")?; }
+                write!(f, "{name}={val}")?;
+                first = false;
+            }
         }
-        part!("years", self.years);
-        part!("months", self.months);
-        part!("days", self.days);
-        part!("leapdays", self.leapdays);
-        part!("hours", self.time.hours());
-        part!("minutes", self.time.minutes());
-        part!("seconds", self.time.seconds());
-        part!("microseconds", self.time.microseconds());
         write!(f, ")")
     }
 }
@@ -680,6 +680,10 @@ mod tests {
             .unwrap()
     }
 
+    fn date(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
     fn rd(years: i32, months: i32, days: i32) -> RelativeDelta {
         RelativeDelta::builder()
             .years(years)
@@ -688,6 +692,16 @@ mod tests {
             .build()
             .unwrap()
     }
+
+    fn assert_add_dt(delta: RelativeDelta, base: NaiveDateTime, expected: NaiveDateTime) {
+        assert_eq!(
+            delta.add_to_naive_datetime(base),
+            expected,
+            "base={base}, delta={delta}",
+        );
+    }
+
+    // ---- Builder ----
 
     #[test]
     fn test_builder() {
@@ -705,43 +719,100 @@ mod tests {
     }
 
     #[test]
+    fn test_weeks_builder() {
+        let delta = RelativeDelta::builder().weeks(2).build().unwrap();
+        assert_eq!(delta.days(), 14);
+        assert_eq!(delta.weeks(), 2);
+    }
+
+    #[test]
+    fn test_weeks_with_extra_days() {
+        let a = RelativeDelta::builder().weeks(1).days(3).build().unwrap();
+        let b = RelativeDelta::builder().days(3).weeks(1).build().unwrap();
+        assert_eq!(a.days(), 10);
+        assert_eq!(b.days(), 10);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_struct_size() {
+        let size = size_of::<RelativeDelta>();
+        assert!(size <= 80, "RelativeDelta is {size} bytes, expected <= 80");
+    }
+
+    // ---- Normalization ----
+
+    #[test]
+    fn test_time_normalization() {
+        // 90 seconds → 1 minute 30 seconds
+        let delta = RelativeDelta::builder().seconds(90).build().unwrap();
+        assert_eq!(delta.minutes(), 1);
+        assert_eq!(delta.seconds(), 30);
+    }
+
+    #[test]
+    fn test_hours_overflow_to_days() {
+        let delta = RelativeDelta::builder().hours(25).build().unwrap();
+        assert_eq!(delta.days(), 1);
+        assert_eq!(delta.hours(), 1);
+    }
+
+    #[test]
+    fn test_months_overflow() {
+        let delta = RelativeDelta::builder().months(14).build().unwrap();
+        assert_eq!(delta.years(), 1);
+        assert_eq!(delta.months(), 2);
+    }
+
+    #[test]
+    fn test_microseconds_overflow() {
+        let delta = RelativeDelta::builder().microseconds(2_500_000).build().unwrap();
+        assert_eq!(delta.seconds(), 2);
+        assert_eq!(delta.microseconds(), 500_000);
+    }
+
+    #[test]
+    fn test_large_negative_hours() {
+        let delta = RelativeDelta::builder().hours(-48).build().unwrap();
+        assert_eq!(delta.days(), -2);
+        assert_eq!(delta.hours(), 0);
+    }
+
+    #[test]
+    fn test_large_microseconds() {
+        // 3_661_500_000 us = 1h 1m 1s 500_000us
+        let delta = RelativeDelta::builder().microseconds(3_661_500_000).build().unwrap();
+        assert_eq!(delta.hours(), 1);
+        assert_eq!(delta.minutes(), 1);
+        assert_eq!(delta.seconds(), 1);
+        assert_eq!(delta.microseconds(), 500_000);
+    }
+
+    // ---- Date arithmetic (add_to_naive_datetime) ----
+
+    #[test]
     fn test_add_months() {
-        let base = dt(2024, 1, 31, 0, 0, 0);
-        let delta = rd(0, 1, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2024, 2, 29, 0, 0, 0));
+        assert_add_dt(rd(0, 1, 0), dt(2024, 1, 31, 0, 0, 0), dt(2024, 2, 29, 0, 0, 0));
     }
 
     #[test]
     fn test_add_months_non_leap() {
-        let base = dt(2023, 1, 31, 0, 0, 0);
-        let delta = rd(0, 1, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2023, 2, 28, 0, 0, 0));
+        assert_add_dt(rd(0, 1, 0), dt(2023, 1, 31, 0, 0, 0), dt(2023, 2, 28, 0, 0, 0));
     }
 
     #[test]
     fn test_add_years() {
-        let base = dt(2024, 2, 29, 12, 0, 0);
-        let delta = rd(1, 0, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2025, 2, 28, 12, 0, 0));
+        assert_add_dt(rd(1, 0, 0), dt(2024, 2, 29, 12, 0, 0), dt(2025, 2, 28, 12, 0, 0));
     }
 
     #[test]
     fn test_add_days_and_hours() {
-        let base = dt(2024, 1, 1, 10, 30, 0);
-        let delta = RelativeDelta::new(
-            0, 0, 5, 0, 3, 0, 0, 0, None, None, None, None, None, None, None, None, None, None,
-        )
-        .unwrap();
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2024, 1, 6, 13, 30, 0));
+        let delta = RelativeDelta::builder().days(5).hours(3).build().unwrap();
+        assert_add_dt(delta, dt(2024, 1, 1, 10, 30, 0), dt(2024, 1, 6, 13, 30, 0));
     }
 
     #[test]
     fn test_absolute_fields() {
-        let base = dt(2024, 6, 15, 10, 30, 45);
         let delta = RelativeDelta::builder()
             .year(2025)
             .month(1)
@@ -751,146 +822,230 @@ mod tests {
             .second(0)
             .build()
             .unwrap();
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2025, 1, 1, 0, 0, 0));
+        assert_add_dt(delta, dt(2024, 6, 15, 10, 30, 45), dt(2025, 1, 1, 0, 0, 0));
     }
+
+    #[test]
+    fn test_absolute_and_relative_combined() {
+        // Set month to March, then add 2 months → May
+        let delta = RelativeDelta::builder().month(3).months(2).build().unwrap();
+        let result = delta.add_to_naive_datetime(dt(2024, 1, 15, 0, 0, 0));
+        assert_eq!(result.month(), 5);
+        assert_eq!(result.day(), 15);
+    }
+
+    #[test]
+    fn test_month_december_plus_1() {
+        assert_add_dt(rd(0, 1, 0), dt(2024, 12, 15, 0, 0, 0), dt(2025, 1, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_negative_years_and_months() {
+        assert_add_dt(rd(-2, -6, 0), dt(2024, 3, 15, 0, 0, 0), dt(2021, 9, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_add_to_end_of_month_chain() {
+        // Jan 31 +1m → Feb 29, +1m → Mar 29 (clamped intermediate carries forward)
+        let base = dt(2024, 1, 31, 0, 0, 0);
+        let plus_1m = rd(0, 1, 0).add_to_naive_datetime(base);
+        let plus_2m = rd(0, 1, 0).add_to_naive_datetime(plus_1m);
+        assert_eq!(plus_1m, dt(2024, 2, 29, 0, 0, 0));
+        assert_eq!(plus_2m, dt(2024, 3, 29, 0, 0, 0));
+    }
+
+    // ---- Negative months regression ----
+
+    #[test]
+    fn test_subtract_1_month_from_january() {
+        assert_add_dt(rd(0, -1, 0), dt(2024, 1, 15, 0, 0, 0), dt(2023, 12, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_subtract_13_months() {
+        assert_add_dt(rd(0, -13, 0), dt(2024, 1, 15, 0, 0, 0), dt(2022, 12, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_subtract_12_months() {
+        assert_add_dt(rd(0, -12, 0), dt(2024, 3, 15, 0, 0, 0), dt(2023, 3, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_subtract_25_months() {
+        assert_add_dt(rd(0, -25, 0), dt(2024, 3, 15, 0, 0, 0), dt(2022, 2, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_add_large_positive_months() {
+        assert_add_dt(rd(0, 25, 0), dt(2024, 1, 15, 0, 0, 0), dt(2026, 2, 15, 0, 0, 0));
+    }
+
+    // ---- Leap year & day clamping ----
+
+    #[test]
+    fn test_add_month_to_leap_day() {
+        // Feb 29 + 1 month → Mar 29 (not clamped)
+        assert_add_dt(rd(0, 1, 0), dt(2024, 2, 29, 0, 0, 0), dt(2024, 3, 29, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_add_year_from_leap_day() {
+        // Feb 29 2024 + 1 year → Feb 28 2025 (day clamped)
+        assert_add_dt(rd(1, 0, 0), dt(2024, 2, 29, 12, 30, 0), dt(2025, 2, 28, 12, 30, 0));
+    }
+
+    #[test]
+    fn test_add_4_years_from_leap_day() {
+        // Feb 29 2024 + 4 years → Feb 29 2028 (leap year again)
+        assert_add_dt(rd(4, 0, 0), dt(2024, 2, 29, 0, 0, 0), dt(2028, 2, 29, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_day_clamping_jan31_plus_1month() {
+        assert_add_dt(rd(0, 1, 0), dt(2024, 1, 31, 0, 0, 0), dt(2024, 2, 29, 0, 0, 0));
+        assert_add_dt(rd(0, 1, 0), dt(2023, 1, 31, 0, 0, 0), dt(2023, 2, 28, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_day_clamping_mar31_minus_1month() {
+        assert_add_dt(rd(0, -1, 0), dt(2024, 3, 31, 0, 0, 0), dt(2024, 2, 29, 0, 0, 0));
+        assert_add_dt(rd(0, -1, 0), dt(2023, 3, 31, 0, 0, 0), dt(2023, 2, 28, 0, 0, 0));
+    }
+
+    // ---- add_to_naive_date ----
+
+    #[test]
+    fn test_add_to_naive_date() {
+        let result = rd(0, 1, 0).add_to_naive_date(date(2024, 1, 31));
+        assert_eq!(result, date(2024, 2, 29));
+    }
+
+    #[test]
+    fn test_negative_months_date_only() {
+        let result = rd(0, -13, 0).add_to_naive_date(date(2024, 1, 15));
+        assert_eq!(result, date(2022, 12, 15));
+    }
+
+    #[test]
+    fn test_add_to_naive_date_with_weekday() {
+        let fr = Weekday::new(4, None).unwrap();
+        let delta = RelativeDelta::builder().weekday(fr).build().unwrap();
+        let result = delta.add_to_naive_date(date(2024, 1, 10)); // Wednesday → Friday
+        assert_eq!(result, date(2024, 1, 12));
+    }
+
+    // ---- Weekday ----
 
     #[test]
     fn test_weekday_next_monday() {
-        let base = dt(2024, 1, 3, 0, 0, 0);
         let mo = Weekday::new(0, None).unwrap();
         let delta = RelativeDelta::builder().weekday(mo).build().unwrap();
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2024, 1, 8, 0, 0, 0));
+        assert_add_dt(delta, dt(2024, 1, 3, 0, 0, 0), dt(2024, 1, 8, 0, 0, 0));
     }
 
     #[test]
+    fn test_weekday_negative_n() {
+        // Previous Friday (-1) from Wednesday Jan 10
+        let fr_prev = Weekday::new(4, Some(-1)).unwrap();
+        let delta = RelativeDelta::builder().weekday(fr_prev).build().unwrap();
+        assert_add_dt(delta, dt(2024, 1, 10, 0, 0, 0), dt(2024, 1, 5, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_weekday_same_day_positive() {
+        // Already Monday + weekday(MO, +1) → same Monday
+        let mo = Weekday::new(0, Some(1)).unwrap();
+        let delta = RelativeDelta::builder().weekday(mo).build().unwrap();
+        assert_add_dt(delta, dt(2024, 1, 8, 0, 0, 0), dt(2024, 1, 8, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_weekday_second_occurrence() {
+        // 2nd Tuesday from Wednesday Jan 10
+        let tu2 = Weekday::new(1, Some(2)).unwrap();
+        let delta = RelativeDelta::builder().weekday(tu2).build().unwrap();
+        assert_add_dt(delta, dt(2024, 1, 10, 0, 0, 0), dt(2024, 1, 23, 0, 0, 0));
+    }
+
+    // ---- Yearday / nlyearday ----
+
+    #[test]
+    fn test_yearday() {
+        let delta = RelativeDelta::builder().year(2024).yearday(60).build().unwrap();
+        let result = delta.add_to_naive_datetime(dt(2024, 1, 1, 0, 0, 0));
+        assert_eq!(result.month(), 2);
+    }
+
+    #[test]
+    fn test_yearday_leapday_adjustment() {
+        // yearday 60 in leap year: leapdays=-1 is auto-applied for yearday > 59
+        let delta = RelativeDelta::builder().year(2024).yearday(60).build().unwrap();
+        let result = delta.add_to_naive_datetime(dt(2024, 1, 1, 0, 0, 0));
+        assert_eq!(result.month(), 2);
+    }
+
+    #[test]
+    fn test_nlyearday() {
+        let delta = RelativeDelta::builder().year(2024).nlyearday(60).build().unwrap();
+        let result = delta.add_to_naive_datetime(dt(2024, 1, 1, 0, 0, 0));
+        // nlyearday 60 = Mar 1 (non-leap calendar)
+        assert_eq!(result.month(), 3);
+        assert_eq!(result.day(), 1);
+    }
+
+    #[test]
+    fn test_invalid_yearday_367() {
+        let result = RelativeDelta::builder().yearday(367).build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_yearday_zero_ignored() {
+        let delta = RelativeDelta::builder().yearday(0).build().unwrap();
+        assert!(delta.is_zero());
+    }
+
+    // ---- Arithmetic (add_rd / sub_rd / neg) ----
+
+    #[test]
     fn test_neg() {
-        let delta = rd(1, 2, 3);
-        let neg = delta.neg();
+        let neg = rd(1, 2, 3).neg();
         assert_eq!(neg.years(), -1);
         assert_eq!(neg.months(), -2);
         assert_eq!(neg.days(), -3);
     }
 
     #[test]
+    fn test_neg_preserves_absolute() {
+        let delta = RelativeDelta::builder()
+            .years(1)
+            .months(2)
+            .days(3)
+            .hour(10)
+            .minute(30)
+            .build()
+            .unwrap();
+        let neg = delta.neg();
+        assert_eq!(neg.years(), -1);
+        assert_eq!(neg.months(), -2);
+        assert_eq!(neg.days(), -3);
+        assert!(neg.has_time());
+    }
+
+    #[test]
     fn test_add_rd() {
-        let a = rd(1, 2, 3);
-        let b = rd(0, 3, 7);
-        let result = a.add_rd(&b);
+        let result = rd(1, 2, 3).add_rd(&rd(0, 3, 7));
         assert_eq!(result.years(), 1);
         assert_eq!(result.months(), 5);
         assert_eq!(result.days(), 10);
     }
 
     #[test]
-    fn test_from_diff() {
-        let dt1 = dt(2025, 3, 15, 10, 30, 0);
-        let dt2 = dt(2024, 1, 10, 8, 15, 0);
-        let delta = RelativeDelta::from_diff(dt1, dt2);
-        let result = delta.add_to_naive_datetime(dt2);
-        assert_eq!(result, dt1);
-    }
-
-    #[test]
-    fn test_is_zero() {
-        let delta = RelativeDelta::new(
-            0, 0, 0, 0, 0, 0, 0, 0, None, None, None, None, None, None, None, None, None, None,
-        )
-        .unwrap();
-        assert!(delta.is_zero());
-    }
-
-    #[test]
-    fn test_time_normalization() {
-        // 90 seconds → 1 minute 30 seconds, packed into single i64
-        let delta = RelativeDelta::new(
-            0, 0, 0, 0, 0, 0, 90, 0, None, None, None, None, None, None, None, None, None, None,
-        )
-        .unwrap();
-        assert_eq!(delta.minutes(), 1);
-        assert_eq!(delta.seconds(), 30);
-    }
-
-    #[test]
-    fn test_hours_overflow_to_days() {
-        let delta = RelativeDelta::new(
-            0, 0, 0, 0, 25, 0, 0, 0, None, None, None, None, None, None, None, None, None, None,
-        )
-        .unwrap();
-        assert_eq!(delta.days(), 1);
-        assert_eq!(delta.hours(), 1);
-    }
-
-    #[test]
-    fn test_months_overflow() {
-        let delta = RelativeDelta::new(
-            0, 14, 0, 0, 0, 0, 0, 0, None, None, None, None, None, None, None, None, None, None,
-        )
-        .unwrap();
-        assert_eq!(delta.years(), 1);
-        assert_eq!(delta.months(), 2);
-    }
-
-    #[test]
-    fn test_microseconds_overflow() {
-        let delta = RelativeDelta::new(
-            0, 0, 0, 0, 0, 0, 0, 2_500_000, None, None, None, None, None, None, None, None,
-            None, None,
-        )
-        .unwrap();
-        assert_eq!(delta.seconds(), 2);
-        assert_eq!(delta.microseconds(), 500_000);
-    }
-
-    #[test]
-    fn test_yearday() {
-        let delta = RelativeDelta::new(
-            0, 0, 0, 0, 0, 0, 0, 0, Some(2024), None, None, None, Some(60), None, None, None,
-            None, None,
-        )
-        .unwrap();
-        let base = dt(2024, 1, 1, 0, 0, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result.month(), 2);
-    }
-
-    #[test]
-    fn test_add_to_naive_date() {
-        let base = NaiveDate::from_ymd_opt(2024, 1, 31).unwrap();
-        let delta = rd(0, 1, 0);
-        let result = delta.add_to_naive_date(base);
-        assert_eq!(result, NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
-    }
-
-    #[test]
-    fn test_display_nonzero_only() {
-        let delta = rd(1, 2, 3);
-        assert_eq!(delta.to_string(), "relativedelta(years=1, months=2, days=3)");
-    }
-
-    #[test]
-    fn test_display_empty() {
-        let delta = rd(0, 0, 0);
-        assert_eq!(delta.to_string(), "relativedelta()");
-    }
-
-    #[test]
-    fn test_display_time() {
-        let delta = RelativeDelta::builder().hours(1).minutes(30).build().unwrap();
-        assert_eq!(delta.to_string(), "relativedelta(hours=1, minutes=30)");
-    }
-
-    #[test]
-    fn test_has_time() {
-        let no_time = rd(1, 0, 0);
-        assert!(!no_time.has_time());
-
-        let with_time = RelativeDelta::builder().hours(1).build().unwrap();
-        assert!(with_time.has_time());
-
-        let with_abs_time = RelativeDelta::builder().hour(12).build().unwrap();
-        assert!(with_abs_time.has_time());
+    fn test_add_rd_months_overflow() {
+        let result = rd(0, 10, 0).add_rd(&rd(0, 5, 0));
+        assert_eq!(result.years(), 1);
+        assert_eq!(result.months(), 3);
     }
 
     #[test]
@@ -904,81 +1059,135 @@ mod tests {
     }
 
     #[test]
+    fn test_sub_rd_months_underflow() {
+        let result = rd(0, 2, 0).sub_rd(&rd(0, 5, 0));
+        assert_eq!(result.years(), 0);
+        assert_eq!(result.months(), -3);
+    }
+
+    #[test]
     fn test_sub_rd_time_underflow_to_days() {
-        // 1h - 3h = -2h → -1 day + 22h? No: total_us = -7200s, extra_days=0, time=-2h
-        // Actually: -2h total_us = -7_200_000_000. extra_days = -7200000000/86400000000 = 0.
-        // So days=0, hours=-2. But for sub where base has days:
         let a = RelativeDelta::builder().days(1).hours(1).build().unwrap();
         let b = RelativeDelta::builder().hours(3).build().unwrap();
         let result = a.sub_rd(&b);
-        // days=1, time = 1h - 3h = -2h. extra_days=0. So days=1, hours=-2.
-        // net: 1 day - 2 hours = 22 hours. Representation: days=1, time=-2h.
-        // This is consistent — add_to_datetime will compute 1*86400 + (-2*3600) = 79200s = 22h.
+        // days=1, time = 1h - 3h = -2h (no day borrow; consistent with add_to_datetime)
         assert_eq!(result.days(), 1);
         assert_eq!(result.hours(), -2);
     }
 
-    // --- P0 regression tests (negative months) ---
+    // ---- from_diff ----
 
     #[test]
-    fn test_subtract_1_month_from_january() {
-        // Jan 15 - 1 month = Dec 15 of previous year
-        let base = dt(2024, 1, 15, 0, 0, 0);
-        let delta = rd(0, -1, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2023, 12, 15, 0, 0, 0));
+    fn test_from_diff() {
+        let d1 = dt(2025, 3, 15, 10, 30, 0);
+        let d2 = dt(2024, 1, 10, 8, 15, 0);
+        let delta = RelativeDelta::from_diff(d1, d2);
+        assert_eq!(delta.add_to_naive_datetime(d2), d1);
     }
 
     #[test]
-    fn test_subtract_13_months() {
-        // Jan 15 2024 - 13 months = Dec 15 2022
-        let base = dt(2024, 1, 15, 0, 0, 0);
-        let delta = rd(0, -13, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2022, 12, 15, 0, 0, 0));
+    fn test_from_diff_identical_dates() {
+        let d = dt(2024, 6, 15, 10, 30, 0);
+        assert!(RelativeDelta::from_diff(d, d).is_zero());
     }
 
     #[test]
-    fn test_subtract_12_months() {
-        // Mar 15 2024 - 12 months = Mar 15 2023
-        let base = dt(2024, 3, 15, 0, 0, 0);
-        let delta = rd(0, -12, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2023, 3, 15, 0, 0, 0));
+    fn test_from_diff_one_day() {
+        let delta = RelativeDelta::from_diff(dt(2024, 1, 2, 0, 0, 0), dt(2024, 1, 1, 0, 0, 0));
+        assert_eq!(delta.days(), 1);
+        assert_eq!(delta.months(), 0);
+        assert_eq!(delta.years(), 0);
     }
 
     #[test]
-    fn test_subtract_25_months() {
-        // Mar 15 2024 - 25 months = Feb 15 2022
-        let base = dt(2024, 3, 15, 0, 0, 0);
-        let delta = rd(0, -25, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2022, 2, 15, 0, 0, 0));
+    fn test_from_diff_reverse() {
+        let d1 = dt(2024, 1, 1, 0, 0, 0);
+        let d2 = dt(2025, 1, 1, 0, 0, 0);
+        let delta = RelativeDelta::from_diff(d1, d2);
+        assert_eq!(delta.years(), -1);
+        assert_eq!(delta.add_to_naive_datetime(d2), d1);
     }
 
     #[test]
-    fn test_add_large_positive_months() {
-        // Jan 15 2024 + 25 months = Feb 15 2026
-        let base = dt(2024, 1, 15, 0, 0, 0);
-        let delta = rd(0, 25, 0);
-        let result = delta.add_to_naive_datetime(base);
-        assert_eq!(result, dt(2026, 2, 15, 0, 0, 0));
+    fn test_from_diff_with_time() {
+        let d1 = dt(2024, 1, 1, 14, 30, 0);
+        let d2 = dt(2024, 1, 1, 10, 0, 0);
+        let delta = RelativeDelta::from_diff(d1, d2);
+        assert_eq!(delta.hours(), 4);
+        assert_eq!(delta.minutes(), 30);
+        assert_eq!(delta.add_to_naive_datetime(d2), d1);
+    }
+
+    // ---- Properties (is_zero / has_time / eq) ----
+
+    #[test]
+    fn test_is_zero() {
+        assert!(rd(0, 0, 0).is_zero());
     }
 
     #[test]
-    fn test_negative_months_date_only() {
-        // Same bug for NaiveDate path
-        let base = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
-        let delta = rd(0, -13, 0);
-        let result = delta.add_to_naive_date(base);
-        assert_eq!(result, NaiveDate::from_ymd_opt(2022, 12, 15).unwrap());
+    fn test_has_time() {
+        assert!(!rd(1, 0, 0).has_time());
+        assert!(RelativeDelta::builder().hours(1).build().unwrap().has_time());
+        assert!(RelativeDelta::builder().hour(12).build().unwrap().has_time());
     }
 
     #[test]
-    fn test_struct_size() {
-        // Verify the struct is compact
-        let size = std::mem::size_of::<RelativeDelta>();
-        // Should be significantly smaller than 17 * Option<i32> = 136 bytes
-        assert!(size <= 80, "RelativeDelta is {size} bytes, expected <= 80");
+    fn test_eq_symmetry() {
+        let a = rd(1, 2, 3);
+        let b = rd(1, 2, 3);
+        assert_eq!(a, b);
+        assert_eq!(b, a);
+    }
+
+    #[test]
+    fn test_eq_normalized() {
+        assert_eq!(rd(1, 0, 0), rd(0, 12, 0));
+    }
+
+    #[test]
+    fn test_ne_different_fields() {
+        assert_ne!(rd(1, 0, 0), rd(1, 1, 0));
+        assert_ne!(rd(0, 0, 1), rd(0, 0, 2));
+    }
+
+    // ---- Display ----
+
+    #[test]
+    fn test_display_nonzero_only() {
+        assert_eq!(rd(1, 2, 3).to_string(), "relativedelta(years=1, months=2, days=3)");
+    }
+
+    #[test]
+    fn test_display_empty() {
+        assert_eq!(rd(0, 0, 0).to_string(), "relativedelta()");
+    }
+
+    #[test]
+    fn test_display_time() {
+        let delta = RelativeDelta::builder().hours(1).minutes(30).build().unwrap();
+        assert_eq!(delta.to_string(), "relativedelta(hours=1, minutes=30)");
+    }
+
+    #[test]
+    fn test_display_all_fields() {
+        let delta = RelativeDelta::builder()
+            .years(1)
+            .months(2)
+            .days(3)
+            .hours(4)
+            .minutes(5)
+            .seconds(6)
+            .microseconds(7)
+            .build()
+            .unwrap();
+        let s = delta.to_string();
+        assert!(s.contains("years=1"));
+        assert!(s.contains("months=2"));
+        assert!(s.contains("days=3"));
+        assert!(s.contains("hours=4"));
+        assert!(s.contains("minutes=5"));
+        assert!(s.contains("seconds=6"));
+        assert!(s.contains("microseconds=7"));
     }
 }

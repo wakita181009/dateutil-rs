@@ -274,4 +274,180 @@ mod tests {
         let dt = isoparse("2024-01-15T10:30:45.123").unwrap();
         assert_eq!(dt.nanosecond() / 1000, 123000);
     }
+
+    #[test]
+    fn test_iso_invalid_date_feb_30() {
+        assert!(isoparse("2024-02-30").is_err());
+    }
+
+    #[test]
+    fn test_iso_invalid_date_month_13() {
+        assert!(isoparse("2024-13-01").is_err());
+    }
+
+    #[test]
+    fn test_iso_invalid_date_day_00() {
+        assert!(isoparse("2024-01-00").is_err());
+    }
+
+    #[test]
+    fn test_iso_leap_year_feb_29() {
+        let dt = isoparse("2024-02-29").unwrap();
+        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
+    }
+
+    #[test]
+    fn test_iso_non_leap_year_feb_29() {
+        assert!(isoparse("2023-02-29").is_err());
+    }
+
+    #[test]
+    fn test_iso_midnight() {
+        let dt = isoparse("2024-01-15T00:00:00").unwrap();
+        assert_eq!(dt.hour(), 0);
+        assert_eq!(dt.minute(), 0);
+        assert_eq!(dt.second(), 0);
+    }
+
+    #[test]
+    fn test_iso_end_of_day() {
+        let dt = isoparse("2024-01-15T23:59:59").unwrap();
+        assert_eq!(dt.hour(), 23);
+        assert_eq!(dt.minute(), 59);
+        assert_eq!(dt.second(), 59);
+    }
+
+    #[test]
+    fn test_iso_frac_1_digit() {
+        let dt = isoparse("2024-01-15T10:30:45.1").unwrap();
+        assert_eq!(dt.nanosecond() / 1000, 100000);
+    }
+
+    #[test]
+    fn test_iso_frac_2_digits() {
+        let dt = isoparse("2024-01-15T10:30:45.12").unwrap();
+        assert_eq!(dt.nanosecond() / 1000, 120000);
+    }
+
+    #[test]
+    fn test_iso_frac_4_digits() {
+        let dt = isoparse("2024-01-15T10:30:45.1234").unwrap();
+        assert_eq!(dt.nanosecond() / 1000, 123400);
+    }
+
+    #[test]
+    fn test_iso_frac_5_digits() {
+        let dt = isoparse("2024-01-15T10:30:45.12345").unwrap();
+        assert_eq!(dt.nanosecond() / 1000, 123450);
+    }
+
+    #[test]
+    fn test_iso_frac_6_digits() {
+        let dt = isoparse("2024-01-15T10:30:45.123456").unwrap();
+        assert_eq!(dt.nanosecond() / 1000, 123456);
+    }
+
+    #[test]
+    fn test_iso_frac_more_than_6_digits_truncates() {
+        // Only first 6 fractional digits used
+        let dt = isoparse("2024-01-15T10:30:45.1234567").unwrap();
+        assert_eq!(dt.nanosecond() / 1000, 123456);
+    }
+
+    #[test]
+    fn test_iso_compact_hhmmss() {
+        let dt = isoparse("20240115T103045").unwrap();
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    #[test]
+    fn test_iso_compact_tz_offset() {
+        let dt = isoparse("2024-01-15T10:30:45+0530").unwrap();
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+    }
+
+    #[test]
+    fn test_iso_compact_negative_tz() {
+        let dt = isoparse("2024-01-15T10:30:45-0800").unwrap();
+        assert_eq!(dt.hour(), 10);
+    }
+
+    #[test]
+    fn test_iso_hh_only() {
+        let dt = isoparse("2024-01-15T10").unwrap();
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 0);
+    }
+
+    #[test]
+    fn test_iso_leading_trailing_whitespace() {
+        let dt = isoparse("  2024-01-15T10:30:45  ").unwrap();
+        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+        assert_eq!(dt.hour(), 10);
+    }
+
+    #[test]
+    fn test_iso_whitespace_only() {
+        assert!(isoparse("   ").is_err());
+    }
+
+    #[test]
+    fn test_iso_year_boundaries() {
+        let dt = isoparse("0001-01-01").unwrap();
+        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(1, 1, 1).unwrap());
+
+        let dt = isoparse("9999-12-31").unwrap();
+        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(9999, 12, 31).unwrap());
+    }
+
+    #[test]
+    fn test_iso_dec_31() {
+        let dt = isoparse("2024-12-31T23:59:59.999999").unwrap();
+        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 12, 31).unwrap());
+        assert_eq!(dt.hour(), 23);
+        assert_eq!(dt.nanosecond() / 1000, 999999);
+    }
+
+    #[test]
+    fn test_iso_partial_formats_invalid() {
+        assert!(isoparse("202").is_err()); // 3 digits
+        assert!(isoparse("2024-1").is_err()); // incomplete month
+        assert!(isoparse("2024-01-1").is_err()); // incomplete day
+    }
+
+    #[test]
+    fn test_iso_invalid_time_hour_24() {
+        assert!(isoparse("2024-01-15T24:00:00").is_err());
+    }
+
+    #[test]
+    fn test_iso_invalid_time_minute_60() {
+        assert!(isoparse("2024-01-15T10:60:00").is_err());
+    }
+
+    #[test]
+    fn test_iso_invalid_time_second_60() {
+        assert!(isoparse("2024-01-15T10:30:60").is_err());
+    }
+
+    #[test]
+    fn test_iso_compact_with_z() {
+        let dt = isoparse("20240115T103045Z").unwrap();
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    #[test]
+    fn test_parse_int_edge_cases() {
+        assert_eq!(parse_int("0").unwrap(), 0);
+        assert_eq!(parse_int("000000").unwrap(), 0);
+        assert_eq!(parse_int("999999").unwrap(), 999999);
+        assert!(parse_int("").is_err());
+        assert!(parse_int("abc").is_err());
+        assert!(parse_int("12.3").is_err());
+    }
 }
