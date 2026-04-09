@@ -1,10 +1,14 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
+use chrono::NaiveDate;
 use dateutil_core::common::Weekday;
 use dateutil_core::easter::{easter, EasterMethod};
 use dateutil_core::parser;
 use dateutil_core::parser::tokenizer;
 use dateutil_core::relativedelta::RelativeDelta;
+use dateutil_core::rrule::{Frequency, Recurrence, RRuleBuilder};
+use dateutil_core::rrule::parse::rrulestr;
+use dateutil_core::rrule::set::RRuleSet;
 
 fn bench_tokenizer(c: &mut Criterion) {
     c.bench_function("tokenize_simple_date", |b| {
@@ -224,6 +228,266 @@ fn bench_relativedelta(c: &mut Criterion) {
     });
 }
 
+fn dt(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) -> chrono::NaiveDateTime {
+    NaiveDate::from_ymd_opt(y, m, d)
+        .unwrap()
+        .and_hms_opt(h, mi, s)
+        .unwrap()
+}
+
+fn bench_rrule_iter(c: &mut Criterion) {
+    c.bench_function("rrule_daily_100", |b| {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .count(100)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all());
+        })
+    });
+
+    c.bench_function("rrule_weekly_52", |b| {
+        let rule = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .count(52)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all());
+        })
+    });
+
+    c.bench_function("rrule_monthly_24", |b| {
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 15, 9, 0, 0))
+            .count(24)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all());
+        })
+    });
+
+    c.bench_function("rrule_yearly_10", |b| {
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(2020, 6, 15, 0, 0, 0))
+            .count(10)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all());
+        })
+    });
+
+    c.bench_function("rrule_hourly_720", |b| {
+        let rule = RRuleBuilder::new(Frequency::Hourly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(720)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all());
+        })
+    });
+
+    c.bench_function("rrule_daily_byweekday_mwf_52", |b| {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .byweekday(vec![
+                Weekday::new(0, None).unwrap(), // MO
+                Weekday::new(2, None).unwrap(), // WE
+                Weekday::new(4, None).unwrap(), // FR
+            ])
+            .count(52)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all());
+        })
+    });
+
+    c.bench_function("rrule_monthly_bymonthday_15_12", |b| {
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .bymonthday(vec![15])
+            .count(12)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all());
+        })
+    });
+
+    c.bench_function("rrule_yearly_bymonth_interval2", |b| {
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .bymonth(vec![1, 4, 7, 10])
+            .interval(2)
+            .count(20)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all());
+        })
+    });
+}
+
+fn bench_rrule_before_after(c: &mut Criterion) {
+    let rule = RRuleBuilder::new(Frequency::Daily)
+        .dtstart(dt(2020, 1, 1, 9, 0, 0))
+        .count(365)
+        .build()
+        .unwrap();
+
+    c.bench_function("rrule_before_mid", |b| {
+        b.iter(|| {
+            black_box(rule.before(black_box(dt(2020, 7, 1, 0, 0, 0)), false));
+        })
+    });
+
+    c.bench_function("rrule_after_mid", |b| {
+        b.iter(|| {
+            black_box(rule.after(black_box(dt(2020, 7, 1, 0, 0, 0)), false));
+        })
+    });
+
+    c.bench_function("rrule_between_quarter", |b| {
+        b.iter(|| {
+            black_box(rule.between(
+                black_box(dt(2020, 4, 1, 0, 0, 0)),
+                black_box(dt(2020, 6, 30, 0, 0, 0)),
+                true,
+            ));
+        })
+    });
+}
+
+fn bench_rruleset(c: &mut Criterion) {
+    c.bench_function("rruleset_two_rules_merge", |b| {
+        b.iter(|| {
+            let mut rset = RRuleSet::new();
+            let rule1 = RRuleBuilder::new(Frequency::Daily)
+                .dtstart(dt(2020, 1, 1, 9, 0, 0))
+                .count(30)
+                .build()
+                .unwrap();
+            let rule2 = RRuleBuilder::new(Frequency::Daily)
+                .dtstart(dt(2020, 1, 1, 14, 0, 0))
+                .count(30)
+                .build()
+                .unwrap();
+            rset.rrule(rule1);
+            rset.rrule(rule2);
+            black_box(rset.all());
+        })
+    });
+
+    c.bench_function("rruleset_with_exdates", |b| {
+        b.iter(|| {
+            let mut rset = RRuleSet::new();
+            let rule = RRuleBuilder::new(Frequency::Daily)
+                .dtstart(dt(2020, 1, 1, 9, 0, 0))
+                .count(60)
+                .build()
+                .unwrap();
+            rset.rrule(rule);
+            // Exclude weekends (approx)
+            for i in 0..9 {
+                rset.exdate(dt(2020, 1, 4 + i * 7, 9, 0, 0));
+                rset.exdate(dt(2020, 1, 5 + i * 7, 9, 0, 0));
+            }
+            black_box(rset.all());
+        })
+    });
+
+    c.bench_function("rruleset_with_exrule", |b| {
+        b.iter(|| {
+            let mut rset = RRuleSet::new();
+            let rule = RRuleBuilder::new(Frequency::Daily)
+                .dtstart(dt(2020, 1, 1, 9, 0, 0))
+                .count(60)
+                .build()
+                .unwrap();
+            rset.rrule(rule);
+            let exrule = RRuleBuilder::new(Frequency::Daily)
+                .dtstart(dt(2020, 1, 1, 9, 0, 0))
+                .interval(7)
+                .count(9)
+                .build()
+                .unwrap();
+            rset.exrule(exrule);
+            black_box(rset.all());
+        })
+    });
+
+    c.bench_function("rruleset_rdates_only_50", |b| {
+        b.iter(|| {
+            let mut rset = RRuleSet::new();
+            for i in 0..50 {
+                rset.rdate(dt(2020, 1, 1, 9, 0, 0) + chrono::Duration::days(i * 3));
+            }
+            black_box(rset.all());
+        })
+    });
+}
+
+fn bench_rrulestr(c: &mut Criterion) {
+    c.bench_function("rrulestr_simple_daily", |b| {
+        b.iter(|| {
+            black_box(
+                rrulestr(
+                    black_box("DTSTART:20200101T090000\nRRULE:FREQ=DAILY;COUNT=30"),
+                    None, false, false, false,
+                ).unwrap(),
+            );
+        })
+    });
+
+    c.bench_function("rrulestr_weekly_byday", |b| {
+        b.iter(|| {
+            black_box(
+                rrulestr(
+                    black_box("DTSTART:20200101T090000\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=52"),
+                    None, false, false, false,
+                ).unwrap(),
+            );
+        })
+    });
+
+    c.bench_function("rrulestr_monthly_complex", |b| {
+        b.iter(|| {
+            black_box(
+                rrulestr(
+                    black_box("DTSTART:20200101T090000\nRRULE:FREQ=MONTHLY;BYMONTHDAY=1,15;BYHOUR=9,17;COUNT=24"),
+                    None, false, false, false,
+                ).unwrap(),
+            );
+        })
+    });
+
+    c.bench_function("rrulestr_with_exdate", |b| {
+        b.iter(|| {
+            black_box(
+                rrulestr(
+                    black_box("DTSTART:20200101T090000\nRRULE:FREQ=DAILY;COUNT=10\nEXDATE:20200103T090000,20200107T090000"),
+                    None, true, false, false,
+                ).unwrap(),
+            );
+        })
+    });
+
+    c.bench_function("rrulestr_parse_and_collect", |b| {
+        b.iter(|| {
+            let result = rrulestr(
+                black_box("DTSTART:20200101T090000\nRRULE:FREQ=DAILY;COUNT=100"),
+                None, false, false, false,
+            ).unwrap();
+            black_box(result.all());
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_tokenizer,
@@ -232,5 +496,9 @@ criterion_group!(
     bench_easter,
     bench_weekday,
     bench_relativedelta,
+    bench_rrule_iter,
+    bench_rrule_before_after,
+    bench_rruleset,
+    bench_rrulestr,
 );
 criterion_main!(benches);

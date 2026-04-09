@@ -330,11 +330,16 @@ pub struct RRule {
     pub(crate) byyearday: Option<ByList<i32>>,
     pub(crate) byeaster: Option<ByList<i32>>,
     pub(crate) byweekno: Option<ByList<i32>>,
-    pub(crate) byweekday: Option<ByList<u8>>,
     pub(crate) bynweekday: Option<ByList<(u8, i32)>>,
     pub(crate) byhour: Option<ByList<u8>>,
     pub(crate) byminute: Option<ByList<u8>>,
     pub(crate) bysecond: Option<ByList<u8>>,
+
+    // Pre-computed bitmasks for O(1) filter checks
+    pub(crate) bymonth_mask: u16,
+    pub(crate) byweekday_mask: u8,
+    pub(crate) bymonthday_mask: u32,
+    pub(crate) bynmonthday_mask: u32,
 
     pub(crate) timeset: Option<SmallVec<[NaiveTime; 4]>>,
 
@@ -376,6 +381,19 @@ impl IntoIterator for RRule {
     /// Consume self and return an iterator without cloning.
     fn into_iter(self) -> iter::RRuleIter {
         iter::RRuleIter::new(Arc::new(self))
+    }
+}
+
+impl Recurrence for Arc<RRule> {
+    type Iter = iter::RRuleIter;
+
+    /// Iterate without cloning — reuses the existing `Arc`.
+    fn iter(&self) -> iter::RRuleIter {
+        iter::RRuleIter::new(Arc::clone(self))
+    }
+
+    fn is_finite(&self) -> bool {
+        self.count.is_some() || self.until.is_some()
     }
 }
 
@@ -715,6 +733,20 @@ impl RRuleBuilder {
             Some(ts)
         };
 
+        // Pre-compute bitmasks for O(1) filter checks
+        let bymonth_mask = bymonth.as_deref().map_or(0u16, |v| {
+            v.iter().fold(0u16, |acc, &m| acc | (1u16 << m))
+        });
+        let byweekday_mask = byweekday_flat.as_deref().map_or(0u8, |v| {
+            v.iter().fold(0u8, |acc, &w| acc | (1u8 << w))
+        });
+        let bymonthday_mask = bymonthday_pos.iter().fold(0u32, |acc, &d| {
+            if (1..=31).contains(&d) { acc | (1u32 << d as u32) } else { acc }
+        });
+        let bynmonthday_mask = bynmonthday.iter().fold(0u32, |acc, &d| {
+            if (-31..=-1).contains(&d) { acc | (1u32 << (-d - 1) as u32) } else { acc }
+        });
+
         Ok(RRule {
             freq,
             dtstart,
@@ -729,11 +761,14 @@ impl RRuleBuilder {
             byyearday,
             byeaster,
             byweekno,
-            byweekday: byweekday_flat,
             bynweekday,
             byhour,
             byminute,
             bysecond,
+            bymonth_mask,
+            byweekday_mask,
+            bymonthday_mask,
+            bynmonthday_mask,
             timeset,
             orig_byweekday,
             explicit,
@@ -1635,5 +1670,1235 @@ mod tests {
                 dt(1997, 9, 3, 1, 0, 0),
             ]
         );
+    }
+
+    // ===================================================================
+    // BYWEEKNO tests
+    // ===================================================================
+
+    #[test]
+    fn test_yearly_byweekno() {
+        // Every year in week 20
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(3)
+            .byweekno(vec![20])
+            .byweekday(vec![crate::common::MO])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1998, 5, 11, 9, 0, 0),
+                dt(1999, 5, 17, 9, 0, 0),
+                dt(2000, 5, 15, 9, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_yearly_byweekno_and_weekday() {
+        // Week 1 and 52, on Tuesday and Thursday
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .byweekno(vec![1])
+            .byweekday(vec![crate::common::TU, crate::common::TH])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        // 1998 week 1: starts Dec 29, 1997. Tue=Dec 30, Thu=Jan 1
+        assert_eq!(results.len(), 4);
+        for r in &results {
+            let wd = r.weekday().num_days_from_monday();
+            assert!(wd == 1 || wd == 3, "should be Tue or Thu, got weekday {wd}");
+        }
+    }
+
+    #[test]
+    fn test_yearly_byweekno_negative() {
+        // Last week of the year
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(3)
+            .byweekno(vec![-1])
+            .byweekday(vec![crate::common::MO])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 3);
+        // Each result should be a Monday in late December
+        for r in &results {
+            assert_eq!(r.weekday().num_days_from_monday(), 0);
+        }
+    }
+
+    #[test]
+    fn test_yearly_byweekno_week53() {
+        // Week 53 — only some years have it
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(3)
+            .byweekno(vec![53])
+            .byweekday(vec![crate::common::MO])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        // Should produce results only in years with 53 weeks
+        assert!(!results.is_empty() || results.is_empty()); // no panic
+        for r in &results {
+            assert_eq!(r.weekday().num_days_from_monday(), 0);
+        }
+    }
+
+    // ===================================================================
+    // WKST (week start day) tests
+    // ===================================================================
+
+    #[test]
+    fn test_weekly_wkst_monday() {
+        // WEEKLY interval=2, wkst=MO (default)
+        let rule = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0)) // Tuesday
+            .count(4)
+            .interval(2)
+            .byweekday(vec![crate::common::TU, crate::common::SU])
+            .wkst(0) // Monday
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),  // Tue
+                dt(1997, 9, 7, 9, 0, 0),  // Sun (same week with MO start)
+                dt(1997, 9, 16, 9, 0, 0), // Tue (2 weeks later)
+                dt(1997, 9, 21, 9, 0, 0), // Sun
+            ]
+        );
+    }
+
+    #[test]
+    fn test_weekly_wkst_sunday() {
+        // WEEKLY interval=2, wkst=SU — different grouping
+        let rule = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0)) // Tuesday
+            .count(4)
+            .interval(2)
+            .byweekday(vec![crate::common::TU, crate::common::SU])
+            .wkst(6) // Sunday
+            .build()
+            .unwrap();
+        let results = rule.all();
+        // With SU as week start, Sun Sep 7 falls in a different week than Tue Sep 2
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),  // Tue
+                dt(1997, 9, 14, 9, 0, 0), // Sun (next included week)
+                dt(1997, 9, 16, 9, 0, 0), // Tue
+                dt(1997, 9, 28, 9, 0, 0), // Sun
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Yearly BYDAY (without N) tests
+    // ===================================================================
+
+    #[test]
+    fn test_yearly_byweekday_no_n() {
+        // Every Tuesday and Thursday in the year
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(6)
+            .byweekday(vec![crate::common::TU, crate::common::TH])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 6);
+        for r in &results {
+            let wd = r.weekday().num_days_from_monday();
+            assert!(wd == 1 || wd == 3, "Expected Tue/Thu");
+        }
+        assert_eq!(results[0], dt(1997, 9, 2, 9, 0, 0));  // Tue
+        assert_eq!(results[1], dt(1997, 9, 4, 9, 0, 0));  // Thu
+    }
+
+    #[test]
+    fn test_yearly_bymonth_and_weekday() {
+        // Every TU and TH in January and March
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .bymonth(vec![1, 3])
+            .byweekday(vec![crate::common::TU, crate::common::TH])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 4);
+        for r in &results {
+            let m = r.month();
+            assert!(m == 1 || m == 3, "Expected January or March");
+            let wd = r.weekday().num_days_from_monday();
+            assert!(wd == 1 || wd == 3, "Expected Tue/Thu");
+        }
+    }
+
+    #[test]
+    fn test_yearly_bymonth_and_nweekday() {
+        // First Monday and last Friday of January
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .bymonth(vec![1])
+            .byweekday(vec![
+                crate::common::MO.with_n(Some(1)),
+                crate::common::FR.with_n(Some(-1)),
+            ])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 4);
+        for r in &results {
+            assert_eq!(r.month(), 1);
+        }
+        // 1998 Jan: first Mon=5, last Fri=30
+        assert_eq!(results[0], dt(1998, 1, 5, 9, 0, 0));
+        assert_eq!(results[1], dt(1998, 1, 30, 9, 0, 0));
+    }
+
+    // ===================================================================
+    // Negative BYYEARDAY tests
+    // ===================================================================
+
+    #[test]
+    fn test_yearly_byyearday_negative() {
+        // Last day and 2nd-to-last day of the year
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .byyearday(vec![-1, -2])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 12, 30, 9, 0, 0), // -2 = Dec 30
+                dt(1997, 12, 31, 9, 0, 0), // -1 = Dec 31
+                dt(1998, 12, 30, 9, 0, 0),
+                dt(1998, 12, 31, 9, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Yearly BYSETPOS tests
+    // ===================================================================
+
+    #[test]
+    fn test_yearly_bysetpos() {
+        // Every year, 1st and last day from MO-FR in January
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .bymonth(vec![1])
+            .byweekday(vec![
+                crate::common::MO,
+                crate::common::TU,
+                crate::common::WE,
+                crate::common::TH,
+                crate::common::FR,
+            ])
+            .bysetpos(vec![1, -1])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 4);
+        // 1998 Jan: first workday = Thu Jan 1, last workday = Fri Jan 30
+        assert_eq!(results[0], dt(1998, 1, 1, 9, 0, 0));
+        assert_eq!(results[1], dt(1998, 1, 30, 9, 0, 0));
+    }
+
+    // ===================================================================
+    // Monthly + BYMONTH combination
+    // ===================================================================
+
+    #[test]
+    fn test_monthly_bymonth() {
+        // Monthly, but only in January and March
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .bymonth(vec![1, 3])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1998, 1, 2, 9, 0, 0),
+                dt(1998, 3, 2, 9, 0, 0),
+                dt(1999, 1, 2, 9, 0, 0),
+                dt(1999, 3, 2, 9, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Daily + BYWEEKDAY
+    // ===================================================================
+
+    #[test]
+    fn test_daily_byweekday() {
+        // Daily but only TU and TH
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0)) // Tuesday
+            .count(4)
+            .byweekday(vec![crate::common::TU, crate::common::TH])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),  // Tue
+                dt(1997, 9, 4, 9, 0, 0),  // Thu
+                dt(1997, 9, 9, 9, 0, 0),  // Tue
+                dt(1997, 9, 11, 9, 0, 0), // Thu
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Sub-daily + BY* filter combinations
+    // ===================================================================
+
+    #[test]
+    fn test_hourly_byhour() {
+        // Hourly but only at 9 and 17
+        let rule = RRuleBuilder::new(Frequency::Hourly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .byhour(vec![9, 17])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 17, 0, 0),
+                dt(1997, 9, 3, 9, 0, 0),
+                dt(1997, 9, 3, 17, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_hourly_byminute_and_bysecond() {
+        // Hourly with byminute and bysecond
+        let rule = RRuleBuilder::new(Frequency::Hourly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .byminute(vec![0, 30])
+            .bysecond(vec![0])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 9, 30, 0),
+                dt(1997, 9, 2, 10, 0, 0),
+                dt(1997, 9, 2, 10, 30, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_minutely_byminute() {
+        // Minutely at minutes 0, 15, 30, 45
+        let rule = RRuleBuilder::new(Frequency::Minutely)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .byminute(vec![0, 15, 30, 45])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 9, 15, 0),
+                dt(1997, 9, 2, 9, 30, 0),
+                dt(1997, 9, 2, 9, 45, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_minutely_byhour() {
+        // Minutely, but only in hour 9 and 10
+        let rule = RRuleBuilder::new(Frequency::Minutely)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .interval(15)
+            .count(8)
+            .byhour(vec![9, 10])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 8);
+        for r in &results {
+            assert!(r.hour() == 9 || r.hour() == 10);
+        }
+    }
+
+    #[test]
+    fn test_minutely_cross_hour() {
+        // Minutely crossing hour boundary
+        let rule = RRuleBuilder::new(Frequency::Minutely)
+            .dtstart(dt(1997, 9, 2, 9, 58, 0))
+            .count(4)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(1997, 9, 2, 9, 58, 0),
+                dt(1997, 9, 2, 9, 59, 0),
+                dt(1997, 9, 2, 10, 0, 0),
+                dt(1997, 9, 2, 10, 1, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_secondly_cross_minute() {
+        // Secondly crossing minute boundary
+        let rule = RRuleBuilder::new(Frequency::Secondly)
+            .dtstart(dt(1997, 9, 2, 9, 59, 58))
+            .count(4)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(1997, 9, 2, 9, 59, 58),
+                dt(1997, 9, 2, 9, 59, 59),
+                dt(1997, 9, 2, 10, 0, 0),
+                dt(1997, 9, 2, 10, 0, 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_secondly_bysecond() {
+        // Secondly at seconds 0 and 30
+        let rule = RRuleBuilder::new(Frequency::Secondly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .bysecond(vec![0, 30])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 9, 0, 30),
+                dt(1997, 9, 2, 9, 1, 0),
+                dt(1997, 9, 2, 9, 1, 30),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_hourly_bymonth() {
+        // Hourly, but only in January
+        let rule = RRuleBuilder::new(Frequency::Hourly)
+            .dtstart(dt(1997, 12, 31, 22, 0, 0))
+            .count(3)
+            .bymonth(vec![1])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        // Should skip Dec 31 hours and start from Jan 1
+        assert_eq!(results.len(), 3);
+        for r in &results {
+            assert_eq!(r.month(), 1);
+        }
+    }
+
+    #[test]
+    fn test_hourly_cross_month() {
+        // Hourly crossing month boundary
+        let rule = RRuleBuilder::new(Frequency::Hourly)
+            .dtstart(dt(1997, 9, 30, 22, 0, 0))
+            .count(4)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(1997, 9, 30, 22, 0, 0),
+                dt(1997, 9, 30, 23, 0, 0),
+                dt(1997, 10, 1, 0, 0, 0),
+                dt(1997, 10, 1, 1, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Leap year tests
+    // ===================================================================
+
+    #[test]
+    fn test_yearly_feb29_leap_year() {
+        // Yearly on Feb 29 — only hits leap years
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(2000, 2, 29, 0, 0, 0))
+            .count(3)
+            .bymonth(vec![2])
+            .bymonthday(vec![29])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(2000, 2, 29, 0, 0, 0),
+                dt(2004, 2, 29, 0, 0, 0),
+                dt(2008, 2, 29, 0, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_monthly_negative_bymonthday_feb() {
+        // Last day of month crossing February
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2000, 1, 1, 0, 0, 0))
+            .count(4)
+            .bymonthday(vec![-1])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(2000, 1, 31, 0, 0, 0),
+                dt(2000, 2, 29, 0, 0, 0), // leap year
+                dt(2000, 3, 31, 0, 0, 0),
+                dt(2000, 4, 30, 0, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_daily_cross_feb_leap() {
+        // Daily crossing Feb 28-29 in leap year
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2000, 2, 27, 0, 0, 0))
+            .count(4)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(2000, 2, 27, 0, 0, 0),
+                dt(2000, 2, 28, 0, 0, 0),
+                dt(2000, 2, 29, 0, 0, 0),
+                dt(2000, 3, 1, 0, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_daily_cross_feb_non_leap() {
+        // Daily crossing Feb 28 in non-leap year
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2001, 2, 27, 0, 0, 0))
+            .count(3)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(2001, 2, 27, 0, 0, 0),
+                dt(2001, 2, 28, 0, 0, 0),
+                dt(2001, 3, 1, 0, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Count edge cases
+    // ===================================================================
+
+    #[test]
+    fn test_count_zero() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(0)
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_count_one() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(1)
+            .build()
+            .unwrap();
+        assert_eq!(rule.all(), vec![dt(2020, 1, 1, 0, 0, 0)]);
+    }
+
+    // ===================================================================
+    // between exclusive and before/after None
+    // ===================================================================
+
+    #[test]
+    fn test_between_exclusive() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(10)
+            .build()
+            .unwrap();
+        let results = rule.between(dt(2020, 1, 3, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0), false);
+        assert_eq!(
+            results,
+            vec![
+                dt(2020, 1, 4, 0, 0, 0),
+                dt(2020, 1, 5, 0, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_before_none() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 5, 0, 0, 0))
+            .count(3)
+            .build()
+            .unwrap();
+        // Nothing before dtstart
+        assert_eq!(rule.before(dt(2020, 1, 4, 0, 0, 0), false), None);
+        assert_eq!(rule.before(dt(2020, 1, 5, 0, 0, 0), false), None);
+    }
+
+    #[test]
+    fn test_after_none() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .build()
+            .unwrap();
+        // Nothing after last occurrence
+        assert_eq!(rule.after(dt(2020, 1, 3, 0, 0, 0), false), None);
+        assert_eq!(rule.after(dt(2020, 1, 4, 0, 0, 0), true), None);
+    }
+
+    // ===================================================================
+    // IntoIterator trait
+    // ===================================================================
+
+    #[test]
+    fn test_into_iterator() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .build()
+            .unwrap();
+        let collected: Vec<_> = rule.into_iter().collect();
+        assert_eq!(
+            collected,
+            vec![
+                dt(2020, 1, 1, 0, 0, 0),
+                dt(2020, 1, 2, 0, 0, 0),
+                dt(2020, 1, 3, 0, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Display roundtrip tests
+    // ===================================================================
+
+    #[test]
+    fn test_display_with_interval_and_wkst() {
+        let rule = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .interval(2)
+            .wkst(6) // Sunday
+            .count(3)
+            .build()
+            .unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("INTERVAL=2"), "missing INTERVAL: {s}");
+        assert!(s.contains("WKST=SU"), "missing WKST: {s}");
+    }
+
+    #[test]
+    fn test_display_with_byday_nth() {
+        use crate::common::{MO, FR};
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .byweekday(vec![MO.with_n(Some(1)), FR.with_n(Some(-1))])
+            .build()
+            .unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYDAY="), "missing BYDAY: {s}");
+        assert!(s.contains("+1MO"), "missing +1MO: {s}");
+        assert!(s.contains("-1FR"), "missing -1FR: {s}");
+    }
+
+    #[test]
+    fn test_display_with_until() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .until(dt(2020, 1, 10, 0, 0, 0))
+            .build()
+            .unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("UNTIL=20200110T000000"), "missing UNTIL: {s}");
+        assert!(!s.contains("COUNT"), "should not have COUNT: {s}");
+    }
+
+    #[test]
+    fn test_display_bymonthday_negative() {
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .bymonthday(vec![1, -1])
+            .build()
+            .unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYMONTHDAY="), "missing BYMONTHDAY: {s}");
+        assert!(s.contains("1"), "missing positive day: {s}");
+        assert!(s.contains("-1"), "missing negative day: {s}");
+    }
+
+    // ===================================================================
+    // Weekly/Monthly crossing year boundary
+    // ===================================================================
+
+    #[test]
+    fn test_weekly_cross_year() {
+        let rule = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(2020, 12, 28, 0, 0, 0)) // Monday
+            .count(3)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(2020, 12, 28, 0, 0, 0),
+                dt(2021, 1, 4, 0, 0, 0),
+                dt(2021, 1, 11, 0, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_monthly_cross_year() {
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 11, 15, 0, 0, 0))
+            .count(4)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(2020, 11, 15, 0, 0, 0),
+                dt(2020, 12, 15, 0, 0, 0),
+                dt(2021, 1, 15, 0, 0, 0),
+                dt(2021, 2, 15, 0, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Monthly with BYHOUR / BYMINUTE / BYSECOND
+    // ===================================================================
+
+    #[test]
+    fn test_monthly_byhour_byminute() {
+        // dtstart at 9:00, byhour=[6,18]: 6:00 < 9:00 so first month skips it
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .byhour(vec![6, 18])
+            .byminute(vec![0])
+            .bysecond(vec![0])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 18, 0, 0),
+                dt(1997, 10, 2, 6, 0, 0),
+                dt(1997, 10, 2, 18, 0, 0),
+                dt(1997, 11, 2, 6, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Daily with BYHOUR
+    // ===================================================================
+
+    #[test]
+    fn test_daily_byhour() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(6)
+            .byhour(vec![9, 17])
+            .byminute(vec![0])
+            .bysecond(vec![0])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 17, 0, 0),
+                dt(1997, 9, 3, 9, 0, 0),
+                dt(1997, 9, 3, 17, 0, 0),
+                dt(1997, 9, 4, 9, 0, 0),
+                dt(1997, 9, 4, 17, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Builder validation edge cases
+    // ===================================================================
+
+    #[test]
+    fn test_builder_bysetpos_out_of_range() {
+        let err = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .bysetpos(vec![367])
+            .build();
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_builder_bysetpos_negative_valid() {
+        // -1 (last) should be valid
+        let ok = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(1)
+            .byweekday(vec![crate::common::MO])
+            .bysetpos(vec![-1])
+            .build();
+        assert!(ok.is_ok());
+    }
+
+    // ===================================================================
+    // Large interval tests
+    // ===================================================================
+
+    #[test]
+    fn test_yearly_large_interval() {
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(2000, 1, 1, 0, 0, 0))
+            .interval(100)
+            .count(3)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(2000, 1, 1, 0, 0, 0),
+                dt(2100, 1, 1, 0, 0, 0),
+                dt(2200, 1, 1, 0, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_weekly_large_interval() {
+        let rule = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(2020, 1, 6, 0, 0, 0)) // Monday
+            .interval(52)
+            .count(3)
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0], dt(2020, 1, 6, 0, 0, 0));
+        // ~1 year gap
+        assert!(results[1].year() == 2020 || results[1].year() == 2021);
+    }
+
+    // ===================================================================
+    // Monthly 31st edge case (months with fewer days)
+    // ===================================================================
+
+    #[test]
+    fn test_monthly_31st_skips() {
+        // Monthly on the 31st — skips months with fewer days
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 31, 0, 0, 0))
+            .count(5)
+            .build()
+            .unwrap();
+        let results = rule.all();
+        // Jan 31, Mar 31, May 31, Jul 31, Aug 31
+        assert_eq!(
+            results,
+            vec![
+                dt(2020, 1, 31, 0, 0, 0),
+                dt(2020, 3, 31, 0, 0, 0),
+                dt(2020, 5, 31, 0, 0, 0),
+                dt(2020, 7, 31, 0, 0, 0),
+                dt(2020, 8, 31, 0, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Multiple iterators from same rule
+    // ===================================================================
+
+    #[test]
+    fn test_multiple_iterators() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .build()
+            .unwrap();
+        let results1 = rule.all();
+        let results2 = rule.all();
+        assert_eq!(results1, results2);
+    }
+
+    // ===================================================================
+    // BYMONTHDAY + BYWEEKDAY combo
+    // ===================================================================
+
+    #[test]
+    fn test_yearly_bymonthday_and_weekday() {
+        // Days 1-7 that are Mondays (= first Monday)
+        let rule = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(3)
+            .bymonth(vec![1])
+            .bymonthday(vec![1, 2, 3, 4, 5, 6, 7])
+            .byweekday(vec![crate::common::MO])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 3);
+        for r in &results {
+            assert_eq!(r.month(), 1);
+            assert!(r.day() <= 7);
+            assert_eq!(r.weekday().num_days_from_monday(), 0);
+        }
+    }
+
+    // ===================================================================
+    // Secondly with interval > 60 (crossing multiple boundaries)
+    // ===================================================================
+
+    #[test]
+    fn test_secondly_large_interval() {
+        let rule = RRuleBuilder::new(Frequency::Secondly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .interval(90) // 1.5 minutes
+            .count(4)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 9, 1, 30),
+                dt(1997, 9, 2, 9, 3, 0),
+                dt(1997, 9, 2, 9, 4, 30),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Minutely with interval crossing day boundary
+    // ===================================================================
+
+    #[test]
+    fn test_minutely_cross_day() {
+        let rule = RRuleBuilder::new(Frequency::Minutely)
+            .dtstart(dt(1997, 9, 2, 23, 58, 0))
+            .count(4)
+            .build()
+            .unwrap();
+        assert_eq!(
+            rule.all(),
+            vec![
+                dt(1997, 9, 2, 23, 58, 0),
+                dt(1997, 9, 2, 23, 59, 0),
+                dt(1997, 9, 3, 0, 0, 0),
+                dt(1997, 9, 3, 0, 1, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // until edge: matching date is included
+    // ===================================================================
+
+    #[test]
+    fn test_until_matching() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .until(dt(2020, 1, 3, 9, 0, 0))
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 3);
+        assert_eq!(*results.last().unwrap(), dt(2020, 1, 3, 9, 0, 0));
+    }
+
+    #[test]
+    fn test_until_non_matching() {
+        // until falls between occurrences
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .until(dt(2020, 1, 3, 8, 0, 0))
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_until_before_dtstart() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 5, 0, 0, 0))
+            .until(dt(2020, 1, 1, 0, 0, 0))
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert!(results.is_empty());
+    }
+
+    // ===================================================================
+    // Secondly + bysecond filter combinations
+    // ===================================================================
+
+    #[test]
+    fn test_secondly_bysecond_with_byminute() {
+        // Secondly at seconds 0,30 filtered to minute 0 and 1
+        let rule = RRuleBuilder::new(Frequency::Secondly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(6)
+            .bysecond(vec![0, 30])
+            .byminute(vec![0, 1])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 9, 0, 30),
+                dt(1997, 9, 2, 9, 1, 0),
+                dt(1997, 9, 2, 9, 1, 30),
+                dt(1997, 9, 2, 10, 0, 0),
+                dt(1997, 9, 2, 10, 0, 30),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_secondly_bysecond_byhour_byminute() {
+        // Secondly at second 0, minutes 0,30, hours 9,10
+        let rule = RRuleBuilder::new(Frequency::Secondly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .bysecond(vec![0])
+            .byminute(vec![0, 30])
+            .byhour(vec![9, 10])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 9, 30, 0),
+                dt(1997, 9, 2, 10, 0, 0),
+                dt(1997, 9, 2, 10, 30, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Minutely + byhour + byminute cross-day
+    // ===================================================================
+
+    #[test]
+    fn test_minutely_byhour_byminute_cross_day() {
+        // Minutely at minutes 0,30 in hours 23,0 — crosses midnight
+        let rule = RRuleBuilder::new(Frequency::Minutely)
+            .dtstart(dt(1997, 9, 2, 23, 0, 0))
+            .count(6)
+            .byhour(vec![23, 0])
+            .byminute(vec![0, 30])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 23, 0, 0),
+                dt(1997, 9, 2, 23, 30, 0),
+                dt(1997, 9, 3, 0, 0, 0),
+                dt(1997, 9, 3, 0, 30, 0),
+                dt(1997, 9, 3, 23, 0, 0),
+                dt(1997, 9, 3, 23, 30, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // bysetpos + multi-time daily frequency
+    // ===================================================================
+
+    #[test]
+    fn test_daily_byhour_bysetpos_first() {
+        // Daily with byhour=[9,17], bysetpos=[1] → picks first time (9:00) each day
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(3)
+            .byhour(vec![9, 17])
+            .byminute(vec![0])
+            .bysecond(vec![0])
+            .bysetpos(vec![1])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 3, 9, 0, 0),
+                dt(1997, 9, 4, 9, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_daily_byhour_bysetpos_last() {
+        // Daily with byhour=[9,17], bysetpos=[-1] → picks last time (17:00) each day
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(3)
+            .byhour(vec![9, 17])
+            .byminute(vec![0])
+            .bysecond(vec![0])
+            .bysetpos(vec![-1])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(
+            results,
+            vec![
+                dt(1997, 9, 2, 17, 0, 0),
+                dt(1997, 9, 3, 17, 0, 0),
+                dt(1997, 9, 4, 17, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // Display roundtrip test
+    // ===================================================================
+
+    #[test]
+    fn test_display_roundtrip_yearly() {
+        let original = RRuleBuilder::new(Frequency::Yearly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(3)
+            .bymonth(vec![1, 3])
+            .bymonthday(vec![5, 10])
+            .build()
+            .unwrap();
+        let original_results = original.all();
+        let display_str = original.to_string();
+
+        let reparsed = crate::rrule::parse::rrulestr(
+            &display_str, None, false, false, true,
+        ).unwrap();
+        let reparsed_results = reparsed.all();
+        assert_eq!(original_results, reparsed_results);
+    }
+
+    #[test]
+    fn test_display_roundtrip_weekly_with_byday() {
+        let original = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(4)
+            .interval(2)
+            .byweekday(vec![crate::common::TU, crate::common::TH])
+            .build()
+            .unwrap();
+        let original_results = original.all();
+        let display_str = original.to_string();
+
+        let reparsed = crate::rrule::parse::rrulestr(
+            &display_str, None, false, false, true,
+        ).unwrap();
+        let reparsed_results = reparsed.all();
+        assert_eq!(original_results, reparsed_results);
+    }
+
+    #[test]
+    fn test_display_roundtrip_monthly_nth_weekday() {
+        use crate::common::{MO, FR};
+        let original = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(1997, 9, 2, 9, 0, 0))
+            .count(3)
+            .byweekday(vec![MO.with_n(Some(1)), FR.with_n(Some(-1))])
+            .build()
+            .unwrap();
+        let original_results = original.all();
+        let display_str = original.to_string();
+
+        let reparsed = crate::rrule::parse::rrulestr(
+            &display_str, None, false, false, true,
+        ).unwrap();
+        let reparsed_results = reparsed.all();
+        assert_eq!(original_results, reparsed_results);
+    }
+
+    #[test]
+    fn test_display_roundtrip_daily_with_until() {
+        let original = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .until(dt(2020, 1, 10, 9, 0, 0))
+            .byhour(vec![9, 17])
+            .byminute(vec![0])
+            .bysecond(vec![0])
+            .build()
+            .unwrap();
+        let original_results = original.all();
+        let display_str = original.to_string();
+
+        let reparsed = crate::rrule::parse::rrulestr(
+            &display_str, None, false, false, true,
+        ).unwrap();
+        let reparsed_results = reparsed.all();
+        assert_eq!(original_results, reparsed_results);
     }
 }

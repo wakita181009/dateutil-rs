@@ -1,5 +1,7 @@
 //! RFC 5545 RRULE string parsing.
 
+use std::borrow::Cow;
+
 use chrono::{NaiveDate, NaiveDateTime};
 use phf::phf_map;
 
@@ -47,44 +49,44 @@ pub fn rrulestr(
     let forceset = forceset || compatible;
     let unfold = unfold || compatible;
 
-    let s_upper = s.to_uppercase();
-    if s_upper.trim().is_empty() {
+    if s.trim().is_empty() {
         return Err(RRuleError::ValueError("empty string".into()));
     }
 
-    let lines: Vec<String> = if unfold {
-        let raw_lines: Vec<&str> = s_upper.lines().collect();
-        let mut result: Vec<String> = Vec::new();
-        for line in raw_lines {
+    let lines: Vec<Cow<'_, str>> = if unfold {
+        let mut result: Vec<Cow<'_, str>> = Vec::new();
+        for line in s.lines() {
             let line = line.trim_end();
             if line.is_empty() {
                 continue;
             }
             if line.starts_with(' ') && !result.is_empty() {
-                let last = result.last_mut().unwrap();
-                last.push_str(&line[1..]);
+                result.last_mut().unwrap().to_mut().push_str(&line[1..]);
             } else {
-                result.push(line.to_string());
+                result.push(Cow::Borrowed(line));
             }
         }
         result
     } else {
-        s_upper.split_whitespace().map(|s| s.to_string()).collect()
+        s.split_whitespace().map(Cow::Borrowed).collect()
     };
 
     // Simple case: single RRULE line
     if !forceset
         && lines.len() == 1
-        && (!lines[0].contains(':') || lines[0].starts_with("RRULE:"))
+        && (!lines[0].contains(':')
+            || lines[0]
+                .get(..6)
+                .is_some_and(|p| p.eq_ignore_ascii_case("RRULE:")))
     {
         let rule = parse_rfc_rrule(&lines[0], dtstart)?;
         return Ok(RRuleStrResult::Single(Box::new(rule)));
     }
 
     // Complex case: parse as rruleset
-    let mut rrulevals: Vec<String> = Vec::new();
-    let mut rdatevals: Vec<String> = Vec::new();
-    let mut exrulevals: Vec<String> = Vec::new();
+    let mut rrulevals: Vec<&str> = Vec::new();
+    let mut rdatevals: Vec<&str> = Vec::new();
+    let mut exrulevals: Vec<&str> = Vec::new();
     let mut exdatevals: Vec<NaiveDateTime> = Vec::new();
     let mut dtstart = dtstart;
 
@@ -92,36 +94,34 @@ pub fn rrulestr(
         if line.is_empty() {
             continue;
         }
-        let (name, value) = if let Some(idx) = line.find(':') {
-            (line[..idx].to_string(), line[idx + 1..].to_string())
+        let (name_part, value) = if let Some(idx) = line.find(':') {
+            (&line[..idx], &line[idx + 1..])
         } else {
-            ("RRULE".to_string(), line.clone())
+            ("RRULE", line.as_ref())
         };
 
-        let parms: Vec<&str> = name.split(';').collect();
-        let name = parms[0];
+        let prop = name_part.split(';').next().unwrap_or(name_part);
 
-        match name {
-            "RRULE" => rrulevals.push(value),
-            "RDATE" => rdatevals.push(value),
-            "EXRULE" => exrulevals.push(value),
-            "EXDATE" => {
-                for datestr in value.split(',') {
-                    if let Some(dt) = parse_rfc_datetime(datestr.trim()) {
-                        exdatevals.push(dt);
-                    }
+        if prop.eq_ignore_ascii_case("RRULE") {
+            rrulevals.push(value);
+        } else if prop.eq_ignore_ascii_case("RDATE") {
+            rdatevals.push(value);
+        } else if prop.eq_ignore_ascii_case("EXRULE") {
+            exrulevals.push(value);
+        } else if prop.eq_ignore_ascii_case("EXDATE") {
+            for datestr in value.split(',') {
+                if let Some(dt) = parse_rfc_datetime(datestr.trim()) {
+                    exdatevals.push(dt);
                 }
             }
-            "DTSTART" => {
-                if let Some(dt) = parse_rfc_datetime(&value) {
-                    dtstart = Some(dt);
-                }
+        } else if prop.eq_ignore_ascii_case("DTSTART") {
+            if let Some(dt) = parse_rfc_datetime(value) {
+                dtstart = Some(dt);
             }
-            _ => {
-                return Err(RRuleError::ValueError(
-                    format!("unsupported property: {name}").into(),
-                ));
-            }
+        } else {
+            return Err(RRuleError::ValueError(
+                format!("unsupported property: {prop}").into(),
+            ));
         }
     }
 
@@ -157,7 +157,7 @@ pub fn rrulestr(
         }
         Ok(RRuleStrResult::Set(rset))
     } else if !rrulevals.is_empty() {
-        let rule = parse_rfc_rrule(&rrulevals[0], dtstart)?;
+        let rule = parse_rfc_rrule(rrulevals[0], dtstart)?;
         Ok(RRuleStrResult::Single(Box::new(rule)))
     } else {
         Err(RRuleError::ValueError("no RRULE found".into()))
@@ -188,7 +188,7 @@ fn parse_rfc_rrule(
     dtstart: Option<NaiveDateTime>,
 ) -> Result<RRule, RRuleError> {
     let value = if let Some((name, val)) = line.split_once(':') {
-        if name != "RRULE" {
+        if !name.eq_ignore_ascii_case("RRULE") {
             return Err(RRuleError::ValueError(
                 format!("unknown parameter name: {name}").into(),
             ));
@@ -215,15 +215,17 @@ fn parse_rfc_rrule(
     let mut bysecond: Option<Vec<u8>> = None;
 
     for pair in value.split(';') {
-        let (name, val) = pair.split_once('=').ok_or_else(|| {
+        let (raw_name, val) = pair.split_once('=').ok_or_else(|| {
             RRuleError::ValueError(format!("invalid RRULE parameter: {pair}").into())
         })?;
+        let name = raw_name.to_ascii_uppercase();
 
-        match name {
+        match name.as_str() {
             "FREQ" => {
+                let val_upper = val.to_ascii_uppercase();
                 freq = Some(
                     FREQ_MAP
-                        .get(val)
+                        .get(val_upper.as_str())
                         .copied()
                         .ok_or_else(|| RRuleError::InvalidFrequency(val.into()))?,
                 );
@@ -356,8 +358,9 @@ fn parse_int_list(s: &str) -> Result<Vec<i32>, RRuleError> {
 }
 
 fn parse_weekday_name(s: &str) -> Result<u8, RRuleError> {
+    let upper = s.to_ascii_uppercase();
     WDAY_MAP
-        .get(s)
+        .get(upper.as_str())
         .copied()
         .ok_or_else(|| RRuleError::ValueError(format!("invalid weekday: {s}").into()))
 }
@@ -407,8 +410,8 @@ fn parse_weekday_list(s: &str) -> Result<Vec<Weekday>, RRuleError> {
 
 /// Parse a datetime in RFC 5545 format: YYYYMMDD or YYYYMMDDTHHmmSS
 pub fn parse_rfc_datetime(s: &str) -> Option<NaiveDateTime> {
-    let s = s.trim().trim_end_matches('Z');
-    if s.len() == 15 && s.as_bytes().get(8) == Some(&b'T') {
+    let s = s.trim().trim_end_matches(['Z', 'z']);
+    if s.len() == 15 && s.as_bytes().get(8).is_some_and(|&b| b == b'T' || b == b't') {
         let year = s[0..4].parse::<i32>().ok()?;
         let month = s[4..6].parse::<u32>().ok()?;
         let day = s[6..8].parse::<u32>().ok()?;
@@ -429,7 +432,7 @@ pub fn parse_rfc_datetime(s: &str) -> Option<NaiveDateTime> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
+    use chrono::{Datelike, NaiveDate};
 
     fn dt(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTime {
         NaiveDate::from_ymd_opt(y, m, d)
@@ -577,5 +580,531 @@ mod tests {
                 dt(1997, 9, 11, 9, 0, 0),
             ]
         );
+    }
+
+    // ===================================================================
+    // rrulestr with EXDATE
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_exdate() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=5\nEXDATE:20200103T000000",
+            None,
+            false,
+            false,
+            true,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(
+            all,
+            vec![
+                dt(2020, 1, 1, 0, 0, 0),
+                dt(2020, 1, 2, 0, 0, 0),
+                dt(2020, 1, 4, 0, 0, 0),
+                dt(2020, 1, 5, 0, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_rrulestr_exdate_multiple() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=5\nEXDATE:20200102T000000,20200104T000000",
+            None,
+            false,
+            false,
+            true,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(
+            all,
+            vec![
+                dt(2020, 1, 1, 0, 0, 0),
+                dt(2020, 1, 3, 0, 0, 0),
+                dt(2020, 1, 5, 0, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // rrulestr with RDATE
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_rdate() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=3\nRDATE:20200110T000000",
+            None,
+            false,
+            false,
+            true,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(
+            all,
+            vec![
+                dt(2020, 1, 1, 0, 0, 0),
+                dt(2020, 1, 2, 0, 0, 0),
+                dt(2020, 1, 3, 0, 0, 0),
+                dt(2020, 1, 10, 0, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_rrulestr_rdate_multiple() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRDATE:20200115T000000,20200105T000000",
+            None,
+            true,
+            false,
+            true,
+        )
+        .unwrap();
+        let all = result.all();
+        // Should be sorted
+        assert_eq!(
+            all,
+            vec![
+                dt(2020, 1, 5, 0, 0, 0),
+                dt(2020, 1, 15, 0, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // rrulestr with EXRULE
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_exrule() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;COUNT=6\nEXRULE:FREQ=DAILY;INTERVAL=2;COUNT=3",
+            None,
+            false,
+            false,
+            true,
+        )
+        .unwrap();
+        let all = result.all();
+        // Daily: 1,2,3,4,5,6; Exrule excludes 1,3,5
+        assert_eq!(
+            all,
+            vec![
+                dt(2020, 1, 2, 0, 0, 0),
+                dt(2020, 1, 4, 0, 0, 0),
+                dt(2020, 1, 6, 0, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // rrulestr compatible mode
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_compatible() {
+        // compatible = true means forceset + unfold + dtstart added as rdate
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=YEARLY;COUNT=2",
+            None,
+            false,
+            true, // compatible
+            false,
+        )
+        .unwrap();
+        assert!(matches!(result, RRuleStrResult::Set(_)));
+        let all = result.all();
+        // dtstart is added as rdate, but dedup should handle it
+        assert!(all.contains(&dt(2020, 1, 1, 0, 0, 0)));
+    }
+
+    // ===================================================================
+    // rrulestr with multiple RRULE lines
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_multiple_rrules() {
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=YEARLY;COUNT=3\nRRULE:FREQ=MONTHLY;COUNT=3;BYMONTHDAY=15",
+            None,
+            false,
+            false,
+            true,
+        )
+        .unwrap();
+        assert!(matches!(result, RRuleStrResult::Set(_)));
+        let all = result.all();
+        // Should have results from both rules, merged and sorted
+        assert!(!all.is_empty());
+        // Check sorting
+        for w in all.windows(2) {
+            assert!(w[0] <= w[1], "results should be sorted");
+        }
+    }
+
+    // ===================================================================
+    // rrulestr unfold (line continuation)
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_unfold() {
+        // RFC 5545 line folding: continuation lines start with space
+        let result = rrulestr(
+            "DTSTART:20200101T000000\nRRULE:FREQ=YEARLY\n ;COUNT=3",
+            None,
+            false,
+            false,
+            true, // unfold enabled
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(all.len(), 3);
+    }
+
+    // ===================================================================
+    // Case insensitivity
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_case_insensitive() {
+        let result = rrulestr(
+            "freq=daily;count=3",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(all.len(), 3);
+    }
+
+    // ===================================================================
+    // Error cases
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_missing_freq() {
+        let err = rrulestr(
+            "COUNT=3",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_invalid_freq() {
+        let err = rrulestr(
+            "FREQ=BIWEEKLY;COUNT=3",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_invalid_interval() {
+        let err = rrulestr(
+            "FREQ=DAILY;INTERVAL=abc;COUNT=3",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_invalid_count() {
+        let err = rrulestr(
+            "FREQ=DAILY;COUNT=abc",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_invalid_until() {
+        let err = rrulestr(
+            "FREQ=DAILY;UNTIL=notadate",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_unknown_property() {
+        let err = rrulestr(
+            "VTODO:something\nRRULE:FREQ=DAILY;COUNT=3",
+            None,
+            false,
+            false,
+            true,
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_unknown_parameter() {
+        let err = rrulestr(
+            "FREQ=DAILY;COUNT=3;FOOBAR=123",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_whitespace_only() {
+        assert!(rrulestr("   ", None, false, false, false).is_err());
+    }
+
+    // ===================================================================
+    // rrulestr with all byxxx parameters
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_with_bymonth() {
+        let result = rrulestr(
+            "FREQ=YEARLY;COUNT=4;BYMONTH=1,3;BYMONTHDAY=1",
+            Some(dt(1997, 9, 2, 9, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(all.len(), 4);
+        for r in &all {
+            assert!(r.month() == 1 || r.month() == 3);
+            assert_eq!(r.day(), 1);
+        }
+    }
+
+    #[test]
+    fn test_rrulestr_with_bysetpos() {
+        let result = rrulestr(
+            "FREQ=MONTHLY;COUNT=3;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1",
+            Some(dt(1997, 9, 2, 9, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(all.len(), 3);
+        // Last workday of each month
+    }
+
+    #[test]
+    fn test_rrulestr_with_byhour_byminute_bysecond() {
+        let result = rrulestr(
+            "FREQ=DAILY;COUNT=2;BYHOUR=9,17;BYMINUTE=0;BYSECOND=0",
+            Some(dt(1997, 9, 2, 9, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(
+            all,
+            vec![
+                dt(1997, 9, 2, 9, 0, 0),
+                dt(1997, 9, 2, 17, 0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_rrulestr_with_byyearday() {
+        let result = rrulestr(
+            "FREQ=YEARLY;COUNT=3;BYYEARDAY=1,100,200",
+            Some(dt(1997, 9, 2, 9, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(all.len(), 3);
+    }
+
+    #[test]
+    fn test_rrulestr_with_byweekno() {
+        let result = rrulestr(
+            "FREQ=YEARLY;COUNT=3;BYWEEKNO=20;BYDAY=MO",
+            Some(dt(1997, 9, 2, 9, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(all.len(), 3);
+    }
+
+    #[test]
+    fn test_rrulestr_with_wkst() {
+        let result = rrulestr(
+            "FREQ=WEEKLY;COUNT=3;WKST=SU",
+            Some(dt(1997, 9, 2, 9, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(all.len(), 3);
+    }
+
+    #[test]
+    fn test_rrulestr_with_byeaster() {
+        let result = rrulestr(
+            "FREQ=YEARLY;COUNT=3;BYEASTER=0",
+            Some(dt(1997, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(
+            all,
+            vec![
+                dt(1997, 3, 30, 0, 0, 0),
+                dt(1998, 4, 12, 0, 0, 0),
+                dt(1999, 4, 4, 0, 0, 0),
+            ]
+        );
+    }
+
+    // ===================================================================
+    // parse_rfc_datetime edge cases
+    // ===================================================================
+
+    #[test]
+    fn test_parse_rfc_datetime_edge_cases() {
+        // Too short
+        assert_eq!(parse_rfc_datetime("2020"), None);
+        // Wrong separator
+        assert_eq!(parse_rfc_datetime("20200101X090000"), None);
+        // Invalid month
+        assert_eq!(parse_rfc_datetime("20201301"), None);
+        // Invalid day
+        assert_eq!(parse_rfc_datetime("20200132"), None);
+    }
+
+    // ===================================================================
+    // parse_weekday_list edge cases
+    // ===================================================================
+
+    #[test]
+    fn test_parse_weekday_list_empty() {
+        assert!(parse_weekday_list("").is_err());
+    }
+
+    #[test]
+    fn test_parse_weekday_list_invalid_day() {
+        assert!(parse_weekday_list("XX").is_err());
+    }
+
+    #[test]
+    fn test_parse_weekday_list_mixed_valid() {
+        // Valid weekdays with and without N
+        let result = parse_weekday_list("MO,+2TU,-1FR,WE").unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0].weekday(), 0); // MO
+        assert_eq!(result[0].n(), None);
+        assert_eq!(result[1].weekday(), 1); // TU
+        assert_eq!(result[1].n(), Some(2));
+        assert_eq!(result[2].weekday(), 4); // FR
+        assert_eq!(result[2].n(), Some(-1));
+        assert_eq!(result[3].weekday(), 2); // WE
+        assert_eq!(result[3].n(), None);
+    }
+
+    // ===================================================================
+    // rrulestr with RRULE: prefix
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_with_rrule_prefix() {
+        let result = rrulestr(
+            "RRULE:FREQ=DAILY;COUNT=3",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let all = result.all();
+        assert_eq!(all.len(), 3);
+    }
+
+    // ===================================================================
+    // RRuleStrResult::all for both variants
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_result_all_single() {
+        let result = rrulestr(
+            "FREQ=DAILY;COUNT=2",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        assert!(matches!(result, RRuleStrResult::Single(_)));
+        assert_eq!(result.all().len(), 2);
+    }
+
+    #[test]
+    fn test_rrulestr_result_all_set() {
+        let result = rrulestr(
+            "FREQ=DAILY;COUNT=2",
+            Some(dt(2020, 1, 1, 0, 0, 0)),
+            true, // forceset
+            false,
+            false,
+        )
+        .unwrap();
+        assert!(matches!(result, RRuleStrResult::Set(_)));
+        assert_eq!(result.all().len(), 2);
+    }
+
+    // ===================================================================
+    // rrulestr no RRULE found
+    // ===================================================================
+
+    #[test]
+    fn test_rrulestr_no_rrule() {
+        let err = rrulestr(
+            "DTSTART:20200101T000000",
+            None,
+            false,
+            false,
+            true,
+        );
+        assert!(err.is_err());
     }
 }

@@ -308,18 +308,14 @@ impl IterInfo {
     fn day_passes_filter(&self, i: usize) -> bool {
         let rr = &self.rule;
 
-        if let Some(ref bm) = rr.bymonth {
-            if !bm.contains(&self.mmask[i]) {
-                return false;
-            }
+        if rr.bymonth_mask != 0 && (rr.bymonth_mask & (1u16 << self.mmask[i])) == 0 {
+            return false;
         }
         if rr.byweekno.is_some() && (!self.wnomask_active || self.wnomask_buf[i] == 0) {
             return false;
         }
-        if let Some(ref bw) = rr.byweekday {
-            if !bw.contains(&self.wdaymask[i]) {
-                return false;
-            }
+        if rr.byweekday_mask != 0 && (rr.byweekday_mask & (1u8 << self.wdaymask[i])) == 0 {
+            return false;
         }
         if rr.bynweekday.is_some()
             && self.nwdaymask_active
@@ -334,9 +330,9 @@ impl IterInfo {
         {
             return false;
         }
-        if (!rr.bymonthday.is_empty() || !rr.bynmonthday.is_empty())
-            && !rr.bymonthday.contains(&self.mdaymask[i])
-            && !rr.bynmonthday.contains(&self.nmdaymask[i])
+        if (rr.bymonthday_mask != 0 || rr.bynmonthday_mask != 0)
+            && (rr.bymonthday_mask & (1u32 << self.mdaymask[i] as u32)) == 0
+            && (rr.bynmonthday_mask & (1u32 << (-self.nmdaymask[i] - 1) as u32)) == 0
         {
             return false;
         }
