@@ -10,6 +10,7 @@ name = "dateutil_core"
 crate-type = ["rlib"]
 
 [dependencies]
+bitflags = "2"
 chrono = "0.4"
 phf = { version = "0.13", features = ["macros"] }
 smallvec = "1.15"

@@ -11,6 +11,8 @@ pub enum Error {
     RelativeDelta(#[from] RelativeDeltaError),
     #[error("{0}")]
     Parse(#[from] ParseError),
+    #[error("{0}")]
+    RRule(#[from] RRuleError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -41,6 +43,24 @@ pub enum ParseError {
     UnknownFormat(Box<str>),
     #[error("string does not contain a date: {0}")]
     NoDate(Box<str>),
+    #[error("{0}")]
+    ValueError(Box<str>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum RRuleError {
+    #[error("invalid bysetpos: must be between -366 and 366, excluding 0")]
+    InvalidBySetPos,
+    #[error("invalid frequency: {0}")]
+    InvalidFrequency(Box<str>),
+    #[error("FREQ is required")]
+    MissingFrequency,
+    #[error("invalid rrule byxxx generates an empty set")]
+    EmptyBySet,
+    #[error("invalid wkst: {0} (must be 0..=6)")]
+    InvalidWkst(u8),
+    #[error("invalid interval: must be >= 1")]
+    InvalidInterval,
     #[error("{0}")]
     ValueError(Box<str>),
 }
