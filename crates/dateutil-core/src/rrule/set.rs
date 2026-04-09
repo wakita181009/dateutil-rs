@@ -75,7 +75,7 @@ impl Default for RRuleSet {
 
 enum IterSource {
     Rule(Box<RRuleIter>),
-    Dates(std::vec::IntoIter<NaiveDateTime>),
+    Dates { data: Vec<NaiveDateTime>, cursor: usize },
 }
 
 impl IterSource {
@@ -83,7 +83,15 @@ impl IterSource {
     fn next(&mut self) -> Option<NaiveDateTime> {
         match self {
             IterSource::Rule(it) => it.next(),
-            IterSource::Dates(it) => it.next(),
+            IterSource::Dates { data, cursor } => {
+                if *cursor < data.len() {
+                    let dt = data[*cursor];
+                    *cursor += 1;
+                    Some(dt)
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -136,11 +144,12 @@ impl RRuleSetIter {
         let mut exheap = BinaryHeap::new();
 
         // Add rdate source (already sorted via sorted insert)
-        let mut rdate_iter = set.rdates.clone().into_iter();
-        if let Some(dt) = rdate_iter.next() {
+        if !set.rdates.is_empty() {
+            let data = set.rdates.clone();
+            let dt = data[0];
             rheap.push(HeapItem {
                 dt,
-                source: IterSource::Dates(rdate_iter),
+                source: IterSource::Dates { data, cursor: 1 },
             });
         }
 

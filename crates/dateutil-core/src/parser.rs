@@ -8,6 +8,28 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime};
 use std::borrow::Cow;
 
 // ---------------------------------------------------------------------------
+// Fast integer parse — hand-rolled for short ASCII digit strings
+// ---------------------------------------------------------------------------
+
+/// Fast integer parse for pure-digit ASCII strings (e.g. "2024", "01", "30").
+/// Returns None if the string contains non-digit bytes or is empty.
+#[inline]
+fn fast_parse_int(s: &str) -> Option<i32> {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut n: i32 = 0;
+    for &b in bytes {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        n = n * 10 + (b - b'0') as i32;
+    }
+    Some(n)
+}
+
+// ---------------------------------------------------------------------------
 // PHF lookup tables — compile-time perfect hash, zero runtime allocation
 // ---------------------------------------------------------------------------
 
@@ -326,9 +348,8 @@ impl Ymd {
 // Utility
 // ---------------------------------------------------------------------------
 
-fn convertyear(year: i32, century_specified: bool) -> i32 {
+fn convertyear(year: i32, century_specified: bool, now_year: i32) -> i32 {
     if year < 100 && !century_specified {
-        let now_year = chrono::Local::now().year();
         let century = now_year / 100 * 100;
         let mut y = year + century;
         if y >= now_year + 50 {
@@ -365,8 +386,9 @@ fn days_in_month(year: i32, month: u32) -> u32 {
 /// - Compile-time phf hash maps for token lookup
 /// - Stack-allocated buffers for lowercase conversion
 pub fn parse(timestr: &str, dayfirst: bool, yearfirst: bool) -> Result<NaiveDateTime, ParseError> {
-    let res = parse_to_result(timestr, dayfirst, yearfirst)?;
-    build_naive(timestr, &res)
+    let now = chrono::Local::now().naive_local();
+    let res = parse_to_result_inner(timestr, dayfirst, yearfirst, now)?;
+    build_naive(&res, now)
 }
 
 /// Parse returning the raw ParseResult (for advanced usage).
@@ -377,6 +399,16 @@ pub fn parse_to_result(
     timestr: &str,
     dayfirst: bool,
     yearfirst: bool,
+) -> Result<ParseResult<'_>, ParseError> {
+    let now = chrono::Local::now().naive_local();
+    parse_to_result_inner(timestr, dayfirst, yearfirst, now)
+}
+
+fn parse_to_result_inner(
+    timestr: &str,
+    dayfirst: bool,
+    yearfirst: bool,
+    now: NaiveDateTime,
 ) -> Result<ParseResult<'_>, ParseError> {
     let tokens = tokenizer::tokenize(timestr);
     let mut res = ParseResult::default();
@@ -405,7 +437,7 @@ pub fn parse_to_result(
     res.century_specified = ymd.century_specified;
 
     if let Some(y) = res.year {
-        res.year = Some(convertyear(y, res.century_specified));
+        res.year = Some(convertyear(y, res.century_specified, now.year()));
     }
 
     // UTC zone normalization
@@ -436,8 +468,8 @@ fn try_parse_token<'a>(
 ) -> usize {
     let token = &tokens[i];
 
-    // Try as number — integer first (fast path avoids expensive f64 parse)
-    let num: Option<(i32, f64)> = if let Ok(vi) = token.parse::<i32>() {
+    // Try as number — fast integer path first (byte-level, no heap)
+    let num: Option<(i32, f64)> = if let Some(vi) = fast_parse_int(token) {
         Some((vi, vi as f64))
     } else if let Ok(vf) = token.parse::<f64>() {
         Some((vf as i32, vf))
@@ -598,20 +630,25 @@ fn try_parse_time_component(
         res.hour = Some(value as u32);
         let mut consumed = 1; // the hour number
 
-        // Look for :MM
+        // Look for :MM — minutes are always integers, use fast path
         if i + 2 < len && tokens[i + 1] == ":" {
-            if let Ok(min) = tokens[i + 2].parse::<f64>() {
+            if let Some(min) = fast_parse_int(&tokens[i + 2]) {
                 res.minute = Some(min as u32);
                 consumed = 3; // hour + ":" + minute
-                // Look for :SS
+                // Look for :SS — seconds may have fractional part
                 if i + 4 < len && tokens[i + 3] == ":" {
-                    if let Ok(sec_str) = tokens[i + 4].parse::<f64>() {
-                        res.second = Some(sec_str as u32);
-                        let frac = sec_str - sec_str.floor();
+                    if let Some(sec) = fast_parse_int(&tokens[i + 4]) {
+                        // Pure integer seconds (fast path)
+                        res.second = Some(sec as u32);
+                        consumed = 5;
+                    } else if let Ok(sec_f) = tokens[i + 4].parse::<f64>() {
+                        // Fractional seconds (e.g. "45.123456")
+                        res.second = Some(sec_f as u32);
+                        let frac = sec_f - sec_f.floor();
                         if frac > 0.0 {
                             res.microsecond = Some((frac * 1_000_000.0).round() as u32);
                         }
-                        consumed = 5; // + ":" + second
+                        consumed = 5;
                     }
                 }
             }
@@ -677,9 +714,7 @@ fn parse_tzoffset(s: &str) -> Option<i32> {
     Some(sign * (hours * 3600 + minutes * 60))
 }
 
-fn build_naive(_timestr: &str, res: &ParseResult<'_>) -> Result<NaiveDateTime, ParseError> {
-    let now = chrono::Local::now().naive_local();
-
+fn build_naive(res: &ParseResult<'_>, now: NaiveDateTime) -> Result<NaiveDateTime, ParseError> {
     let year = res.year.unwrap_or(now.year());
     let month = res.month.unwrap_or(now.month());
     let day = res.day.unwrap_or(now.day());

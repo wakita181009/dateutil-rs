@@ -33,24 +33,28 @@ pub fn tokenize(s: &str) -> SmallVec<[Cow<'_, str>; 16]> {
             let start = pos;
             pos += 1;
             let mut has_dot = false;
+            let mut has_comma = false;
             while pos < len {
                 let c = bytes[pos];
                 if c.is_ascii_digit() {
                     pos += 1;
-                } else if c == b'.' || (c == b',' && pos - start >= 2) {
+                } else if c == b'.' {
                     has_dot = true;
+                    pos += 1;
+                } else if c == b',' && pos - start >= 2 {
+                    has_comma = true;
                     pos += 1;
                 } else {
                     break;
                 }
             }
             // Trim trailing dot/comma (sentence-ending punctuation, not decimal)
-            if has_dot && pos > start && (bytes[pos - 1] == b'.' || bytes[pos - 1] == b',') {
+            if (has_dot || has_comma) && pos > start && (bytes[pos - 1] == b'.' || bytes[pos - 1] == b',') {
                 pos -= 1;
             }
             let slice = &s[start..pos];
-            // Replace comma with dot for decimal numbers (e.g., "1,5" → "1.5")
-            if slice.contains(',') && !slice.contains('.') {
+            // Replace comma with dot for decimal numbers (e.g., "12,5" → "12.5")
+            if has_comma && !has_dot {
                 tokens.push(Cow::Owned(slice.replace(',', ".")));
             } else {
                 tokens.push(Cow::Borrowed(slice));

@@ -273,7 +273,7 @@ impl IterInfo {
     }
 
     /// Returns (start, end) range for the current frequency period.
-    fn period_range(&self, year: i32, month: u32, day: u32) -> (usize, usize) {
+    fn period_range(&self, _year: i32, month: u32, day: u32) -> (usize, usize) {
         match self.rule.freq {
             Frequency::Yearly => (0, self.yearlen as usize),
             Frequency::Monthly => {
@@ -282,8 +282,8 @@ impl IterInfo {
                 (start, end)
             }
             Frequency::Weekly => {
-                let date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
-                let i = (date.num_days_from_ce() - self.yearordinal) as usize;
+                // Compute day-of-year directly from mrange (avoids NaiveDate construction)
+                let i = self.mrange[month as usize - 1] + day as usize - 1;
                 let start = i;
                 let mut end = i;
                 for _ in 0..7 {
@@ -296,8 +296,7 @@ impl IterInfo {
             }
             _ => {
                 // Daily / Hourly / Minutely / Secondly
-                let date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
-                let i = (date.num_days_from_ce() - self.yearordinal) as usize;
+                let i = self.mrange[month as usize - 1] + day as usize - 1;
                 (i, i + 1)
             }
         }
@@ -560,7 +559,9 @@ impl RRuleIter {
             }
             _ => {}
         }
-        self.timeset_buf.sort();
+        if self.timeset_buf.len() > 1 && !self.timeset_buf.windows(2).all(|w| w[0] <= w[1]) {
+            self.timeset_buf.sort();
+        }
     }
 
     fn advance_period(&mut self) -> bool {
@@ -872,6 +873,16 @@ impl Iterator for RRuleIter {
             Some(result)
         } else {
             None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let buffered = self.result_buf.len() - self.result_idx;
+        if let Some(remaining) = self.remaining {
+            let upper = remaining as usize + buffered;
+            (buffered, Some(upper))
+        } else {
+            (buffered, None)
         }
     }
 }
