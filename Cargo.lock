@@ -245,6 +245,7 @@ version = "0.0.8"
 dependencies = [
  "chrono",
  "criterion",
+ "dateutil-py",
  "pyo3",
  "thiserror",
 ]

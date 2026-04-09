@@ -18,10 +18,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Cargo clippy
-        run: cargo clippy --manifest-path crates/dateutil-rs/Cargo.toml -- -D warnings
-      - name: Cargo test
-        run: cargo test --manifest-path crates/dateutil-rs/Cargo.toml
+      - name: Cargo clippy (workspace)
+        run: cargo clippy --workspace --all-features -- -D warnings
+      - name: Cargo test (workspace)
+        run: cargo test --workspace
 
   lint:
     runs-on: ubuntu-latest
@@ -58,8 +58,22 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev --python ${{ matrix.python-version }}
 
-      - name: Build Rust extension
+      - name: Build Rust extension (v0 + v1)
         run: uv run maturin develop --release
+
+      - name: Verify v0 and v1 imports
+        run: |
+          uv run python -c "
+          import dateutil_rs.easter; print('v0 easter OK')
+          import dateutil_rs.parser; print('v0 parser OK')
+          import dateutil_rs.relativedelta; print('v0 relativedelta OK')
+          import dateutil_rs.rrule; print('v0 rrule OK')
+          import dateutil_rs.tz; print('v0 tz OK')
+          import dateutil_rs.v1.easter; print('v1 easter OK')
+          import dateutil_rs.v1.parser; print('v1 parser OK')
+          import dateutil_rs.v1.relativedelta; print('v1 relativedelta OK')
+          import dateutil_rs.v1.rrule; print('v1 rrule OK')
+          "
 
       - name: Run tests via dateutil_rs
         run: >

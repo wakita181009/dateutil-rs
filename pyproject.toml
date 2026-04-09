@@ -21,7 +21,7 @@ dev = [
     "pytest-cov>=7.1",
     "pytest-benchmark>=5.2",
     "freezegun>=1.5",
-    "hypothesis>=6.0",
+    "hypothesis>=6.151",
     "maturin>=1.0",
 ]
 
@@ -31,7 +31,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 manifest-path = "crates/dateutil-rs/Cargo.toml"
-features = ["python"]
+features = ["python", "v1"]
 python-source = "python"
 module-name = "dateutil_rs._native"
 include = [

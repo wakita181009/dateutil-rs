@@ -14,6 +14,7 @@ crate-type = ["rlib"]
 chrono = "0.4"
 thiserror = "2"
 pyo3 = { version = "0.28", features = ["extension-module", "chrono"], optional = true }
+dateutil-py = { path = "../dateutil-py", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
@@ -25,3 +26,4 @@ harness = false
 [features]
 default = []
 python = ["pyo3"]
+v1 = ["dateutil-py/python"]

@@ -479,7 +479,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "freezegun", marker = "extra == 'dev'", specifier = ">=1.5" },
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
+    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.151" },
     { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0" },
     { name = "pytest-benchmark", marker = "extra == 'dev'", specifier = ">=5.2" },

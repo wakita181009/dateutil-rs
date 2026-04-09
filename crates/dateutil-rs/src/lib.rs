@@ -47,5 +47,16 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // RRule classes and functions
     rrule::python::register(m)?;
 
+    // v1 bindings (dateutil-core via dateutil-py)
+    #[cfg(feature = "v1")]
+    {
+        let py = m.py();
+        let v1 = PyModule::new(py, "_native")?;
+        dateutil_py::py::register_all(&v1)?;
+        // Register in sys.modules so `from dateutil_rs.v1._native import ...` works
+        let sys_modules = py.import("sys")?.getattr("modules")?;
+        sys_modules.set_item("dateutil_rs.v1._native", &v1)?;
+    }
+
     Ok(())
 }

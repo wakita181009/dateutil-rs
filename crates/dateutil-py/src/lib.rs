@@ -1,2 +1,2 @@
 #[cfg(feature = "python")]
-mod py;
+pub mod py;
