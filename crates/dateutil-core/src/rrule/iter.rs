@@ -339,15 +339,15 @@ impl IterInfo {
         if let Some(ref byd) = rr.byyearday {
             let ylen = self.yearlen as usize;
             if i < ylen {
-                if !byd.contains(&(i as i32 + 1))
-                    && !byd.contains(&(i as i32 - ylen as i32))
+                if !byd.has_pos((i + 1) as u32)
+                    && !byd.has_neg((ylen - i) as u32)
                 {
                     return false;
                 }
             } else {
                 let adj = i - ylen;
-                if !byd.contains(&(adj as i32 + 1))
-                    && !byd.contains(&(adj as i32 - self.nextyearlen as i32))
+                if !byd.has_pos((adj + 1) as u32)
+                    && !byd.has_neg((self.nextyearlen as usize - adj) as u32)
                 {
                     return false;
                 }
@@ -441,32 +441,29 @@ impl RRuleIter {
                 self.compute_sub_daily_timeset();
             }
 
-            // Build results — use split field borrows via free functions to
-            // avoid cloning timeset. The borrow checker allows simultaneous
-            // immut borrows on timeset_buf/day_buf and mut borrow on result_buf
-            // when passed as separate arguments to a free function.
+            // Build results — split field borrows let us pass immutable refs
+            // (day_buf, timeset_buf, ii.rule) and mutable refs (remaining,
+            // result_buf) into EmitCtx simultaneously without cloning.
             self.result_buf.clear();
             self.result_idx = 0;
 
-            if self.ii.rule.bysetpos.is_some() {
-                // bysetpos path: clone bysetpos + timeset (modest cost, rare path)
-                let bysetpos = self.ii.rule.bysetpos.clone().unwrap();
-                let timeset: SmallVec<[NaiveTime; 4]> = if is_sub_daily {
-                    self.timeset_buf.clone()
+            if let Some(bysetpos) = &self.ii.rule.bysetpos {
+                let timeset: &[NaiveTime] = if is_sub_daily {
+                    &self.timeset_buf
                 } else {
-                    self.ii.rule.timeset.clone().unwrap_or_default()
+                    self.ii.rule.timeset.as_deref().unwrap_or(&[])
                 };
                 if !timeset.is_empty() {
                     let mut ctx = EmitCtx {
                         day_buf: &self.day_buf,
-                        timeset: &timeset,
+                        timeset,
                         yearordinal: self.ii.yearordinal,
                         dtstart: self.ii.rule.dtstart,
                         until: self.ii.rule.until,
                         remaining: &mut self.remaining,
                         result_buf: &mut self.result_buf,
                     };
-                    self.finished = ctx.emit_bysetpos(&bysetpos);
+                    self.finished = ctx.emit_bysetpos(bysetpos);
                 }
             } else if is_sub_daily {
                 // Sub-daily: timeset in self.timeset_buf — split borrow via EmitCtx
@@ -792,6 +789,7 @@ impl EmitCtx<'_> {
     }
 
     /// Emit results from day_buf x timeset. Returns true if finished.
+    #[inline]
     fn emit_results(&mut self) -> bool {
         for &day_idx in self.day_buf {
             if let Some(date) =
@@ -808,6 +806,7 @@ impl EmitCtx<'_> {
     }
 
     /// Emit results with bysetpos filtering. Returns true if finished.
+    #[inline]
     fn emit_bysetpos(&mut self, bysetpos: &ByList<i32>) -> bool {
         let mut poslist: SmallVec<[NaiveDateTime; 8]> = SmallVec::new();
         let ts_len = self.timeset.len() as i32;
@@ -837,13 +836,11 @@ impl EmitCtx<'_> {
             if let Some(date) =
                 NaiveDate::from_num_days_from_ce_opt(self.yearordinal + i as i32)
             {
-                let res = NaiveDateTime::new(date, time);
-                if !poslist.contains(&res) {
-                    poslist.push(res);
-                }
+                poslist.push(NaiveDateTime::new(date, time));
             }
         }
-        poslist.sort();
+        poslist.sort_unstable();
+        poslist.dedup();
 
         for res in poslist {
             if self.push(res) {

@@ -133,6 +133,52 @@ impl fmt::Display for Frequency {
 /// Most rrules have 1-7 values per byxxx field. Inline capacity avoids heap.
 pub type ByList<T> = SmallVec<[T; 7]>;
 
+/// Pre-computed bitmask for O(1) byyearday filter checks.
+///
+/// Yearday values range from -366..=-1 and 1..=366. Two `[u64; 6]` masks
+/// (384 bits each) cover the full range with constant-time lookup.
+#[derive(Debug, Clone)]
+pub(crate) struct ByYearDay {
+    pub(crate) values: ByList<i32>,
+    pos_mask: [u64; 6], // bit i set ⟹ positive yearday (i+1) is present
+    neg_mask: [u64; 6], // bit i set ⟹ negative yearday -(i+1) is present
+}
+
+impl ByYearDay {
+    fn new(values: ByList<i32>) -> Self {
+        let mut pos_mask = [0u64; 6];
+        let mut neg_mask = [0u64; 6];
+        for &v in &values {
+            if v > 0 && v <= 366 {
+                let idx = (v - 1) as usize;
+                pos_mask[idx / 64] |= 1u64 << (idx % 64);
+            } else if (-366..0).contains(&v) {
+                let idx = (-v - 1) as usize;
+                neg_mask[idx / 64] |= 1u64 << (idx % 64);
+            }
+        }
+        Self {
+            values,
+            pos_mask,
+            neg_mask,
+        }
+    }
+
+    /// Check if positive yearday `v` (1..=366) is in the set.
+    #[inline]
+    pub fn has_pos(&self, v: u32) -> bool {
+        let idx = v.wrapping_sub(1) as usize;
+        idx < 384 && (self.pos_mask[idx / 64] & (1u64 << (idx % 64))) != 0
+    }
+
+    /// Check if negative yearday whose absolute value is `v` (1..=366) is in the set.
+    #[inline]
+    pub fn has_neg(&self, v: u32) -> bool {
+        let idx = v.wrapping_sub(1) as usize;
+        idx < 384 && (self.neg_mask[idx / 64] & (1u64 << (idx % 64))) != 0
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Compile-time day/month masks
 // ---------------------------------------------------------------------------
@@ -327,7 +373,7 @@ pub struct RRule {
     pub(crate) bymonth: Option<ByList<u8>>,
     pub(crate) bymonthday: ByList<i32>,
     pub(crate) bynmonthday: ByList<i32>,
-    pub(crate) byyearday: Option<ByList<i32>>,
+    pub(crate) byyearday: Option<ByYearDay>,
     pub(crate) byeaster: Option<ByList<i32>>,
     pub(crate) byweekno: Option<ByList<i32>>,
     pub(crate) bynweekday: Option<ByList<(u8, i32)>>,
@@ -590,7 +636,7 @@ impl RRuleBuilder {
             v.sort();
             v.dedup();
             explicit |= ExplicitFields::BYYEARDAY;
-            Some(ByList::from_vec(v))
+            Some(ByYearDay::new(ByList::from_vec(v)))
         } else {
             None
         };
@@ -842,8 +888,8 @@ impl fmt::Display for RRule {
             }
         }
         if self.explicit.contains(ExplicitFields::BYYEARDAY) {
-            if let Some(ref v) = self.byyearday {
-                parts.push(format!("BYYEARDAY={}", join_ints(v)));
+            if let Some(ref byd) = self.byyearday {
+                parts.push(format!("BYYEARDAY={}", join_ints(&byd.values)));
             }
         }
         if self.explicit.contains(ExplicitFields::BYWEEKNO) {

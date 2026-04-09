@@ -36,7 +36,8 @@ impl RRuleSet {
     }
 
     pub fn rdate(&mut self, dt: NaiveDateTime) {
-        self.rdates.push(dt);
+        let pos = self.rdates.binary_search(&dt).unwrap_or_else(|i| i);
+        self.rdates.insert(pos, dt);
     }
 
     pub fn exrule(&mut self, rule: RRule) {
@@ -44,7 +45,8 @@ impl RRuleSet {
     }
 
     pub fn exdate(&mut self, dt: NaiveDateTime) {
-        self.exdates.push(dt);
+        let pos = self.exdates.binary_search(&dt).unwrap_or_else(|i| i);
+        self.exdates.insert(pos, dt);
     }
 
 }
@@ -133,10 +135,8 @@ impl RRuleSetIter {
         let mut rheap = BinaryHeap::new();
         let mut exheap = BinaryHeap::new();
 
-        // Add rdate source
-        let mut rdates = set.rdates.clone();
-        rdates.sort();
-        let mut rdate_iter = rdates.into_iter();
+        // Add rdate source (already sorted via sorted insert)
+        let mut rdate_iter = set.rdates.clone().into_iter();
         if let Some(dt) = rdate_iter.next() {
             rheap.push(HeapItem {
                 dt,
@@ -166,9 +166,8 @@ impl RRuleSetIter {
             }
         }
 
-        // Sort exdates for cursor-based exclusion
-        let mut exdates = set.exdates.clone();
-        exdates.sort();
+        // Exdates already sorted via sorted insert
+        let exdates = set.exdates.clone();
 
         RRuleSetIter {
             rheap,
