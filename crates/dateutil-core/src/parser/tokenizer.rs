@@ -261,4 +261,133 @@ mod tests {
         let tokens = tokenize("0");
         assert_eq!(strs(&tokens), vec!["0"]);
     }
+
+    // ==== Edge case tests ====
+
+    #[test]
+    fn test_ascii_only_punctuation_mix() {
+        // Tokenizer operates on ASCII bytes; test mixed ASCII punctuation
+        let tokens = tokenize("2024!01@15");
+        assert!(!tokens.is_empty());
+        assert_eq!(&*tokens[0], "2024");
+    }
+
+    #[test]
+    fn test_very_long_number() {
+        let long_num = "1".repeat(100);
+        let tokens = tokenize(&long_num);
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].len(), 100);
+    }
+
+    #[test]
+    fn test_very_long_alpha() {
+        let long_alpha = "a".repeat(200);
+        let tokens = tokenize(&long_alpha);
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].len(), 200);
+    }
+
+    #[test]
+    fn test_more_than_16_tokens_spills_smallvec() {
+        let input = "1-2-3-4-5-6-7-8-9";
+        let tokens = tokenize(input);
+        assert!(tokens.len() > 16);
+        assert_eq!(&*tokens[0], "1");
+        assert_eq!(&*tokens[tokens.len() - 1], "9");
+    }
+
+    #[test]
+    fn test_standalone_dot() {
+        let tokens = tokenize(".");
+        assert_eq!(strs(&tokens), vec!["."]);
+    }
+
+    #[test]
+    fn test_standalone_comma() {
+        let tokens = tokenize(",");
+        assert_eq!(strs(&tokens), vec![","]);
+    }
+
+    #[test]
+    fn test_multiple_dots() {
+        let tokens = tokenize("...");
+        assert_eq!(strs(&tokens), vec![".", ".", "."]);
+    }
+
+    #[test]
+    fn test_brackets_and_parens() {
+        let tokens = tokenize("[2024]");
+        assert_eq!(strs(&tokens), vec!["[", "2024", "]"]);
+    }
+
+    #[test]
+    fn test_comma_at_exactly_offset_2() {
+        let tokens = tokenize("12,5");
+        assert_eq!(strs(&tokens), vec!["12.5"]);
+    }
+
+    #[test]
+    fn test_comma_at_offset_1_not_decimal() {
+        let tokens = tokenize("1,5");
+        assert_eq!(strs(&tokens), vec!["1", ",", "5"]);
+    }
+
+    #[test]
+    fn test_multiple_null_bytes() {
+        let tokens = tokenize("\x00\x00\x002024\x00\x00");
+        assert_eq!(strs(&tokens), vec!["2024"]);
+    }
+
+    #[test]
+    fn test_only_whitespace() {
+        let tokens = tokenize("   \t\n  ");
+        assert_eq!(strs(&tokens), vec![" "]);
+    }
+
+    #[test]
+    fn test_number_dot_alpha() {
+        let tokens = tokenize("15th");
+        assert_eq!(strs(&tokens), vec!["15", "th"]);
+    }
+
+    #[test]
+    fn test_iso_t_separator_lower() {
+        let tokens = tokenize("t");
+        assert_eq!(strs(&tokens), vec!["t"]);
+    }
+
+    #[test]
+    fn test_z_timezone() {
+        let tokens = tokenize("Z");
+        assert_eq!(strs(&tokens), vec!["Z"]);
+    }
+
+    #[test]
+    fn test_negative_offset_no_space() {
+        let tokens = tokenize("-0800");
+        assert_eq!(strs(&tokens), vec!["-", "0800"]);
+    }
+
+    #[test]
+    fn test_decimal_with_only_trailing_zeros() {
+        let tokens = tokenize("45.000000");
+        assert_eq!(strs(&tokens), vec!["45.000000"]);
+    }
+
+    #[test]
+    fn test_mixed_separators_in_date() {
+        // Dots after digits at offset >= 2 are treated as decimal separators,
+        // so "2024.01.15" becomes one token "2024.01" + ".15"
+        let tokens = tokenize("2024.01.15");
+        assert!(!tokens.is_empty());
+        // The first token should start with "2024"
+        assert!(tokens[0].starts_with("2024"));
+    }
+
+    #[test]
+    fn test_number_immediately_after_alpha() {
+        let tokens = tokenize("UTC+5");
+        assert_eq!(strs(&tokens), vec!["UTC", "+", "5"]);
+    }
 }

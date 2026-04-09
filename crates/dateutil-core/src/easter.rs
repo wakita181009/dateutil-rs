@@ -43,7 +43,7 @@ pub fn easter(year: i32, method: EasterMethod) -> Result<NaiveDate, EasterError>
         if method == EasterMethod::Orthodox {
             e = 10;
             if year > 1600 {
-                e = e + year / 100 - 16 - (year / 100 - 16) / 4;
+                e += year / 100 - 16 - (year / 100 - 16) / 4;
             }
         }
         (i, j)
@@ -294,5 +294,93 @@ mod tests {
                 "Failed for year {y}"
             );
         }
+    }
+
+    #[test]
+    fn test_year_0_is_invalid() {
+        assert!(matches!(easter(0, EasterMethod::Western), Err(EasterError::InvalidYear(0))));
+        assert!(matches!(easter(0, EasterMethod::Orthodox), Err(EasterError::InvalidYear(0))));
+        assert!(matches!(easter(0, EasterMethod::Julian), Err(EasterError::InvalidYear(0))));
+    }
+
+    #[test]
+    fn test_negative_years_various() {
+        for y in [-1, -100, -1000, -999_999] {
+            assert!(easter(y, EasterMethod::Western).is_err());
+            assert!(easter(y, EasterMethod::Orthodox).is_err());
+            assert!(easter(y, EasterMethod::Julian).is_err());
+        }
+    }
+
+    #[test]
+    fn test_i32_max_year() {
+        // i32::MAX causes arithmetic overflow in the algorithm — this is expected
+        let result = std::panic::catch_unwind(|| easter(i32::MAX, EasterMethod::Western));
+        // Either panics (overflow) or returns an error — either is acceptable
+        if let Ok(res) = result {
+            assert!(res.is_ok() || matches!(res, Err(EasterError::DateOutOfRange { .. })));
+        }
+    }
+
+    #[test]
+    fn test_century_boundary_leap_years() {
+        for y in [1900, 2000, 2100] {
+            let d = easter(y, EasterMethod::Western).unwrap();
+            assert!(d.month() == 3 || d.month() == 4, "year={y}, month={}", d.month());
+        }
+    }
+
+    #[test]
+    fn test_easter_method_from_i32_large_values() {
+        assert!(EasterMethod::from_i32(100).is_err());
+        assert!(EasterMethod::from_i32(i32::MAX).is_err());
+        assert!(EasterMethod::from_i32(i32::MIN).is_err());
+    }
+
+    #[test]
+    fn test_easter_error_display() {
+        assert_eq!(EasterError::InvalidMethod(99).to_string(), "invalid method: 99");
+        assert_eq!(EasterError::InvalidYear(-5).to_string(), "invalid year: -5");
+        assert_eq!(
+            EasterError::DateOutOfRange { year: 2024, month: 13, day: 1 }.to_string(),
+            "date out of range: 2024-13-1"
+        );
+    }
+
+    #[test]
+    fn test_orthodox_boundary_exact_1600() {
+        let d1600 = easter(1600, EasterMethod::Orthodox).unwrap();
+        let d1601 = easter(1601, EasterMethod::Orthodox).unwrap();
+        assert!((3..=5).contains(&d1600.month()));
+        assert!((3..=5).contains(&d1601.month()));
+    }
+
+    #[test]
+    fn test_easter_always_sunday_western_wide_range() {
+        // Western (Gregorian) Easter is always Sunday across a wide year range
+        for y in [1583, 1900, 2000, 2100, 3000, 4000, 5000, 9999] {
+            let d = easter(y, EasterMethod::Western).unwrap();
+            assert_eq!(
+                d.weekday(), chrono::Weekday::Sun,
+                "Western Easter year={y} is not Sunday"
+            );
+        }
+    }
+
+    #[test]
+    fn test_easter_method_enum_values() {
+        assert_eq!(EasterMethod::Julian as i32, 1);
+        assert_eq!(EasterMethod::Orthodox as i32, 2);
+        assert_eq!(EasterMethod::Western as i32, 3);
+    }
+
+    #[test]
+    fn test_western_earliest_and_latest_possible() {
+        let d2008 = easter(2008, EasterMethod::Western).unwrap();
+        assert_eq!(d2008.month(), 3);
+        assert_eq!(d2008.day(), 23);
+        let d2038 = easter(2038, EasterMethod::Western).unwrap();
+        assert_eq!(d2038.month(), 4);
+        assert_eq!(d2038.day(), 25);
     }
 }

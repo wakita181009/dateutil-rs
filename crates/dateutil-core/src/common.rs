@@ -230,4 +230,57 @@ mod tests {
         set.insert(MO.with_n(Some(1)));
         assert_eq!(set.len(), 2);
     }
+
+    #[test]
+    fn test_weekday_error_display() {
+        let err = Weekday::new(7, None).unwrap_err();
+        assert_eq!(err.to_string(), "invalid weekday: 7 (must be 0..=6)");
+    }
+
+    #[test]
+    fn test_weekday_i32_min_max_n() {
+        let wd = Weekday::new(0, Some(i32::MAX)).unwrap();
+        assert!(wd.to_string().contains(&format!("{}", i32::MAX)));
+        let wd = Weekday::new(0, Some(i32::MIN)).unwrap();
+        assert!(wd.to_string().contains(&format!("{}", i32::MIN)));
+    }
+
+    #[test]
+    fn test_weekday_debug_format() {
+        let wd = Weekday::new(3, Some(2)).unwrap();
+        let debug = format!("{:?}", wd);
+        assert!(debug.contains("weekday: 3"));
+        assert!(debug.contains("n: Some(2)"));
+    }
+
+    #[test]
+    fn test_weekday_with_n_chaining() {
+        let wd = MO.with_n(Some(1)).with_n(Some(-2)).with_n(None);
+        assert_eq!(wd.n(), None);
+        assert_eq!(wd.weekday(), 0);
+    }
+
+    #[test]
+    fn test_weekday_all_constants_n_is_none() {
+        for wd in [MO, TU, WE, TH, FR, SA, SU] {
+            assert_eq!(wd.n(), None);
+        }
+    }
+
+    #[test]
+    fn test_weekday_equality_ignores_n_for_same_display() {
+        let a = MO.with_n(Some(1));
+        let b = MO.with_n(Some(-1));
+        assert_ne!(a, b);
+        assert_eq!(a.weekday(), b.weekday());
+    }
+
+    #[test]
+    fn test_weekday_hash_set_with_n_none_vs_some0() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(MO.with_n(None));
+        set.insert(MO.with_n(Some(0)));
+        assert_eq!(set.len(), 2);
+    }
 }
