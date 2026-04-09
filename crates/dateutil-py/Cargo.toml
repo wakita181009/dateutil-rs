@@ -1,0 +1,22 @@
+[package]
+name = "dateutil-py"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "PyO3 bindings for the dateutil-core crate"
+
+[lib]
+name = "dateutil_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+dateutil-core = { path = "../dateutil-core" }
+chrono = "0.4"
+pyo3 = { version = "0.28", features = ["extension-module", "chrono"], optional = true }
+
+[features]
+default = []
+python = ["pyo3"]
+
+[package.metadata.maturin]
+module-name = "dateutil_rs.v1._native"

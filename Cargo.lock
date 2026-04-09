@@ -224,6 +224,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dateutil-py"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dateutil-core",
+ "pyo3",
+]
+
+[[package]]
 name = "dateutil-rs"
 version = "0.0.8"
 dependencies = [
