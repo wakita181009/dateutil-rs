@@ -7,7 +7,7 @@ use std::sync::Arc;
 use chrono::NaiveDateTime;
 
 use super::iter::RRuleIter;
-use super::RRule;
+use super::{Recurrence, RRule};
 
 // ---------------------------------------------------------------------------
 // RRuleSet
@@ -47,60 +47,17 @@ impl RRuleSet {
         self.exdates.push(dt);
     }
 
-    pub fn is_finite(&self) -> bool {
-        self.rrules.iter().all(|r| r.is_finite())
-    }
+}
 
-    /// Collect all occurrences.
-    ///
-    /// # Panics
-    ///
-    /// Panics if any component rrule is not finite (i.e., neither `count` nor `until` is set).
-    pub fn all(&self) -> Vec<NaiveDateTime> {
-        assert!(
-            self.is_finite(),
-            "all() called on infinite RRuleSet (all rrules must have count or until)"
-        );
-        self.iter().collect()
-    }
+impl Recurrence for RRuleSet {
+    type Iter = RRuleSetIter;
 
-    pub fn iter(&self) -> RRuleSetIter {
+    fn iter(&self) -> RRuleSetIter {
         RRuleSetIter::new(self)
     }
 
-    pub fn before(&self, dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
-        let mut last = None;
-        for i in self.iter() {
-            if (inc && i > dt) || (!inc && i >= dt) {
-                break;
-            }
-            last = Some(i);
-        }
-        last
-    }
-
-    pub fn after(&self, dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
-        self.iter().find(|&i| if inc { i >= dt } else { i > dt })
-    }
-
-    pub fn between(
-        &self,
-        after: NaiveDateTime,
-        before: NaiveDateTime,
-        inc: bool,
-    ) -> Vec<NaiveDateTime> {
-        let mut result = Vec::new();
-        for i in self.iter() {
-            let past_end = if inc { i > before } else { i >= before };
-            if past_end {
-                break;
-            }
-            let in_range = if inc { i >= after } else { i > after };
-            if in_range {
-                result.push(i);
-            }
-        }
-        result
+    fn is_finite(&self) -> bool {
+        self.rrules.iter().all(|r| r.is_finite())
     }
 }
 

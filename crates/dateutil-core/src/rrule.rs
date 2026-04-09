@@ -16,6 +16,66 @@ use crate::common::Weekday;
 use crate::error::RRuleError;
 
 // ---------------------------------------------------------------------------
+// Recurrence trait — shared before/after/between logic
+// ---------------------------------------------------------------------------
+
+/// Trait for types that produce a sequence of recurrence datetimes.
+pub trait Recurrence {
+    type Iter: Iterator<Item = NaiveDateTime>;
+
+    fn iter(&self) -> Self::Iter;
+    fn is_finite(&self) -> bool;
+
+    /// Collect all occurrences.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the recurrence is not finite (i.e., neither `count` nor `until` is set).
+    fn all(&self) -> Vec<NaiveDateTime> {
+        assert!(
+            self.is_finite(),
+            "all() called on infinite recurrence (set count or until)"
+        );
+        self.iter().collect()
+    }
+
+    fn before(&self, dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
+        let mut last = None;
+        for i in self.iter() {
+            if (inc && i > dt) || (!inc && i >= dt) {
+                break;
+            }
+            last = Some(i);
+        }
+        last
+    }
+
+    fn after(&self, dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
+        self.iter().find(|&i| if inc { i >= dt } else { i > dt })
+    }
+
+    fn between(
+        &self,
+        after: NaiveDateTime,
+        before: NaiveDateTime,
+        inc: bool,
+    ) -> Vec<NaiveDateTime> {
+        let mut result = Vec::new();
+        for i in self.iter() {
+            let past_end = if inc { i > before } else { i >= before };
+            if past_end {
+                break;
+            }
+            let in_range = if inc { i >= after } else { i > after };
+            if in_range {
+                result.push(i);
+            }
+        }
+        result
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Frequency enum
 // ---------------------------------------------------------------------------
 
@@ -291,65 +351,21 @@ impl RRule {
     pub fn dtstart(&self) -> NaiveDateTime {
         self.dtstart
     }
+}
 
-    pub fn is_finite(&self) -> bool {
-        self.count.is_some() || self.until.is_some()
-    }
-
-    /// Collect all occurrences. Clones self into an Arc internally.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the rule is not finite (i.e., neither `count` nor `until` is set).
-    pub fn all(&self) -> Vec<NaiveDateTime> {
-        assert!(
-            self.is_finite(),
-            "all() called on infinite RRule (set count or until)"
-        );
-        self.iter().collect()
-    }
+impl Recurrence for RRule {
+    type Iter = iter::RRuleIter;
 
     /// Return an iterator. Clones self into an Arc.
     ///
     /// If you plan to create multiple iterators from the same rule,
     /// wrap in `Arc` first and use `RRuleIter::new(arc)` directly.
-    pub fn iter(&self) -> iter::RRuleIter {
+    fn iter(&self) -> iter::RRuleIter {
         iter::RRuleIter::new(Arc::new(self.clone()))
     }
 
-    pub fn before(&self, dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
-        let mut last = None;
-        for i in self.iter() {
-            if (inc && i > dt) || (!inc && i >= dt) {
-                break;
-            }
-            last = Some(i);
-        }
-        last
-    }
-
-    pub fn after(&self, dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
-        self.iter().find(|&i| if inc { i >= dt } else { i > dt })
-    }
-
-    pub fn between(
-        &self,
-        after: NaiveDateTime,
-        before: NaiveDateTime,
-        inc: bool,
-    ) -> Vec<NaiveDateTime> {
-        let mut result = Vec::new();
-        for i in self.iter() {
-            let past_end = if inc { i > before } else { i >= before };
-            if past_end {
-                break;
-            }
-            let in_range = if inc { i >= after } else { i > after };
-            if in_range {
-                result.push(i);
-            }
-        }
-        result
+    fn is_finite(&self) -> bool {
+        self.count.is_some() || self.until.is_some()
     }
 }
 

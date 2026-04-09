@@ -7,7 +7,7 @@ use crate::common::Weekday;
 use crate::error::RRuleError;
 
 use super::set::RRuleSet;
-use super::{Frequency, RRule, RRuleBuilder};
+use super::{Frequency, Recurrence, RRule, RRuleBuilder};
 
 // ---------------------------------------------------------------------------
 // PHF lookup tables
