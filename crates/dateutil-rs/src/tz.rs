@@ -345,6 +345,9 @@ pub mod python {
 
     use super::*;
 
+    /// Wall-time tuple: (year, month, day, hour, minute, second, microsecond, fold).
+    type WallTimeTuple = (i32, u32, u32, u32, u32, u32, u32, bool);
+
     /// Internal UTC timezone helper.
     #[pyclass(name = "_TzUtc", skip_from_py_object)]
     #[derive(Debug, Clone)]
@@ -486,7 +489,7 @@ pub mod python {
         }
 
         /// Convert a UTC datetime to wall time, returning (wall_naive, fold).
-        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<WallTimeTuple> {
             fromutc_result_to_tuple(dt, &self.inner)
         }
 
@@ -550,7 +553,7 @@ pub mod python {
             Ok(self.inner.is_ambiguous(naive))
         }
 
-        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<WallTimeTuple> {
             let (naive, _fold) = extract_dt_and_fold(dt)?;
             let (wall, fold) = self.inner.fromutc(naive);
             Ok((
@@ -622,7 +625,7 @@ pub mod python {
             Ok(self.inner.is_ambiguous(naive))
         }
 
-        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<WallTimeTuple> {
             let (naive, _fold) = extract_dt_and_fold(dt)?;
             let (wall, fold) = self.inner.fromutc(naive);
             Ok((
@@ -727,7 +730,7 @@ pub mod python {
             Ok(self.inner.is_ambiguous(naive))
         }
 
-        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+        fn fromutc_naive(&self, dt: &Bound<'_, PyAny>) -> PyResult<WallTimeTuple> {
             let (naive, _fold) = extract_dt_and_fold(dt)?;
             let (wall, fold) = self.inner.fromutc(naive);
             Ok((
@@ -888,7 +891,7 @@ pub mod python {
     fn fromutc_result_to_tuple(
         dt: &Bound<'_, PyAny>,
         tz: &impl FromUtcRust,
-    ) -> PyResult<(i32, u32, u32, u32, u32, u32, u32, bool)> {
+    ) -> PyResult<WallTimeTuple> {
         let (naive, _fold) = extract_dt_and_fold(dt)?;
         let (wall, fold) = tz.fromutc_rust(naive);
         Ok((

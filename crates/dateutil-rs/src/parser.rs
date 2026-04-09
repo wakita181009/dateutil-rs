@@ -1576,6 +1576,7 @@ pub mod python {
         fuzzy = false,
         fuzzy_with_tokens = false,
     ))]
+    #[allow(clippy::too_many_arguments)]
     pub fn parse_py<'py>(
         py: Python<'py>,
         timestr: &str,
@@ -1704,7 +1705,7 @@ pub mod python {
         let parser = IsoParser::default();
         let res = parser
             .isoparse(dt_str)
-            .map_err(|e| PyValueError::new_err(e))?;
+            .map_err(PyValueError::new_err)?;
         iso_to_pydt(py, &res)
     }
 
@@ -1731,7 +1732,7 @@ pub mod python {
                 None
             };
             let inner =
-                IsoParser::new(sep_byte).map_err(|e| PyValueError::new_err(e))?;
+                IsoParser::new(sep_byte).map_err(PyValueError::new_err)?;
             Ok(Self { inner })
         }
 
@@ -1743,7 +1744,7 @@ pub mod python {
             let res = self
                 .inner
                 .isoparse(dt_str)
-                .map_err(|e| PyValueError::new_err(e))?;
+                .map_err(PyValueError::new_err)?;
             iso_to_pydt(py, &res)
         }
     }

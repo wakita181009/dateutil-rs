@@ -143,3 +143,91 @@ class relativedelta:
     def __bool__(self) -> bool: ...
     def __repr__(self) -> str: ...
     def __str__(self) -> str: ...
+
+# ---------------------------------------------------------------------------
+# rrule — Recurrence rules (RFC 5545)
+# ---------------------------------------------------------------------------
+
+YEARLY: Final[int]
+MONTHLY: Final[int]
+WEEKLY: Final[int]
+DAILY: Final[int]
+HOURLY: Final[int]
+MINUTELY: Final[int]
+SECONDLY: Final[int]
+
+class rrule:
+    """RFC 5545 recurrence rule."""
+
+    def __init__(
+        self,
+        freq: int,
+        dtstart: datetime.datetime | None = None,
+        interval: int = 1,
+        wkst: int | None = None,
+        count: int | None = None,
+        until: datetime.datetime | None = None,
+        bysetpos: list[int] | None = None,
+        bymonth: list[int] | None = None,
+        bymonthday: list[int] | None = None,
+        byyearday: list[int] | None = None,
+        byeaster: list[int] | None = None,
+        byweekno: list[int] | None = None,
+        byweekday: list[int | weekday] | None = None,
+        byhour: list[int] | None = None,
+        byminute: list[int] | None = None,
+        bysecond: list[int] | None = None,
+    ) -> None: ...
+    @property
+    def freq(self) -> int: ...
+    @property
+    def dtstart(self) -> datetime.datetime: ...
+    def all(self) -> list[datetime.datetime]: ...
+    def before(
+        self, dt: datetime.datetime, inc: bool = False
+    ) -> datetime.datetime | None: ...
+    def after(
+        self, dt: datetime.datetime, inc: bool = False
+    ) -> datetime.datetime | None: ...
+    def between(
+        self,
+        after: datetime.datetime,
+        before: datetime.datetime,
+        inc: bool = False,
+    ) -> list[datetime.datetime]: ...
+    def __iter__(self) -> Self: ...
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
+
+_RRule = rrule
+
+class rruleset:
+    """Set of recurrence rules, dates, exclusion rules, and exclusion dates."""
+
+    def __init__(self) -> None: ...
+    def rrule(self, rule: _RRule) -> None: ...
+    def rdate(self, dt: datetime.datetime) -> None: ...
+    def exrule(self, rule: _RRule) -> None: ...
+    def exdate(self, dt: datetime.datetime) -> None: ...
+    def all(self) -> list[datetime.datetime]: ...
+    def before(
+        self, dt: datetime.datetime, inc: bool = False
+    ) -> datetime.datetime | None: ...
+    def after(
+        self, dt: datetime.datetime, inc: bool = False
+    ) -> datetime.datetime | None: ...
+    def between(
+        self,
+        after: datetime.datetime,
+        before: datetime.datetime,
+        inc: bool = False,
+    ) -> list[datetime.datetime]: ...
+    def __iter__(self) -> Self: ...
+
+def rrulestr(
+    s: str,
+    dtstart: datetime.datetime | None = None,
+    forceset: bool = False,
+    compatible: bool = False,
+    unfold: bool = False,
+) -> rrule | rruleset: ...

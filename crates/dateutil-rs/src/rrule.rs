@@ -3141,27 +3141,30 @@ pub mod python {
                 let start: Option<isize> = slice.getattr("start")?.extract()?;
                 let stop: Option<isize> = slice.getattr("stop")?.extract()?;
 
-                if step > 0 && start.unwrap_or(0) >= 0 && stop.is_some() && stop.unwrap() >= 0 {
-                    // Positive slice with explicit stop: lazy islice
-                    let s = start.unwrap_or(0) as usize;
-                    let e = stop.unwrap() as usize;
-                    let step = step as usize;
-                    let py_list = PyList::empty(py);
-                    let mut it = self.inner.iter();
-                    let mut pos = 0usize;
-                    while pos < e {
-                        match it.next() {
-                            Some(dt) => {
-                                if pos >= s && (pos - s) % step == 0 {
-                                    py_list.append(naive_to_py_datetime(py, dt, tzinfo)?)?;
+                if let Some(stop_val) = stop.filter(|&v| v >= 0) {
+                    if step > 0 && start.unwrap_or(0) >= 0 {
+                        // Positive slice with explicit stop: lazy islice
+                        let s = start.unwrap_or(0) as usize;
+                        let e = stop_val as usize;
+                        let step = step as usize;
+                        let py_list = PyList::empty(py);
+                        let mut it = self.inner.iter();
+                        let mut pos = 0usize;
+                        while pos < e {
+                            match it.next() {
+                                Some(dt) => {
+                                    if pos >= s && (pos - s).is_multiple_of(step) {
+                                        py_list.append(naive_to_py_datetime(py, dt, tzinfo)?)?;
+                                    }
                                 }
+                                None => break,
                             }
-                            None => break,
+                            pos += 1;
                         }
-                        pos += 1;
+                        return Ok(py_list.into_any());
                     }
-                    Ok(py_list.into_any())
-                } else {
+                }
+                {
                     // Negative step/start/stop or open-ended: materialize
                     if !self.inner.is_finite() {
                         return Err(pyo3::exceptions::PyTypeError::new_err(
@@ -3473,27 +3476,30 @@ pub mod python {
                 let start: Option<isize> = slice.getattr("start")?.extract()?;
                 let stop: Option<isize> = slice.getattr("stop")?.extract()?;
 
-                if step > 0 && start.unwrap_or(0) >= 0 && stop.is_some() && stop.unwrap() >= 0 {
-                    // Positive slice with explicit stop: lazy islice
-                    let s = start.unwrap_or(0) as usize;
-                    let e = stop.unwrap() as usize;
-                    let step = step as usize;
-                    let py_list = PyList::empty(py);
-                    let mut it = self.inner.iter();
-                    let mut pos = 0usize;
-                    while pos < e {
-                        match it.next() {
-                            Some(dt) => {
-                                if pos >= s && (pos - s) % step == 0 {
-                                    py_list.append(naive_to_py_datetime(py, dt, tzinfo)?)?;
+                if let Some(stop_val) = stop.filter(|&v| v >= 0) {
+                    if step > 0 && start.unwrap_or(0) >= 0 {
+                        // Positive slice with explicit stop: lazy islice
+                        let s = start.unwrap_or(0) as usize;
+                        let e = stop_val as usize;
+                        let step = step as usize;
+                        let py_list = PyList::empty(py);
+                        let mut it = self.inner.iter();
+                        let mut pos = 0usize;
+                        while pos < e {
+                            match it.next() {
+                                Some(dt) => {
+                                    if pos >= s && (pos - s).is_multiple_of(step) {
+                                        py_list.append(naive_to_py_datetime(py, dt, tzinfo)?)?;
+                                    }
                                 }
+                                None => break,
                             }
-                            None => break,
+                            pos += 1;
                         }
-                        pos += 1;
+                        return Ok(py_list.into_any());
                     }
-                    Ok(py_list.into_any())
-                } else {
+                }
+                {
                     // Negative step/start/stop or open-ended: materialize
                     if !self.inner.is_finite() {
                         return Err(pyo3::exceptions::PyTypeError::new_err(
@@ -3588,6 +3594,7 @@ pub mod python {
     /// Python-exposed rrulestr function.
     #[pyfunction]
     #[pyo3(name = "rrulestr", signature = (s, dtstart=None, cache=false, unfold=false, forceset=false, compatible=false, ignoretz=false, tzids=None, tzinfos=None))]
+    #[allow(clippy::too_many_arguments)]
     pub fn rrulestr_py<'py>(
         py: Python<'py>,
         s: &str,
