@@ -298,27 +298,24 @@ fn timedelta_to_rd(td: &Bound<'_, PyDelta>) -> PyResult<RelativeDelta> {
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
-// --- from_diff-specific helper (UTC normalisation + awareness check) ---
+// --- from_diff-specific helper (awareness check) ---
 
 /// Extract `NaiveDateTime` from a Python datetime/date for `from_diff`,
-/// along with an awareness flag. For aware datetimes the returned
-/// `NaiveDateTime` is UTC-normalised (wall clock minus utcoffset).
+/// along with an awareness flag. Wall clock time is preserved as-is
+/// (no UTC normalisation) to match python-dateutil semantics where
+/// `relativedelta(dt1, dt2)` operates on local wall time.
 /// `date` objects are always naive.
 fn py_any_to_ndt_for_diff(obj: &Bound<'_, PyAny>) -> PyResult<(NaiveDateTime, bool)> {
     // datetime first (subclass of date)
     if let Ok(dt) = obj.cast::<PyDateTime>() {
         let ndt = conv::pydt_to_naive(dt);
-        if let Some(ref tzinfo) = dt.get_tzinfo() {
+        let aware = if let Some(ref tzinfo) = dt.get_tzinfo() {
             let utcoffset_obj = tzinfo.call_method1("utcoffset", (obj,))?;
-            if !utcoffset_obj.is_none() {
-                let td = utcoffset_obj.cast::<PyDelta>()?;
-                let offset_secs =
-                    td.get_days() as i64 * 86_400 + td.get_seconds() as i64;
-                let utc_ndt = ndt - chrono::Duration::seconds(offset_secs);
-                return Ok((utc_ndt, true));
-            }
-        }
-        return Ok((ndt, false));
+            !utcoffset_obj.is_none()
+        } else {
+            false
+        };
+        return Ok((ndt, aware));
     }
     // date or other — always naive
     Ok((conv::py_any_to_naive_datetime(obj)?, false))
