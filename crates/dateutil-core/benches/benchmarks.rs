@@ -41,26 +41,26 @@ fn bench_tokenizer(c: &mut Criterion) {
 fn bench_parser(c: &mut Criterion) {
     c.bench_function("parse_iso_date", |b| {
         b.iter(|| {
-            black_box(parser::parse(black_box("2024-01-15"), false, false, None).unwrap());
+            black_box(parser::parse(black_box("2024-01-15"), false, false, None, None).unwrap());
         })
     });
 
     c.bench_function("parse_datetime", |b| {
         b.iter(|| {
-            black_box(parser::parse(black_box("2024-01-15 10:30:45"), false, false, None).unwrap());
+            black_box(parser::parse(black_box("2024-01-15 10:30:45"), false, false, None, None).unwrap());
         })
     });
 
     c.bench_function("parse_month_name", |b| {
         b.iter(|| {
-            black_box(parser::parse(black_box("January 15, 2024"), false, false, None).unwrap());
+            black_box(parser::parse(black_box("January 15, 2024"), false, false, None, None).unwrap());
         })
     });
 
     c.bench_function("parse_complex", |b| {
         b.iter(|| {
             black_box(
-                parser::parse(black_box("Monday, January 15, 2024 3:30:45.123456 PM UTC"), false, false, None)
+                parser::parse(black_box("Monday, January 15, 2024 3:30:45.123456 PM UTC"), false, false, None, None)
                     .unwrap(),
             );
         })
@@ -71,7 +71,7 @@ fn bench_parser(c: &mut Criterion) {
             black_box(
                 parser::parse_to_result(
                     black_box("Monday, January 15, 2024 3:30:45.123456 PM EST -05:00"),
-                    false, false,
+                    false, false, None,
                 ).unwrap(),
             );
         })
@@ -80,7 +80,7 @@ fn bench_parser(c: &mut Criterion) {
     c.bench_function("parse_tz_positive_offset", |b| {
         b.iter(|| {
             black_box(
-                parser::parse_to_result(black_box("2024-01-15 10:30:45+05:30"), false, false)
+                parser::parse_to_result(black_box("2024-01-15 10:30:45+05:30"), false, false, None)
                     .unwrap(),
             );
         })
@@ -89,7 +89,7 @@ fn bench_parser(c: &mut Criterion) {
     c.bench_function("parse_tz_negative_offset", |b| {
         b.iter(|| {
             black_box(
-                parser::parse_to_result(black_box("2024-01-15 10:30:45-0800"), false, false)
+                parser::parse_to_result(black_box("2024-01-15 10:30:45-0800"), false, false, None)
                     .unwrap(),
             );
         })
@@ -97,7 +97,7 @@ fn bench_parser(c: &mut Criterion) {
 
     c.bench_function("parse_ampm", |b| {
         b.iter(|| {
-            black_box(parser::parse(black_box("January 15, 2024 3:30 PM"), false, false, None).unwrap());
+            black_box(parser::parse(black_box("January 15, 2024 3:30 PM"), false, false, None, None).unwrap());
         })
     });
 
@@ -135,7 +135,7 @@ fn bench_parser_throughput(c: &mut Criterion) {
     c.bench_function("parse_throughput_8_inputs", |b| {
         b.iter(|| {
             for input in &inputs {
-                black_box(parser::parse(black_box(input), false, false, None).unwrap());
+                black_box(parser::parse(black_box(input), false, false, None, None).unwrap());
             }
         })
     });

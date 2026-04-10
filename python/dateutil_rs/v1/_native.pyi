@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import datetime
 import sys
-from collections.abc import Iterator
-from typing import Final, Literal, TypedDict
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any, Final, Literal, TypedDict
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -70,16 +70,48 @@ class ParseResultDict(TypedDict):
     tzname: str | None
     tzoffset: int | None
 
+class _ParserInfoBase:
+    """Customisable lookup tables for the parser.
+
+    Subclass and override the class variables to support non-English dates.
+    """
+
+    JUMP: list[str]
+    WEEKDAYS: list[tuple[str, str]]
+    MONTHS: list[list[str]]
+    HMS: list[tuple[str, str, str]]
+    AMPM: list[tuple[str, str]]
+    UTCZONE: list[str]
+    PERTAIN: list[str]
+    TZOFFSET: dict[str, int]
+    dayfirst: bool
+    yearfirst: bool
+    def __init__(
+        self,
+        dayfirst: bool | None = None,
+        yearfirst: bool | None = None,
+    ) -> None: ...
+    def __repr__(self) -> str: ...
+
+_TzData = datetime.tzinfo | int | str | None
+_TzInfos = Mapping[str, _TzData] | Callable[[str, int], _TzData]
+
 def parse(
     timestr: str,
-    dayfirst: bool = False,
-    yearfirst: bool = False,
+    parserinfo: Any | None = None,
+    *,
+    dayfirst: bool | None = None,
+    yearfirst: bool | None = None,
     default: datetime.datetime | None = None,
+    ignoretz: bool = False,
+    tzinfos: _TzInfos | None = None,
 ) -> datetime.datetime: ...
 def parse_to_dict(
     timestr: str,
-    dayfirst: bool = False,
-    yearfirst: bool = False,
+    *,
+    parserinfo: Any | None = None,
+    dayfirst: bool | None = None,
+    yearfirst: bool | None = None,
 ) -> ParseResultDict: ...
 def isoparse(dt_str: str) -> datetime.datetime: ...
 

@@ -1,36 +1,350 @@
-use dateutil_core::parser;
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use std::collections::HashMap;
 
-/// Parse a date/time string into a datetime.
-///
-/// Returns a naive datetime. Use `parse_to_dict` for access to parsed
-/// fields including timezone info.
-#[pyfunction]
-#[pyo3(name = "parse", signature = (timestr, dayfirst=false, yearfirst=false, default=None))]
-fn parse_py(
-    timestr: &str,
-    dayfirst: bool,
-    yearfirst: bool,
-    default: Option<chrono::NaiveDateTime>,
-) -> PyResult<chrono::NaiveDateTime> {
-    parser::parse(timestr, dayfirst, yearfirst, default)
+use dateutil_core::parser;
+use dateutil_core::parser::ParserInfo;
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTzInfo, PyType};
+
+use chrono::{Datelike, Timelike};
+
+// ---------------------------------------------------------------------------
+// Helpers: Python timezone construction
+// ---------------------------------------------------------------------------
+
+fn make_py_tz<'py>(py: Python<'py>, offset_seconds: i32) -> PyResult<Bound<'py, PyTzInfo>> {
+    let datetime_mod = py.import("datetime")?;
+    let td = datetime_mod
+        .getattr("timedelta")?
+        .call1((0, offset_seconds))?;
+    datetime_mod
+        .getattr("timezone")?
+        .call1((&td,))?
+        .cast_into::<PyTzInfo>()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
-/// Parse a date/time string and return a dict with all parsed fields.
+fn make_py_utc<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyTzInfo>> {
+    let datetime_mod = py.import("datetime")?;
+    datetime_mod
+        .getattr("timezone")?
+        .getattr("utc")?
+        .cast_into::<PyTzInfo>()
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+fn ndt_to_pydt<'py>(
+    py: Python<'py>,
+    ndt: chrono::NaiveDateTime,
+    tz: Option<&Bound<'py, PyTzInfo>>,
+) -> PyResult<Bound<'py, pyo3::PyAny>> {
+    let datetime_mod = py.import("datetime")?;
+    let datetime_cls = datetime_mod.getattr("datetime")?;
+    let us = ndt.and_utc().timestamp_subsec_micros();
+    match tz {
+        Some(tz) => datetime_cls.call1((
+            ndt.date().year(),
+            ndt.date().month(),
+            ndt.date().day(),
+            ndt.time().hour(),
+            ndt.time().minute(),
+            ndt.time().second(),
+            us,
+            tz,
+        )),
+        None => datetime_cls.call1((
+            ndt.date().year(),
+            ndt.date().month(),
+            ndt.date().day(),
+            ndt.time().hour(),
+            ndt.time().minute(),
+            ndt.time().second(),
+            us,
+        )),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// parserinfo — Rust pyclass (internal base)
+// ---------------------------------------------------------------------------
+
+/// Convert a Python list of `str | tuple[str, …]` into a lowercased
+/// `HashMap<String, usize>` where each string maps to its group index.
+fn convert(list: &Bound<'_, pyo3::PyAny>) -> PyResult<HashMap<String, usize>> {
+    let mut map = HashMap::new();
+    let seq: Vec<Bound<'_, pyo3::PyAny>> = list.extract()?;
+    for (i, item) in seq.iter().enumerate() {
+        if let Ok(s) = item.extract::<String>() {
+            map.insert(s.to_lowercase(), i);
+        } else {
+            let parts: Vec<String> = item.extract()?;
+            for s in parts {
+                map.insert(s.to_lowercase(), i);
+            }
+        }
+    }
+    Ok(map)
+}
+
+/// Build a `ParserInfo` from class-level attributes read from a Python type.
+fn build_parser_info(cls: &Bound<'_, PyType>) -> PyResult<ParserInfo> {
+    let jump_map = convert(&cls.getattr("JUMP")?)?;
+    let weekdays = convert(&cls.getattr("WEEKDAYS")?)?;
+    let months_raw = convert(&cls.getattr("MONTHS")?)?;
+    let months = months_raw
+        .into_iter()
+        .map(|(k, v)| (k, v + 1))
+        .collect();
+    let hms = convert(&cls.getattr("HMS")?)?;
+    let ampm = convert(&cls.getattr("AMPM")?)?;
+    let utczone_map = convert(&cls.getattr("UTCZONE")?)?;
+    let pertain_map = convert(&cls.getattr("PERTAIN")?)?;
+    let tzoffset: HashMap<String, i32> = cls.getattr("TZOFFSET")?.extract()?;
+
+    Ok(ParserInfo {
+        jump: jump_map.into_keys().collect(),
+        weekdays,
+        months,
+        hms,
+        ampm,
+        utczone: utczone_map.into_keys().collect(),
+        pertain: pertain_map.into_keys().collect(),
+        tzoffset,
+    })
+}
+
+/// Internal base class for ``parserinfo``.
 ///
-/// Keys: year, month, day, weekday, hour, minute, second, microsecond,
-///       tzname, tzoffset. Values are None when not present in the input.
+/// The public Python class subclasses this and calls ``_build(type(self))``
+/// in ``__init__`` so that subclass class-variable overrides are respected.
+#[pyclass(name = "_ParserInfoBase", subclass)]
+pub struct PyParserInfo {
+    inner: ParserInfo,
+    #[pyo3(get)]
+    dayfirst: bool,
+    #[pyo3(get)]
+    yearfirst: bool,
+}
+
+#[pymethods]
+impl PyParserInfo {
+    // ---- Class-level defaults (overridable by Python subclasses) ----
+
+    #[classattr]
+    #[allow(non_snake_case)]
+    fn JUMP() -> Vec<&'static str> {
+        vec![
+            " ", ".", ",", ";", "-", "/", "'", "at", "on", "and", "ad",
+            "m", "t", "of", "st", "nd", "rd", "th",
+        ]
+    }
+
+    #[classattr]
+    #[allow(non_snake_case)]
+    fn WEEKDAYS() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("Mon", "Monday"),
+            ("Tue", "Tuesday"),
+            ("Wed", "Wednesday"),
+            ("Thu", "Thursday"),
+            ("Fri", "Friday"),
+            ("Sat", "Saturday"),
+            ("Sun", "Sunday"),
+        ]
+    }
+
+    #[classattr]
+    #[allow(non_snake_case)]
+    fn MONTHS() -> Vec<Vec<&'static str>> {
+        vec![
+            vec!["Jan", "January"],
+            vec!["Feb", "February"],
+            vec!["Mar", "March"],
+            vec!["Apr", "April"],
+            vec!["May"],
+            vec!["Jun", "June"],
+            vec!["Jul", "July"],
+            vec!["Aug", "August"],
+            vec!["Sep", "Sept", "September"],
+            vec!["Oct", "October"],
+            vec!["Nov", "November"],
+            vec!["Dec", "December"],
+        ]
+    }
+
+    #[classattr]
+    #[allow(non_snake_case)]
+    fn HMS() -> Vec<(&'static str, &'static str, &'static str)> {
+        vec![
+            ("h", "hour", "hours"),
+            ("m", "minute", "minutes"),
+            ("s", "second", "seconds"),
+        ]
+    }
+
+    #[classattr]
+    #[allow(non_snake_case)]
+    fn AMPM() -> Vec<(&'static str, &'static str)> {
+        vec![("am", "a"), ("pm", "p")]
+    }
+
+    #[classattr]
+    #[allow(non_snake_case)]
+    fn UTCZONE() -> Vec<&'static str> {
+        vec!["UTC", "GMT", "Z", "z"]
+    }
+
+    #[classattr]
+    #[allow(non_snake_case)]
+    fn PERTAIN() -> Vec<&'static str> {
+        vec!["of"]
+    }
+
+    #[classattr]
+    #[allow(non_snake_case)]
+    fn TZOFFSET() -> HashMap<String, i32> {
+        HashMap::new()
+    }
+
+    // ---- Constructor ----
+
+    #[new]
+    #[pyo3(signature = (dayfirst=false, yearfirst=false))]
+    fn new(dayfirst: bool, yearfirst: bool) -> Self {
+        Self {
+            inner: ParserInfo::default(),
+            dayfirst,
+            yearfirst,
+        }
+    }
+
+    /// Read class-level variables and rebuild internal lookup tables.
+    /// Called from Python ``__init__`` with ``type(self)`` so that
+    /// subclass overrides are captured.
+    fn _build(&mut self, cls: &Bound<'_, PyType>) -> PyResult<()> {
+        self.inner = build_parser_info(cls)?;
+        Ok(())
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "parserinfo(dayfirst={}, yearfirst={})",
+            self.dayfirst, self.yearfirst
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// parse()
+// ---------------------------------------------------------------------------
+
+/// Parse a date/time string into a datetime.
 #[pyfunction]
-#[pyo3(name = "parse_to_dict", signature = (timestr, dayfirst=false, yearfirst=false))]
+#[pyo3(name = "parse", signature = (
+    timestr,
+    parserinfo = None,
+    *,
+    dayfirst = None,
+    yearfirst = None,
+    default = None,
+    ignoretz = false,
+    tzinfos = None,
+))]
+#[allow(clippy::too_many_arguments)]
+fn parse_py<'py>(
+    py: Python<'py>,
+    timestr: &str,
+    parserinfo: Option<Bound<'py, PyParserInfo>>,
+    dayfirst: Option<bool>,
+    yearfirst: Option<bool>,
+    default: Option<chrono::NaiveDateTime>,
+    ignoretz: bool,
+    tzinfos: Option<Bound<'py, pyo3::PyAny>>,
+) -> PyResult<Bound<'py, pyo3::PyAny>> {
+    let pi_ref = parserinfo.as_ref().map(|pi| pi.borrow());
+    let (info_ref, df, yf) = match pi_ref {
+        Some(ref pi) => (
+            Some(&pi.inner),
+            dayfirst.unwrap_or(pi.dayfirst),
+            yearfirst.unwrap_or(pi.yearfirst),
+        ),
+        None => (None, dayfirst.unwrap_or(false), yearfirst.unwrap_or(false)),
+    };
+
+    let res = parser::parse_to_result(timestr, df, yf, info_ref)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    let now = chrono::Local::now().naive_local();
+    let default_dt =
+        default.unwrap_or_else(|| now.date().and_hms_opt(0, 0, 0).unwrap());
+    let ndt = parser::build_naive(&res, default_dt)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    if ignoretz {
+        return ndt_to_pydt(py, ndt, None);
+    }
+
+    // tzinfos resolution
+    if let Some(ref tzinfos_obj) = tzinfos {
+        if let Some(ref tzname) = res.tzname {
+            let tzdata = if tzinfos_obj.is_callable() {
+                let offset_arg: Bound<'py, pyo3::PyAny> = match res.tzoffset {
+                    Some(o) => o.into_pyobject(py)?.into_any(),
+                    None => py.None().into_bound(py),
+                };
+                tzinfos_obj.call1((tzname.as_ref(), offset_arg))?
+            } else {
+                tzinfos_obj.get_item(tzname.as_ref())?
+            };
+
+            if tzdata.is_none() {
+                return ndt_to_pydt(py, ndt, None);
+            } else if let Ok(offset_secs) = tzdata.extract::<i32>() {
+                let tz = make_py_tz(py, offset_secs)?;
+                return ndt_to_pydt(py, ndt, Some(&tz));
+            } else {
+                let tz = tzdata.cast::<PyTzInfo>()?;
+                return ndt_to_pydt(py, ndt, Some(tz));
+            }
+        }
+    }
+
+    // Offset-based fallback
+    if let Some(offset) = res.tzoffset {
+        if offset == 0 {
+            let tz = make_py_utc(py)?;
+            return ndt_to_pydt(py, ndt, Some(&tz));
+        }
+        let tz = make_py_tz(py, offset)?;
+        return ndt_to_pydt(py, ndt, Some(&tz));
+    }
+
+    ndt_to_pydt(py, ndt, None)
+}
+
+// ---------------------------------------------------------------------------
+// parse_to_dict()
+// ---------------------------------------------------------------------------
+
+#[pyfunction]
+#[pyo3(name = "parse_to_dict", signature = (timestr, *, parserinfo=None, dayfirst=None, yearfirst=None))]
 fn parse_to_dict_py<'py>(
     py: Python<'py>,
     timestr: &str,
-    dayfirst: bool,
-    yearfirst: bool,
+    parserinfo: Option<Bound<'py, PyParserInfo>>,
+    dayfirst: Option<bool>,
+    yearfirst: Option<bool>,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let res = parser::parse_to_result(timestr, dayfirst, yearfirst)
+    let pi_ref = parserinfo.as_ref().map(|pi| pi.borrow());
+    let (info_ref, df, yf) = match pi_ref {
+        Some(ref pi) => (
+            Some(&pi.inner),
+            dayfirst.unwrap_or(pi.dayfirst),
+            yearfirst.unwrap_or(pi.yearfirst),
+        ),
+        None => (None, dayfirst.unwrap_or(false), yearfirst.unwrap_or(false)),
+    };
+
+    let res = parser::parse_to_result(timestr, df, yf, info_ref)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     let dict = PyDict::new(py);
@@ -47,7 +361,6 @@ fn parse_to_dict_py<'py>(
     Ok(dict)
 }
 
-/// Parse an ISO-8601 date/time string into a datetime.
 #[pyfunction]
 #[pyo3(name = "isoparse")]
 fn isoparse_py(dt_str: &str) -> PyResult<chrono::NaiveDateTime> {
@@ -56,6 +369,7 @@ fn isoparse_py(dt_str: &str) -> PyResult<chrono::NaiveDateTime> {
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<PyParserInfo>()?;
     m.add_function(pyo3::wrap_pyfunction!(parse_py, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(parse_to_dict_py, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(isoparse_py, m)?)?;
