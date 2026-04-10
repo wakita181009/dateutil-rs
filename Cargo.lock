@@ -225,6 +225,7 @@ dependencies = [
  "bitflags",
  "chrono",
  "criterion",
+ "iana-time-zone",
  "phf",
  "smallvec",
  "thiserror",

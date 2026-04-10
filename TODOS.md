@@ -5,14 +5,14 @@ Feature gaps between python-dateutil v2.9.0 and dateutil-rs v1 (dateutil-core / 
 ## High Priority
 
 ### Phase 4: Timezone Module
-- [ ] `TzUtc` — UTC timezone
-- [ ] `TzOffset` — Fixed UTC offset with name
-- [ ] `TzLocal` — System local timezone
-- [ ] `TzFile` — TZif binary file parsing with optimized abbreviations
-- [ ] `gettz(name)` — Timezone factory with caching
-- [ ] `datetime_exists(dt, tz)` — Check DST gap
-- [ ] `datetime_ambiguous(dt, tz)` — Check DST overlap
-- [ ] `resolve_imaginary(dt)` — Shift imaginary datetime forward
+- [x] `TzUtc` — UTC timezone
+- [x] `TzOffset` — Fixed UTC offset with name
+- [x] `TzLocal` — System local timezone
+- [x] `TzFile` — TZif binary file parsing with optimized abbreviations
+- [x] `gettz(name)` — Timezone factory with caching
+- [x] `datetime_exists(dt, tz)` — Check DST gap
+- [x] `datetime_ambiguous(dt, tz)` — Check DST overlap
+- [x] `resolve_imaginary(dt)` — Shift imaginary datetime forward
 
 ### Parser: Missing Parameters
 - [ ] `tzinfos` callback — Custom timezone name → tzinfo resolution
@@ -22,17 +22,10 @@ Feature gaps between python-dateutil v2.9.0 and dateutil-rs v1 (dateutil-core / 
 ### Parser: parserinfo Customization
 - [ ] `parserinfo` class — Custom month/weekday names, jump words, etc. (enables non-English parsing)
 
-### RelativeDelta: Arithmetic Operators
-- [ ] `normalized()` — Normalize months/years overflow
-
 ## Low Priority
 
 ### Parser
 - [ ] `fuzzy_with_tokens()` — Return `(datetime, tuple_of_tokens)`
-
-### RRule
-- [ ] `cache` parameter — Cache generated occurrences
-- [ ] Property getters for `count`, `until`, `interval`, `wkst`, and all `by*` parameters
 
 ## Intentionally Excluded (v1 design decision)
 

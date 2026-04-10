@@ -5,6 +5,7 @@ pub mod easter;
 pub mod parser;
 pub mod relativedelta;
 pub mod rrule;
+pub mod tz;
 
 /// Register all v1 bindings on the given module.
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -13,6 +14,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     parser::register(m)?;
     relativedelta::register(m)?;
     rrule::register(m)?;
+    tz::register(m)?;
     Ok(())
 }
 

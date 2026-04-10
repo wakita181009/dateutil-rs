@@ -357,6 +357,24 @@ bitflags::bitflags! {
 }
 
 // ---------------------------------------------------------------------------
+// Bitflags for O(1) optional byxxx field presence checks in day_passes_filter
+// ---------------------------------------------------------------------------
+
+bitflags::bitflags! {
+    /// Tracks which optional byxxx fields are set on an RRule.
+    ///
+    /// Used in `day_passes_filter()` to avoid scattered `Option` discriminant
+    /// loads — a single `u8` AND replaces 4 separate memory loads.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) struct ByPresent: u8 {
+        const WEEKNO   = 1 << 0;
+        const NWEEKDAY = 1 << 1;
+        const EASTER   = 1 << 2;
+        const YEARDAY  = 1 << 3;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // RRule
 // ---------------------------------------------------------------------------
 
@@ -388,6 +406,9 @@ pub struct RRule {
     pub(crate) bynmonthday_mask: u32,
 
     pub(crate) timeset: Option<SmallVec<[NaiveTime; 4]>>,
+
+    /// Cache-friendly presence mask for optional byxxx fields in day_passes_filter.
+    pub(crate) by_present: ByPresent,
 
     /// Original weekday values for Display (preserves nth info).
     pub(crate) orig_byweekday: Option<ByList<Weekday>>,
@@ -843,6 +864,13 @@ impl RRuleBuilder {
             Some(ts)
         };
 
+        // Pre-compute presence mask for optional byxxx fields
+        let mut by_present = ByPresent::empty();
+        if byweekno.is_some() { by_present |= ByPresent::WEEKNO; }
+        if bynweekday.is_some() { by_present |= ByPresent::NWEEKDAY; }
+        if byeaster.is_some() { by_present |= ByPresent::EASTER; }
+        if byyearday.is_some() { by_present |= ByPresent::YEARDAY; }
+
         // Pre-compute bitmasks for O(1) filter checks
         let bymonth_mask = bymonth.as_deref().map_or(0u16, |v| {
             v.iter().fold(0u16, |acc, &m| acc | (1u16 << m))
@@ -880,6 +908,7 @@ impl RRuleBuilder {
             bymonthday_mask,
             bynmonthday_mask,
             timeset,
+            by_present,
             orig_byweekday,
             explicit,
         })

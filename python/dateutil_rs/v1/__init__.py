@@ -20,6 +20,16 @@ from dateutil_rs.v1.rrule import (
     rruleset,
     rrulestr,
 )
+from dateutil_rs.v1.tz import (
+    datetime_ambiguous,
+    datetime_exists,
+    gettz,
+    resolve_imaginary,
+    tzfile,
+    tzlocal,
+    tzoffset,
+    tzutc,
+)
 
 __all__ = [
     "DAILY",
@@ -39,13 +49,21 @@ __all__ = [
     "WE",
     "WEEKLY",
     "YEARLY",
+    "datetime_ambiguous",
+    "datetime_exists",
     "easter",
+    "gettz",
     "isoparse",
     "parse",
     "parse_to_dict",
     "relativedelta",
+    "resolve_imaginary",
     "rrule",
     "rruleset",
     "rrulestr",
+    "tzfile",
+    "tzlocal",
+    "tzoffset",
+    "tzutc",
     "weekday",
 ]

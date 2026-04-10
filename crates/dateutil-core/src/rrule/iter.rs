@@ -303,26 +303,32 @@ impl IterInfo {
     }
 
     /// Single inline predicate: does day index `i` pass all byxxx filters?
+    ///
+    /// Optional field presence is checked via `by_present` bitmask (single `u8`)
+    /// instead of scattered `Option` discriminant loads for better cache locality.
     #[inline]
     fn day_passes_filter(&self, i: usize) -> bool {
         let rr = &self.rule;
+        let present = rr.by_present;
 
         if rr.bymonth_mask != 0 && (rr.bymonth_mask & (1u16 << self.mmask[i])) == 0 {
             return false;
         }
-        if rr.byweekno.is_some() && (!self.wnomask_active || self.wnomask_buf[i] == 0) {
+        if present.contains(ByPresent::WEEKNO)
+            && (!self.wnomask_active || self.wnomask_buf[i] == 0)
+        {
             return false;
         }
         if rr.byweekday_mask != 0 && (rr.byweekday_mask & (1u8 << self.wdaymask[i])) == 0 {
             return false;
         }
-        if rr.bynweekday.is_some()
+        if present.contains(ByPresent::NWEEKDAY)
             && self.nwdaymask_active
             && (i >= self.nwdaymask_buf.len() || self.nwdaymask_buf[i] == 0)
         {
             return false;
         }
-        if rr.byeaster.is_some()
+        if present.contains(ByPresent::EASTER)
             && (!self.eastermask_active
                 || i >= self.eastermask_buf.len()
                 || self.eastermask_buf[i] == 0)
@@ -335,7 +341,8 @@ impl IterInfo {
         {
             return false;
         }
-        if let Some(ref byd) = rr.byyearday {
+        if present.contains(ByPresent::YEARDAY) {
+            let byd = rr.byyearday.as_ref().unwrap();
             let ylen = self.yearlen as usize;
             if i < ylen {
                 if !byd.has_pos((i + 1) as u32)
@@ -559,7 +566,7 @@ impl RRuleIter {
             }
             _ => {}
         }
-        if self.timeset_buf.len() > 1 && !self.timeset_buf.windows(2).all(|w| w[0] <= w[1]) {
+        if self.timeset_buf.len() > 1 && !self.timeset_buf.array_windows::<2>().all(|[a, b]| a <= b) {
             self.timeset_buf.sort();
         }
     }

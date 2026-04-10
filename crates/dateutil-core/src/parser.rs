@@ -29,6 +29,26 @@ fn fast_parse_int(s: &str) -> Option<i32> {
     Some(n)
 }
 
+/// Fast decimal parse for "NN" or "NN.FFFFFF" patterns.
+/// Returns (integer_part, microseconds) using pure integer arithmetic — no f64.
+#[inline]
+fn fast_parse_decimal(s: &str) -> Option<(i32, u32)> {
+    let dot_pos = s.as_bytes().iter().position(|&b| b == b'.')?;
+    let int_part = fast_parse_int(&s[..dot_pos])?;
+    let frac_str = &s[dot_pos + 1..];
+    if frac_str.is_empty() {
+        return Some((int_part, 0));
+    }
+    let us = match frac_str.len() {
+        1..=5 => {
+            const SCALE: [u32; 5] = [100_000, 10_000, 1_000, 100, 10];
+            fast_parse_int(frac_str)? as u32 * SCALE[frac_str.len() - 1]
+        }
+        _ => fast_parse_int(&frac_str[..6])? as u32,
+    };
+    Some((int_part, us))
+}
+
 // ---------------------------------------------------------------------------
 // PHF lookup tables — compile-time perfect hash, zero runtime allocation
 // ---------------------------------------------------------------------------
@@ -473,32 +493,29 @@ fn try_parse_token<'a>(
 ) -> usize {
     let token = &tokens[i];
 
-    // Try as number — fast integer path first (byte-level, no heap)
-    let num: Option<(i32, f64)> = if let Some(vi) = fast_parse_int(token) {
-        Some((vi, vi as f64))
-    } else if let Ok(vf) = token.parse::<f64>() {
-        Some((vf as i32, vf))
+    // Try as number — fast integer path first, then decimal (no f64)
+    let num: Option<(i32, u32)> = if let Some(vi) = fast_parse_int(token) {
+        Some((vi, 0))
     } else {
-        None
+        fast_parse_decimal(token)
     };
-    if let Some((value_i, value)) = num {
+    if let Some((value_i, value_us)) = num {
         // Check for HH:MM:SS pattern (number followed by ":" or HMS word)
         if i + 1 < len && tokens[i + 1] == ":" {
-            return try_parse_time_component(tokens, i, len, res, value);
+            return try_parse_time_component(tokens, i, len, res, value_i as u32);
         }
 
         // Check if next token is HMS
         if i + 1 < len {
             if let Some(hms_idx) = lookup_hms(&tokens[i + 1]) {
-                assign_hms(res, hms_idx, value);
+                assign_hms(res, hms_idx, value_i as u32, value_us);
                 return 2; // number + HMS word
             }
         }
 
         // Check for decimal seconds (only accept pure fractional values like "0.5")
-        if token.contains('.') && value_i == 0 && res.second.is_some() && res.microsecond.is_none() {
-            let frac = value - value.floor();
-            res.microsecond = Some((frac * 1_000_000.0).round() as u32);
+        if value_us > 0 && value_i == 0 && res.second.is_some() && res.microsecond.is_none() {
+            res.microsecond = Some(value_us);
             return 1;
         }
 
@@ -628,11 +645,11 @@ fn try_parse_time_component(
     i: usize,
     len: usize,
     res: &mut ParseResult<'_>,
-    value: f64,
+    value: u32,
 ) -> usize {
     // Pattern: HH:MM or HH:MM:SS or HH:MM:SS.ffffff
     if res.hour.is_none() {
-        res.hour = Some(value as u32);
+        res.hour = Some(value);
         let mut consumed = 1; // the hour number
 
         // Look for :MM — minutes are always integers, use fast path
@@ -646,12 +663,11 @@ fn try_parse_time_component(
                         // Pure integer seconds (fast path)
                         res.second = Some(sec as u32);
                         consumed = 5;
-                    } else if let Ok(sec_f) = tokens[i + 4].parse::<f64>() {
-                        // Fractional seconds (e.g. "45.123456")
-                        res.second = Some(sec_f as u32);
-                        let frac = sec_f - sec_f.floor();
-                        if frac > 0.0 {
-                            res.microsecond = Some((frac * 1_000_000.0).round() as u32);
+                    } else if let Some((sec, us)) = fast_parse_decimal(&tokens[i + 4]) {
+                        // Fractional seconds (e.g. "45.123456") — integer arithmetic only
+                        res.second = Some(sec as u32);
+                        if us > 0 {
+                            res.microsecond = Some(us);
                         }
                         consumed = 5;
                     }
@@ -664,15 +680,14 @@ fn try_parse_time_component(
 }
 
 #[inline]
-fn assign_hms(res: &mut ParseResult<'_>, hms_idx: usize, value: f64) {
+fn assign_hms(res: &mut ParseResult<'_>, hms_idx: usize, int_val: u32, us: u32) {
     match hms_idx {
-        0 => res.hour = Some(value as u32),
-        1 => res.minute = Some(value as u32),
+        0 => res.hour = Some(int_val),
+        1 => res.minute = Some(int_val),
         2 => {
-            res.second = Some(value as u32);
-            let frac = value - value.floor();
-            if frac > 0.0 {
-                res.microsecond = Some((frac * 1_000_000.0).round() as u32);
+            res.second = Some(int_val);
+            if us > 0 {
+                res.microsecond = Some(us);
             }
         }
         _ => {}

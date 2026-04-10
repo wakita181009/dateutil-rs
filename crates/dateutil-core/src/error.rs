@@ -13,6 +13,8 @@ pub enum Error {
     Parse(#[from] ParseError),
     #[error("{0}")]
     RRule(#[from] RRuleError),
+    #[error("{0}")]
+    Tz(#[from] TzError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -63,6 +65,20 @@ pub enum RRuleError {
     InvalidInterval,
     #[error("{0}")]
     ValueError(Box<str>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum TzError {
+    #[error("I/O error: {0}")]
+    Io(Box<str>),
+    #[error("invalid TZif magic: expected 'TZif'")]
+    InvalidMagic,
+    #[error("invalid TZif data: {0}")]
+    InvalidData(Box<str>),
+    #[error("invalid POSIX TZ string: {0}")]
+    InvalidPosixTz(Box<str>),
+    #[error("timezone not found: {0}")]
+    NotFound(Box<str>),
 }
 
 #[cfg(test)]
