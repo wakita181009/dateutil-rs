@@ -41,6 +41,8 @@ FR: weekday
 SA: weekday
 SU: weekday
 
+_Weekday = weekday
+
 # ---------------------------------------------------------------------------
 # easter
 # ---------------------------------------------------------------------------
@@ -120,7 +122,7 @@ class relativedelta:
     @property
     def microsecond(self) -> int | None: ...
     @property
-    def weekday(self) -> weekday | None: ...
+    def weekday(self) -> _Weekday | None: ...
     def __init__(
         self,
         years: int = 0,
@@ -135,7 +137,7 @@ class relativedelta:
         year: int | None = None,
         month: int | None = None,
         day: int | None = None,
-        weekday: weekday | None = None,
+        weekday: _Weekday | None = None,
         yearday: int | None = None,
         nlyearday: int | None = None,
         hour: int | None = None,
@@ -197,7 +199,7 @@ class rrule:
         byyearday: list[int] | None = None,
         byeaster: list[int] | None = None,
         byweekno: list[int] | None = None,
-        byweekday: list[int | weekday] | None = None,
+        byweekday: list[int | _Weekday] | None = None,
         byhour: list[int] | None = None,
         byminute: list[int] | None = None,
         bysecond: list[int] | None = None,
