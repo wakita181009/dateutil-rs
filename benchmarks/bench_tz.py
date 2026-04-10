@@ -40,14 +40,10 @@ def test_tz_gettz_offset(benchmark, du):
 
 
 # --- Timezone conversion benchmarks ---
-# These require tzinfo protocol (datetime.astimezone), which v1 tz types
-# do not implement. v1 uses a separate API (fromutc method).
 
 
 def test_tz_convert_utc_to_eastern(benchmark, du):
     """Convert UTC datetime to US/Eastern."""
-    if du.name == "v1":
-        pytest.skip("v1 tz types do not implement datetime.tzinfo protocol")
     UTC_DT = datetime.datetime(2024, 7, 15, 14, 30, 0, tzinfo=du.tz.UTC)
     eastern = du.tz.gettz("America/New_York")
 
@@ -59,8 +55,6 @@ def test_tz_convert_utc_to_eastern(benchmark, du):
 
 def test_tz_convert_utc_to_jst(benchmark, du):
     """Convert UTC datetime to Asia/Tokyo."""
-    if du.name == "v1":
-        pytest.skip("v1 tz types do not implement datetime.tzinfo protocol")
     UTC_DT = datetime.datetime(2024, 7, 15, 14, 30, 0, tzinfo=du.tz.UTC)
     jst = du.tz.gettz("Asia/Tokyo")
 
@@ -72,8 +66,6 @@ def test_tz_convert_utc_to_jst(benchmark, du):
 
 def test_tz_localize_naive(benchmark, du):
     """Attach timezone to naive datetime via replace."""
-    if du.name == "v1":
-        pytest.skip("v1 tz types do not implement datetime.tzinfo protocol")
     NAIVE_DT = datetime.datetime(2024, 7, 15, 14, 30, 0)
     jst = du.tz.gettz("Asia/Tokyo")
 
@@ -85,8 +77,6 @@ def test_tz_localize_naive(benchmark, du):
 
 def test_tz_convert_chain(benchmark, du):
     """Chain conversion: UTC -> Eastern -> Pacific -> JST."""
-    if du.name == "v1":
-        pytest.skip("v1 tz types do not implement datetime.tzinfo protocol")
     UTC_DT = datetime.datetime(2024, 7, 15, 14, 30, 0, tzinfo=du.tz.UTC)
     eastern = du.tz.gettz("America/New_York")
     pacific = du.tz.gettz("America/Los_Angeles")
