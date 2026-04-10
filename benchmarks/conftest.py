@@ -6,11 +6,9 @@ Build both native modules before running:
     maturin develop --manifest-path crates/dateutil-py/Cargo.toml -F python
 """
 
-import datetime
 from types import SimpleNamespace
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # python-dateutil (PyPI baseline)
@@ -114,61 +112,23 @@ def _import_v1():
     except ImportError:
         return None
 
-    # --- v1 relativedelta wrapper (match python-dateutil API) ---
+    # --- v1 relativedelta (direct use — __radd__/__rsub__/__mul__/from_diff in Rust) ---
 
-    class V1RelativeDelta:
-        """Thin wrapper so datetime +/- relativedelta works in benchmarks."""
-
-        __slots__ = ("_inner",)
-
-        @staticmethod
-        def _to_dt(d):
-            """Promote date to datetime for v1 from_diff (accepts NaiveDateTime only)."""
-            if isinstance(d, datetime.datetime):
-                return d
-            return datetime.datetime.combine(d, datetime.time())
-
-        def __init__(self, dt1=None, dt2=None, **kwargs):
-            if dt1 is not None and dt2 is not None:
-                self._inner = _v1_rd_cls.from_diff(
-                    self._to_dt(dt1), self._to_dt(dt2),
-                )
-            else:
-                self._inner = _v1_rd_cls(**kwargs)
-
-        def __radd__(self, other):
-            if isinstance(other, datetime.datetime):
-                return self._inner.add_to_datetime(other)
-            if isinstance(other, datetime.date):
-                return self._inner.add_to_date(other)
-            return NotImplemented
-
-        def __rsub__(self, other):
-            neg = -self._inner
-            if isinstance(other, datetime.datetime):
-                return neg.add_to_datetime(other)
-            if isinstance(other, datetime.date):
-                return neg.add_to_date(other)
-            return NotImplemented
-
-        def __mul__(self, n):
-            i = self._inner
-            return V1RelativeDelta(
-                years=i.years * n,
-                months=i.months * n,
-                days=i.days * n,
-                hours=i.hours * n,
-                minutes=i.minutes * n,
-                seconds=i.seconds * n,
-                microseconds=i.microseconds * n,
-            )
-
-        def __rmul__(self, n):
-            return self.__mul__(n)
+    def _v1_relativedelta(dt1=None, dt2=None, **kwargs):
+        """Factory matching python-dateutil's relativedelta(dt1=, dt2=, **kw) API."""
+        if dt1 is not None and dt2 is not None:
+            return _v1_rd_cls.from_diff(dt1, dt2)
+        return _v1_rd_cls(**kwargs)
 
     v1_rd_module = SimpleNamespace(
-        relativedelta=V1RelativeDelta,
-        MO=MO, TU=TU, WE=WE, TH=TH, FR=FR, SA=SA, SU=SU,
+        relativedelta=_v1_relativedelta,
+        MO=MO,
+        TU=TU,
+        WE=WE,
+        TH=TH,
+        FR=FR,
+        SA=SA,
+        SU=SU,
     )
 
     # --- v1 rrule wrapper (convert tuple → list for byweekday) ---
@@ -186,9 +146,20 @@ def _import_v1():
         rrule=_v1_rrule_compat,
         rruleset=_v1_rruleset_cls,
         rrulestr=_v1_rrulestr_fn,
-        YEARLY=YEARLY, MONTHLY=MONTHLY, WEEKLY=WEEKLY, DAILY=DAILY,
-        HOURLY=HOURLY, MINUTELY=MINUTELY, SECONDLY=SECONDLY,
-        MO=MO, TU=TU, WE=WE, TH=TH, FR=FR, SA=SA, SU=SU,
+        YEARLY=YEARLY,
+        MONTHLY=MONTHLY,
+        WEEKLY=WEEKLY,
+        DAILY=DAILY,
+        HOURLY=HOURLY,
+        MINUTELY=MINUTELY,
+        SECONDLY=SECONDLY,
+        MO=MO,
+        TU=TU,
+        WE=WE,
+        TH=TH,
+        FR=FR,
+        SA=SA,
+        SU=SU,
     )
 
     # --- v1 easter namespace ---
@@ -252,11 +223,15 @@ def du(request):
 
     if request.param == "v0":
         if _v0 is None:
-            pytest.skip("dateutil_rs v0 not installed (run: maturin develop --manifest-path crates/dateutil-rs/Cargo.toml -F python)")
+            pytest.skip(
+                "dateutil_rs v0 not installed (run: maturin develop --manifest-path crates/dateutil-rs/Cargo.toml -F python)"
+            )
         return _v0
 
     # v1
     if _v1 is None:
-        pytest.skip("dateutil_rs v1 not installed (run: maturin develop --manifest-path crates/dateutil-py/Cargo.toml -F python)")
+        pytest.skip(
+            "dateutil_rs v1 not installed (run: maturin develop --manifest-path crates/dateutil-py/Cargo.toml -F python)"
+        )
 
     return _v1

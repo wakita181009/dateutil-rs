@@ -1,6 +1,9 @@
 use super::common::PyWeekday;
+use super::conv;
+use chrono::{Datelike, NaiveDateTime};
 use dateutil_core::relativedelta::{RelativeDelta, RelativeDeltaBuilder};
 use pyo3::prelude::*;
+use pyo3::types::{PyDate, PyDateTime, PyDelta, PyDeltaAccess, PyTzInfoAccess};
 
 /// Python wrapper for dateutil_core::relativedelta::RelativeDelta.
 #[pyclass(name = "relativedelta", from_py_object)]
@@ -71,12 +74,25 @@ impl PyRelativeDelta {
         Ok(Self { inner })
     }
 
-    /// Create a relativedelta from the difference between two datetimes.
+    /// Create a relativedelta from the difference between two dates/datetimes.
+    ///
+    /// Both arguments must be either both naive or both aware. Mixed
+    /// naive/aware raises `TypeError`, matching python-dateutil behaviour.
+    /// When both are aware, datetimes are UTC-normalised before diffing.
     #[staticmethod]
-    fn from_diff(dt1: chrono::NaiveDateTime, dt2: chrono::NaiveDateTime) -> Self {
-        Self {
-            inner: RelativeDelta::from_diff(dt1, dt2),
+    fn from_diff(dt1: &Bound<'_, PyAny>, dt2: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let (ndt1, aware1) = py_any_to_ndt_for_diff(dt1)?;
+        let (ndt2, aware2) = py_any_to_ndt_for_diff(dt2)?;
+
+        if aware1 != aware2 {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "can't compare offset-naive and offset-aware datetimes",
+            ));
         }
+
+        Ok(Self {
+            inner: RelativeDelta::from_diff(ndt1, ndt2),
+        })
     }
 
     /// Add this delta to a datetime.
@@ -134,16 +150,74 @@ impl PyRelativeDelta {
 
     // Arithmetic operations
 
-    fn __add__(&self, other: &PyRelativeDelta) -> Self {
-        Self {
-            inner: self.inner.add_rd(&other.inner),
+    fn __add__<'py>(
+        &self,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = other.py();
+
+        // relativedelta + relativedelta
+        if let Ok(rd) = other.extract::<PyRef<'_, PyRelativeDelta>>() {
+            let result = Self { inner: self.inner.add_rd(&rd.inner) };
+            return Ok(Bound::new(py, result)?.into_any());
         }
+
+        // relativedelta + timedelta
+        if let Ok(td) = other.cast::<PyDelta>() {
+            let td_rd = timedelta_to_rd(td)?;
+            let result = Self { inner: self.inner.add_rd(&td_rd) };
+            return Ok(Bound::new(py, result)?.into_any());
+        }
+
+        // relativedelta + datetime (check BEFORE date — datetime is a date subclass)
+        if let Ok(dt) = other.cast::<PyDateTime>() {
+            let ndt = conv::pydt_to_naive(dt);
+            let result = self.inner.add_to_naive_datetime(ndt);
+            let tzinfo = dt.get_tzinfo();
+            return conv::ndt_to_py_datetime(py, result, tzinfo.as_ref());
+        }
+
+        // relativedelta + date
+        if other.cast::<PyDate>().is_ok() {
+            if self.inner.has_time() {
+                let ndt = conv::py_any_to_naive_datetime(other)?;
+                let result = self.inner.add_to_naive_datetime(ndt);
+                return conv::ndt_to_py_datetime(py, result, None);
+            }
+            let nd = conv::py_any_to_naive_date(other)?;
+            let result = self.inner.add_to_naive_date(nd);
+            let obj = PyDate::new(py, result.year(), result.month() as u8, result.day() as u8)?;
+            return Ok(obj.into_any());
+        }
+
+        Ok(py.NotImplemented().into_bound(py).into_any())
     }
 
-    fn __sub__(&self, other: &PyRelativeDelta) -> Self {
-        Self {
-            inner: self.inner.sub_rd(&other.inner),
+    fn __radd__<'py>(
+        &self,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.__add__(other)
+    }
+
+    fn __sub__<'py>(
+        &self,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = other.py();
+        if let Ok(rd) = other.extract::<PyRef<'_, PyRelativeDelta>>() {
+            let result = Self { inner: self.inner.sub_rd(&rd.inner) };
+            return Ok(Bound::new(py, result)?.into_any());
         }
+        Ok(py.NotImplemented().into_bound(py).into_any())
+    }
+
+    fn __rsub__<'py>(
+        &self,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let neg = Self { inner: self.inner.neg() };
+        neg.__add__(other)
     }
 
     fn __neg__(&self) -> Self {
@@ -152,21 +226,32 @@ impl PyRelativeDelta {
         }
     }
 
-    fn __mul__(&self, factor: f64) -> Self {
-        Self {
-            inner: self.inner.mul(factor),
+    fn __mul__<'py>(
+        &self,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = other.py();
+        match other.extract::<f64>() {
+            Ok(f) => Ok(Bound::new(py, Self { inner: self.inner.mul(f) })?.into_any()),
+            Err(_) => Ok(py.NotImplemented().into_bound(py).into_any()),
         }
     }
 
-    fn __rmul__(&self, factor: f64) -> Self {
-        Self {
-            inner: self.inner.mul(factor),
-        }
+    fn __rmul__<'py>(
+        &self,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.__mul__(other)
     }
 
-    fn __truediv__(&self, factor: f64) -> Self {
-        Self {
-            inner: self.inner.div(factor),
+    fn __truediv__<'py>(
+        &self,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = other.py();
+        match other.extract::<f64>() {
+            Ok(f) => Ok(Bound::new(py, Self { inner: self.inner.div(f) })?.into_any()),
+            Err(_) => Ok(py.NotImplemented().into_bound(py).into_any()),
         }
     }
 
@@ -198,6 +283,45 @@ impl PyRelativeDelta {
     fn __str__(&self) -> String {
         self.inner.to_string()
     }
+}
+
+// --- timedelta → RelativeDelta conversion ---
+
+/// Convert a Python `datetime.timedelta` to a `RelativeDelta` with
+/// equivalent days, seconds, and microseconds.
+fn timedelta_to_rd(td: &Bound<'_, PyDelta>) -> PyResult<RelativeDelta> {
+    RelativeDeltaBuilder::new()
+        .days(td.get_days())
+        .seconds(td.get_seconds())
+        .microseconds(td.get_microseconds() as i64)
+        .build()
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+// --- from_diff-specific helper (UTC normalisation + awareness check) ---
+
+/// Extract `NaiveDateTime` from a Python datetime/date for `from_diff`,
+/// along with an awareness flag. For aware datetimes the returned
+/// `NaiveDateTime` is UTC-normalised (wall clock minus utcoffset).
+/// `date` objects are always naive.
+fn py_any_to_ndt_for_diff(obj: &Bound<'_, PyAny>) -> PyResult<(NaiveDateTime, bool)> {
+    // datetime first (subclass of date)
+    if let Ok(dt) = obj.cast::<PyDateTime>() {
+        let ndt = conv::pydt_to_naive(dt);
+        if let Some(ref tzinfo) = dt.get_tzinfo() {
+            let utcoffset_obj = tzinfo.call_method1("utcoffset", (obj,))?;
+            if !utcoffset_obj.is_none() {
+                let td = utcoffset_obj.cast::<PyDelta>()?;
+                let offset_secs =
+                    td.get_days() as i64 * 86_400 + td.get_seconds() as i64;
+                let utc_ndt = ndt - chrono::Duration::seconds(offset_secs);
+                return Ok((utc_ndt, true));
+            }
+        }
+        return Ok((ndt, false));
+    }
+    // date or other — always naive
+    Ok((conv::py_any_to_naive_datetime(obj)?, false))
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

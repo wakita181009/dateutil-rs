@@ -1,67 +1,10 @@
 use std::collections::HashMap;
 
+use super::conv::{make_py_tz, make_py_utc, ndt_to_py_datetime};
 use dateutil_core::parser;
 use dateutil_core::parser::ParserInfo;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTzInfo, PyType};
-
-use chrono::{Datelike, Timelike};
-
-// ---------------------------------------------------------------------------
-// Helpers: Python timezone construction
-// ---------------------------------------------------------------------------
-
-fn make_py_tz<'py>(py: Python<'py>, offset_seconds: i32) -> PyResult<Bound<'py, PyTzInfo>> {
-    let datetime_mod = py.import("datetime")?;
-    let td = datetime_mod
-        .getattr("timedelta")?
-        .call1((0, offset_seconds))?;
-    datetime_mod
-        .getattr("timezone")?
-        .call1((&td,))?
-        .cast_into::<PyTzInfo>()
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-}
-
-fn make_py_utc<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyTzInfo>> {
-    let datetime_mod = py.import("datetime")?;
-    datetime_mod
-        .getattr("timezone")?
-        .getattr("utc")?
-        .cast_into::<PyTzInfo>()
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-}
-
-fn ndt_to_pydt<'py>(
-    py: Python<'py>,
-    ndt: chrono::NaiveDateTime,
-    tz: Option<&Bound<'py, PyTzInfo>>,
-) -> PyResult<Bound<'py, pyo3::PyAny>> {
-    let datetime_mod = py.import("datetime")?;
-    let datetime_cls = datetime_mod.getattr("datetime")?;
-    let us = ndt.and_utc().timestamp_subsec_micros();
-    match tz {
-        Some(tz) => datetime_cls.call1((
-            ndt.date().year(),
-            ndt.date().month(),
-            ndt.date().day(),
-            ndt.time().hour(),
-            ndt.time().minute(),
-            ndt.time().second(),
-            us,
-            tz,
-        )),
-        None => datetime_cls.call1((
-            ndt.date().year(),
-            ndt.date().month(),
-            ndt.date().day(),
-            ndt.time().hour(),
-            ndt.time().minute(),
-            ndt.time().second(),
-            us,
-        )),
-    }
-}
 
 // ---------------------------------------------------------------------------
 // parserinfo — Rust pyclass (internal base)
@@ -302,7 +245,7 @@ fn parse_py<'py>(
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     if ignoretz {
-        return ndt_to_pydt(py, ndt, None);
+        return ndt_to_py_datetime(py, ndt, None);
     }
 
     // tzinfos resolution
@@ -319,13 +262,13 @@ fn parse_py<'py>(
             };
 
             if tzdata.is_none() {
-                return ndt_to_pydt(py, ndt, None);
+                return ndt_to_py_datetime(py, ndt, None);
             } else if let Ok(offset_secs) = tzdata.extract::<i32>() {
                 let tz = make_py_tz(py, offset_secs)?;
-                return ndt_to_pydt(py, ndt, Some(&tz));
+                return ndt_to_py_datetime(py, ndt, Some(&tz));
             } else {
                 let tz = tzdata.cast::<PyTzInfo>()?;
-                return ndt_to_pydt(py, ndt, Some(tz));
+                return ndt_to_py_datetime(py, ndt, Some(tz));
             }
         }
     }
@@ -334,13 +277,13 @@ fn parse_py<'py>(
     if let Some(offset) = res.tzoffset {
         if offset == 0 {
             let tz = make_py_utc(py)?;
-            return ndt_to_pydt(py, ndt, Some(&tz));
+            return ndt_to_py_datetime(py, ndt, Some(&tz));
         }
         let tz = make_py_tz(py, offset)?;
-        return ndt_to_pydt(py, ndt, Some(&tz));
+        return ndt_to_py_datetime(py, ndt, Some(&tz));
     }
 
-    ndt_to_pydt(py, ndt, None)
+    ndt_to_py_datetime(py, ndt, None)
 }
 
 // ---------------------------------------------------------------------------

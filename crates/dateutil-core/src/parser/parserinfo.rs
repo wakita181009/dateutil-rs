@@ -143,13 +143,15 @@ impl ParserInfo {
 
     /// Look up a known timezone abbreviation. Returns offset in seconds.
     /// UTC-equivalent zones return `Some(0)`. Matching is case-insensitive.
+    /// Single `lowercase_buf` call covers both utczone and tzoffset lookups.
     #[inline]
     pub fn tzoffset(&self, name: &str) -> Option<i32> {
-        if self.utczone(name) {
+        let buf = lowercase_buf(name)?;
+        let low = lower_str(name, &buf);
+        if self.utczone.contains(low) {
             return Some(0);
         }
-        let buf = lowercase_buf(name)?;
-        self.tzoffset.get(lower_str(name, &buf)).copied()
+        self.tzoffset.get(low).copied()
     }
 }
 

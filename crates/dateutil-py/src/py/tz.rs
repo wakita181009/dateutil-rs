@@ -1,72 +1,11 @@
-use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+use chrono::NaiveDateTime;
 use dateutil_core::tz::{self, TimeZone, TzFile, TzLocal, TzOffset, TzUtc};
 use pyo3::prelude::*;
-use pyo3::types::{PyDateAccess, PyDateTime, PyDelta, PyTimeAccess, PyTzInfo};
+use pyo3::types::{PyDateTime, PyDelta, PyTzInfo};
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Convert total seconds to a Python `datetime.timedelta`.
-#[inline]
-fn secs_to_pydelta<'py>(py: Python<'py>, total_secs: i32) -> PyResult<Bound<'py, PyDelta>> {
-    let days = total_secs.div_euclid(86400);
-    let remaining = total_secs.rem_euclid(86400);
-    PyDelta::new(py, days, remaining, 0, false)
-}
-
-/// Extract `NaiveDateTime` from a Python datetime, ignoring tzinfo.
-/// Uses C-level getters for zero-overhead extraction.
-#[inline]
-fn extract_ndt(dt: &Bound<'_, PyAny>) -> PyResult<NaiveDateTime> {
-    let pydt = dt.cast::<PyDateTime>()?;
-    // Python datetime always carries valid components — unwrap is safe.
-    let date = NaiveDate::from_ymd_opt(
-        pydt.get_year(),
-        pydt.get_month().into(),
-        pydt.get_day().into(),
-    )
-    .unwrap();
-    let time = NaiveTime::from_hms_micro_opt(
-        pydt.get_hour().into(),
-        pydt.get_minute().into(),
-        pydt.get_second().into(),
-        pydt.get_microsecond(),
-    )
-    .unwrap();
-    Ok(NaiveDateTime::new(date, time))
-}
-
-/// Extract `fold` flag from a Python datetime (defaults to false).
-#[inline]
-fn extract_fold(dt: &Bound<'_, PyAny>) -> bool {
-    dt.getattr("fold")
-        .and_then(|f| f.extract::<u8>())
-        .map(|f| f != 0)
-        .unwrap_or(false)
-}
-
-/// Build an aware `datetime.datetime` from a `NaiveDateTime`, tzinfo, and fold.
-#[inline]
-fn ndt_to_py<'py>(
-    py: Python<'py>,
-    ndt: NaiveDateTime,
-    tz: &Bound<'py, PyTzInfo>,
-    fold: bool,
-) -> PyResult<Bound<'py, PyDateTime>> {
-    PyDateTime::new_with_fold(
-        py,
-        ndt.year(),
-        ndt.month() as u8,
-        ndt.day() as u8,
-        ndt.hour() as u8,
-        ndt.minute() as u8,
-        ndt.second() as u8,
-        ndt.nanosecond() / 1000,
-        Some(tz),
-        fold,
-    )
-}
+use super::conv::{
+    extract_ndt, extract_ndt_fold, ndt_to_py_datetime_with_fold, secs_to_pydelta,
+};
 
 // ---------------------------------------------------------------------------
 // PyTzUtc — extends datetime.tzinfo
@@ -114,7 +53,7 @@ impl PyTzUtc {
         let py = slf.py();
         let ndt = extract_ndt(dt)?;
         let tz = slf.cast::<PyTzInfo>()?;
-        ndt_to_py(py, ndt, tz, false)
+        ndt_to_py_datetime_with_fold(py, ndt, tz, false)
     }
 
     fn __repr__(&self) -> &str {
@@ -178,7 +117,7 @@ impl PyTzOffset {
         let ndt = extract_ndt(dt)?;
         let wall = slf.borrow().inner.fromutc(ndt);
         let tz = slf.cast::<PyTzInfo>()?;
-        ndt_to_py(py, wall, tz, false)
+        ndt_to_py_datetime_with_fold(py, wall, tz, false)
     }
 
     fn __repr__(&self) -> String {
@@ -214,7 +153,7 @@ impl PyTzFile {
         dt: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyDelta>> {
         let (ndt, fold) = match dt {
-            Some(d) => (extract_ndt(d)?, extract_fold(d)),
+            Some(d) => extract_ndt_fold(d)?,
             None => return secs_to_pydelta(py, 0),
         };
         secs_to_pydelta(py, self.inner.utcoffset(ndt, fold))
@@ -226,7 +165,7 @@ impl PyTzFile {
         dt: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyDelta>> {
         let (ndt, fold) = match dt {
-            Some(d) => (extract_ndt(d)?, extract_fold(d)),
+            Some(d) => extract_ndt_fold(d)?,
             None => return secs_to_pydelta(py, 0),
         };
         secs_to_pydelta(py, self.inner.dst(ndt, fold))
@@ -234,7 +173,7 @@ impl PyTzFile {
 
     fn tzname<'py>(&self, dt: Option<&Bound<'py, PyAny>>) -> PyResult<&str> {
         let (ndt, fold) = match dt {
-            Some(d) => (extract_ndt(d)?, extract_fold(d)),
+            Some(d) => extract_ndt_fold(d)?,
             None => return Ok(""),
         };
         Ok(self.inner.tzname(ndt, fold))
@@ -255,7 +194,7 @@ impl PyTzFile {
         let wall = inner.fromutc(ndt);
         let fold = inner.is_ambiguous(wall);
         let tz = slf.cast::<PyTzInfo>()?;
-        ndt_to_py(py, wall, tz, fold)
+        ndt_to_py_datetime_with_fold(py, wall, tz, fold)
     }
 
     fn __repr__(&self) -> String {
@@ -291,7 +230,7 @@ impl PyTzLocal {
         dt: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyDelta>> {
         let (ndt, fold) = match dt {
-            Some(d) => (extract_ndt(d)?, extract_fold(d)),
+            Some(d) => extract_ndt_fold(d)?,
             None => return secs_to_pydelta(py, 0),
         };
         secs_to_pydelta(py, self.inner.utcoffset(ndt, fold))
@@ -303,7 +242,7 @@ impl PyTzLocal {
         dt: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyDelta>> {
         let (ndt, fold) = match dt {
-            Some(d) => (extract_ndt(d)?, extract_fold(d)),
+            Some(d) => extract_ndt_fold(d)?,
             None => return secs_to_pydelta(py, 0),
         };
         secs_to_pydelta(py, self.inner.dst(ndt, fold))
@@ -311,7 +250,7 @@ impl PyTzLocal {
 
     fn tzname<'py>(&self, dt: Option<&Bound<'py, PyAny>>) -> PyResult<&str> {
         let (ndt, fold) = match dt {
-            Some(d) => (extract_ndt(d)?, extract_fold(d)),
+            Some(d) => extract_ndt_fold(d)?,
             None => return Ok(""),
         };
         Ok(self.inner.tzname(ndt, fold))
@@ -332,7 +271,7 @@ impl PyTzLocal {
         let wall = inner.fromutc(ndt);
         let fold = inner.is_ambiguous(wall);
         let tz = slf.cast::<PyTzInfo>()?;
-        ndt_to_py(py, wall, tz, fold)
+        ndt_to_py_datetime_with_fold(py, wall, tz, fold)
     }
 
     fn __repr__(&self) -> String {

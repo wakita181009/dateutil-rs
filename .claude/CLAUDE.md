@@ -144,11 +144,11 @@ Full python-dateutil v2.9.0 API compatibility. All modules implemented:
 
 | Python Module | Rust Module | Status | Speedup |
 |---|---|---|---|
-| `dateutil.parser` | `dateutil_rs::parser` | ✅ | 1.3x–23.5x |
-| `dateutil.rrule` | `dateutil_rs::rrule` | ✅ | 1.7x–9.1x |
-| `dateutil.tz` | `dateutil_rs::tz` | ✅ | 1.0x–94.3x |
-| `dateutil.relativedelta` | `dateutil_rs::relativedelta` | ✅ | 3.5x–18.7x |
-| `dateutil.easter` | `dateutil_rs::easter` | ✅ | 3.2x–6.2x |
+| `dateutil.parser` | `dateutil_rs::parser` | ✅ | 1.3x–23.0x |
+| `dateutil.rrule` | `dateutil_rs::rrule` | ✅ | 1.7x–20.6x |
+| `dateutil.tz` | `dateutil_rs::tz` | ✅ | 0.4x–101.2x |
+| `dateutil.relativedelta` | `dateutil_rs::relativedelta` | ✅ | 4.0x–25.2x |
+| `dateutil.easter` | `dateutil_rs::easter` | ✅ | 4.9x–7.3x |
 | `dateutil.utils` | `dateutil_rs::utils` | ✅ (partial) | — |
 | `dateutil._common` | `dateutil_rs::common` | ✅ | — |
 
@@ -217,15 +217,19 @@ Excluded (legacy / low usage):
 - Strategic `#[inline]` on hot-path functions
 - Criterion benchmarks integrated in the crate for regression testing
 
-### v1 Target Performance
+### v1 Measured Performance (2026-04-11)
 
-| Module | v0 Speedup (vs Python) | v1 Target |
-|--------|------------------------|-----------|
-| Parser | 1.3x–23.5x | 5x–50x |
-| RRule | 1.7x–9.1x | 5x–15x |
-| Timezone | 1.0x–94.3x | 2x–100x |
-| RelativeDelta | 3.5x–18.7x | 10x–30x |
-| Easter | 3.2x–6.2x | 5x–10x |
+| Module | v0 Speedup (vs Python) | v1 Speedup (vs Python) |
+|--------|------------------------|------------------------|
+| Parser (parse) | 1.3x–3.5x | **19.5x–36.0x** |
+| Parser (isoparse) | 5.1x–23.0x | **13.0x–38.4x** |
+| RRule | 1.7x–20.6x | **5.9x–63.7x** |
+| Timezone | 0.4x–101.2x | **1.0x–896.7x** ¹ |
+| RelativeDelta | 4.0x–25.2x | **2.0x–28.1x** ² |
+| Easter | 4.9x–7.3x | **5.0x–7.3x** |
+
+¹ Excludes `tzlocal()` which reads `/etc/localtime` on every call without caching.
+² v1 creation is slower due to Python-side kwarg wrapper; arithmetic operations are significantly faster.
 
 ### v1 Remaining Phases
 
