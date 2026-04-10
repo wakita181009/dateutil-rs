@@ -298,7 +298,7 @@ python = ["pyo3"]
 ```toml
 [package]
 name = "dateutil-rs"
-version = "0.0.13"
+version = "0.0.14"
 edition = "2021"
 
 [lib]
