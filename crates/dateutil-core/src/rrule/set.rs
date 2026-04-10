@@ -16,18 +16,18 @@ use super::{Recurrence, RRule};
 #[derive(Debug, Clone)]
 pub struct RRuleSet {
     rrules: Vec<Arc<RRule>>,
-    rdates: Vec<NaiveDateTime>,
+    rdates: Arc<Vec<NaiveDateTime>>,
     exrules: Vec<Arc<RRule>>,
-    exdates: Vec<NaiveDateTime>,
+    exdates: Arc<Vec<NaiveDateTime>>,
 }
 
 impl RRuleSet {
     pub fn new() -> Self {
         Self {
             rrules: Vec::new(),
-            rdates: Vec::new(),
+            rdates: Arc::new(Vec::new()),
             exrules: Vec::new(),
-            exdates: Vec::new(),
+            exdates: Arc::new(Vec::new()),
         }
     }
 
@@ -36,8 +36,9 @@ impl RRuleSet {
     }
 
     pub fn rdate(&mut self, dt: NaiveDateTime) {
-        let pos = self.rdates.binary_search(&dt).unwrap_or_else(|i| i);
-        self.rdates.insert(pos, dt);
+        let rdates = Arc::make_mut(&mut self.rdates);
+        let pos = rdates.binary_search(&dt).unwrap_or_else(|i| i);
+        rdates.insert(pos, dt);
     }
 
     pub fn exrule(&mut self, rule: RRule) {
@@ -45,10 +46,10 @@ impl RRuleSet {
     }
 
     pub fn exdate(&mut self, dt: NaiveDateTime) {
-        let pos = self.exdates.binary_search(&dt).unwrap_or_else(|i| i);
-        self.exdates.insert(pos, dt);
+        let exdates = Arc::make_mut(&mut self.exdates);
+        let pos = exdates.binary_search(&dt).unwrap_or_else(|i| i);
+        exdates.insert(pos, dt);
     }
-
 }
 
 impl Recurrence for RRuleSet {
@@ -75,7 +76,7 @@ impl Default for RRuleSet {
 
 enum IterSource {
     Rule(Box<RRuleIter>),
-    Dates { data: Vec<NaiveDateTime>, cursor: usize },
+    Dates { data: Arc<Vec<NaiveDateTime>>, cursor: usize },
 }
 
 impl IterSource {
@@ -133,7 +134,7 @@ impl Ord for HeapItem {
 pub struct RRuleSetIter {
     rheap: BinaryHeap<HeapItem>,
     exheap: BinaryHeap<HeapItem>,
-    exdates: Vec<NaiveDateTime>,
+    exdates: Arc<Vec<NaiveDateTime>>,
     exdate_cursor: usize,
     last_dt: Option<NaiveDateTime>,
 }
@@ -143,9 +144,9 @@ impl RRuleSetIter {
         let mut rheap = BinaryHeap::new();
         let mut exheap = BinaryHeap::new();
 
-        // Add rdate source (already sorted via sorted insert)
+        // Add rdate source — Arc::clone is a refcount bump, no data copy
         if !set.rdates.is_empty() {
-            let data = set.rdates.clone();
+            let data = Arc::clone(&set.rdates);
             let dt = data[0];
             rheap.push(HeapItem {
                 dt,
@@ -175,8 +176,8 @@ impl RRuleSetIter {
             }
         }
 
-        // Exdates already sorted via sorted insert
-        let exdates = set.exdates.clone();
+        // Exdates — Arc::clone is a refcount bump, no data copy
+        let exdates = Arc::clone(&set.exdates);
 
         RRuleSetIter {
             rheap,
@@ -187,6 +188,7 @@ impl RRuleSetIter {
         }
     }
 
+    #[inline]
     fn excluded(&mut self, dt: NaiveDateTime) -> bool {
         // Check exdates via cursor
         while self.exdate_cursor < self.exdates.len() && self.exdates[self.exdate_cursor] < dt {
