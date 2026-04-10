@@ -62,6 +62,7 @@ from dateutil_rs.v1.relativedelta import relativedelta
 from dateutil_rs.v1.rrule import rrule, rruleset, MONTHLY
 from dateutil_rs.v1.easter import easter
 from dateutil_rs.v1.common import MO, TU, WE, TH, FR, SA, SU
+from dateutil_rs.v1.tz import gettz, tzutc
 
 # Parse date strings (zero-copy tokenizer)
 dt = parse("2024-01-15T10:30:00")
@@ -69,6 +70,10 @@ dt = parse("2024-01-15T10:30:00")
 # Recurrence rules (buffer-reusing iterator)
 monthly = rrule(MONTHLY, count=5, dtstart=dt)
 dates = monthly.all()
+
+# Timezones
+tokyo = gettz("Asia/Tokyo")
+utc = tzutc()
 ```
 
 ## Development
@@ -198,11 +203,12 @@ dateutil-rs/
 │   │       ├── parser.rs  # parse() + zero-copy tokenizer
 │   │       ├── parser/    # isoparser
 │   │       ├── rrule.rs   # RRule + iterator
-│   │       └── rrule/     # set, parse (rrulestr), iter
+│   │       ├── rrule/     # set, parse (rrulestr), iter
+│   │       └── tz/        # tzutc, tzoffset, tzfile, tzlocal
 │   ├── dateutil-py/       # PyO3 bindings for v1 core
 │   │   └── src/
 │   │       ├── lib.rs     # Module registration
-│   │       └── py/        # Per-module bindings
+│   │       └── py/        # Per-module bindings (common, easter, parser, relativedelta, rrule, tz)
 │   └── dateutil-rs/       # v0: python-dateutil compat + unified native module
 │       └── src/
 │           ├── lib.rs     # Crate root + #[pymodule] (v0 + v1)
@@ -229,7 +235,8 @@ dateutil-rs/
 │       ├── easter.py      # Easter
 │       ├── parser.py      # parse, isoparse
 │       ├── relativedelta.py
-│       └── rrule.py       # rrule, rruleset, rrulestr
+│       ├── rrule.py       # rrule, rruleset, rrulestr
+│       └── tz.py          # tzutc, tzoffset, tzfile, tzlocal, gettz
 ├── tests/                 # Test suite (~13k lines)
 ├── benchmarks/            # pytest-benchmark comparisons
 ├── .github/workflows/     # CI (lint + test matrix)
@@ -262,7 +269,7 @@ dateutil-rs/
 | relativedelta | ✅ | ✅ | |
 | parser | ✅ | ✅ | Zero-copy tokenizer, PHF lookups |
 | rrule | ✅ | ✅ | Bitflag filters, buffer reuse |
-| tz | ❌ | ❌ | Planned |
+| tz | ✅ | ✅ | tzutc, tzoffset, tzfile, tzlocal, gettz |
 
 ## Roadmap
 
@@ -271,7 +278,7 @@ dateutil-rs/
 3. **~~Rust rrule~~** — Rewrite recurrence rules in Rust ✅
 4. **~~Rust tz~~** — Rewrite timezone support in Rust (with gettz cache) ✅
 5. **~~v1 optimized core~~** — common, easter, relativedelta, parser, rrule ✅
-6. **v1 timezone** — Rewrite tz module for v1 core
+6. **~~v1 timezone~~** — Rewrite tz module for v1 core (tzutc, tzoffset, tzfile, tzlocal, gettz) ✅
 7. **Release** — Publish dateutil-core to crates.io and python-dateutil-rs 1.0 to PyPI
 
 ## License

@@ -41,7 +41,11 @@ dateutil-rs/                            # Repository
 │   │       │   ├── iter.rs           # Buffer-reusing iterator
 │   │       │   ├── parse.rs          # rrulestr() RFC string parsing
 │   │       │   └── set.rs            # RRuleSet
-│   │       └── (tz/ planned)
+│   │       └── tz/
+│   │           ├── utc.rs            # TzUtc — UTC timezone
+│   │           ├── offset.rs         # TzOffset — fixed-offset timezone
+│   │           ├── file.rs           # TzFile — TZif binary timezone
+│   │           └── local.rs          # TzLocal — system local timezone
 │   │
 │   ├── dateutil-py/                    # PyO3 thin binding layer
 │   │   ├── Cargo.toml                  # depends on dateutil-core + pyo3
@@ -53,7 +57,8 @@ dateutil-rs/                            # Repository
 │   │           ├── easter.rs          # Easter bindings
 │   │           ├── parser.rs          # Parser bindings
 │   │           ├── relativedelta.rs   # RelativeDelta bindings
-│   │           └── rrule.rs           # RRule/RRuleSet bindings
+│   │           ├── rrule.rs           # RRule/RRuleSet bindings
+│   │           └── tz.rs             # Timezone bindings
 │   │
 │   └── dateutil-rs/                    # v0: python-dateutil compat
 │       ├── Cargo.toml
@@ -97,7 +102,8 @@ dateutil-rs/                            # Repository
 │           ├── easter.py
 │           ├── parser.py
 │           ├── relativedelta.py
-│           └── rrule.py
+│           ├── rrule.py
+│           └── tz.py
 │
 ├── tests/                              # Python tests (from python-dateutil)
 ├── benchmarks/                         # Performance benchmarks
@@ -165,7 +171,7 @@ Full python-dateutil v2.9.0 API compatibility. All modules implemented:
 | `relativedelta` | `dateutil_core::relativedelta` | `dateutil_py::relativedelta` | ✅ Complete |
 | `parser` | `dateutil_core::parser` | `dateutil_py::parser` | ✅ Complete |
 | `rrule` | `dateutil_core::rrule` | `dateutil_py::rrule` | ✅ Complete |
-| `tz` | — | — | ❌ Not yet |
+| `tz` | `dateutil_core::tz` | `dateutil_py::tz` | ✅ Complete (tzutc, tzoffset, tzfile, tzlocal, gettz) |
 
 ### v1 Feature Scope
 
@@ -178,10 +184,10 @@ Included (covers 95%+ of real-world usage):
   ✅ rrulestr(s)            — RFC string parsing
   ✅ easter(year)           — Easter date calculation
   ✅ Weekday (MO–SU)        — weekday constants with N-th occurrence
-  🔲 gettz(name)            — timezone lookup (planned)
-  🔲 tzutc / tzoffset       — UTC and fixed-offset timezones (planned)
-  🔲 tzfile                 — TZif binary timezone files (planned)
-  🔲 tzlocal                — system local timezone (planned)
+  ✅ gettz(name)            — timezone lookup
+  ✅ tzutc / tzoffset       — UTC and fixed-offset timezones
+  ✅ tzfile                 — TZif binary timezone files
+  ✅ tzlocal                — system local timezone
 
 Excluded (legacy / low usage):
   ❌ parserinfo customization  — complex, rarely used
@@ -223,12 +229,7 @@ Excluded (legacy / low usage):
 
 ### v1 Remaining Phases
 
-**Phase 4 — Timezone**
-- `TzFile` with optimized abbreviations
-- `gettz()` with borrowed API
-- `TzUtc`, `TzOffset`, `TzLocal`
-
-**Phase 5 — PyO3 Bindings & Release**
+**Phase 5 — Release**
 - Full test suite passing for v1
 - Publish dateutil-core to crates.io
 - Publish python-dateutil-rs 1.0 to PyPI
