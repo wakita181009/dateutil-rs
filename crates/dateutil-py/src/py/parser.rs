@@ -69,14 +69,21 @@ fn ndt_to_pydt<'py>(
 
 /// Convert a Python list of `str | tuple[str, …]` into a lowercased
 /// `HashMap<String, usize>` where each string maps to its group index.
-fn convert(list: &Bound<'_, pyo3::PyAny>) -> PyResult<HashMap<String, usize>> {
+fn convert(attr_name: &str, list: &Bound<'_, pyo3::PyAny>) -> PyResult<HashMap<String, usize>> {
     let mut map = HashMap::new();
     let seq: Vec<Bound<'_, pyo3::PyAny>> = list.extract()?;
     for (i, item) in seq.iter().enumerate() {
         if let Ok(s) = item.extract::<String>() {
             map.insert(s.to_lowercase(), i);
         } else {
-            let parts: Vec<String> = item.extract()?;
+            let parts: Vec<String> = item.extract().map_err(|_| {
+                let type_name = item.get_type().qualname()
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|_| "unknown".into());
+                pyo3::exceptions::PyTypeError::new_err(format!(
+                    "parserinfo.{attr_name}[{i}]: expected str or sequence of str, got {type_name}",
+                ))
+            })?;
             for s in parts {
                 map.insert(s.to_lowercase(), i);
             }
@@ -85,20 +92,42 @@ fn convert(list: &Bound<'_, pyo3::PyAny>) -> PyResult<HashMap<String, usize>> {
     Ok(map)
 }
 
+/// Extract `ParserInfo`, `dayfirst`, and `yearfirst` from an optional
+/// `PyParserInfo` borrow, falling back to defaults when absent.
+fn resolve_pi_args<'a>(
+    pi_ref: &'a Option<PyRef<'_, PyParserInfo>>,
+    dayfirst: Option<bool>,
+    yearfirst: Option<bool>,
+) -> (Option<&'a ParserInfo>, bool, bool) {
+    match pi_ref {
+        Some(pi) => (
+            Some(&pi.inner),
+            dayfirst.unwrap_or(pi.dayfirst),
+            yearfirst.unwrap_or(pi.yearfirst),
+        ),
+        None => (None, dayfirst.unwrap_or(false), yearfirst.unwrap_or(false)),
+    }
+}
+
 /// Build a `ParserInfo` from class-level attributes read from a Python type.
 fn build_parser_info(cls: &Bound<'_, PyType>) -> PyResult<ParserInfo> {
-    let jump_map = convert(&cls.getattr("JUMP")?)?;
-    let weekdays = convert(&cls.getattr("WEEKDAYS")?)?;
-    let months_raw = convert(&cls.getattr("MONTHS")?)?;
+    let jump_map = convert("JUMP", &cls.getattr("JUMP")?)?;
+    let weekdays = convert("WEEKDAYS", &cls.getattr("WEEKDAYS")?)?;
+    let months_raw = convert("MONTHS", &cls.getattr("MONTHS")?)?;
     let months = months_raw
         .into_iter()
         .map(|(k, v)| (k, v + 1))
         .collect();
-    let hms = convert(&cls.getattr("HMS")?)?;
-    let ampm = convert(&cls.getattr("AMPM")?)?;
-    let utczone_map = convert(&cls.getattr("UTCZONE")?)?;
-    let pertain_map = convert(&cls.getattr("PERTAIN")?)?;
-    let tzoffset: HashMap<String, i32> = cls.getattr("TZOFFSET")?.extract()?;
+    let hms = convert("HMS", &cls.getattr("HMS")?)?;
+    let ampm = convert("AMPM", &cls.getattr("AMPM")?)?;
+    let utczone_map = convert("UTCZONE", &cls.getattr("UTCZONE")?)?;
+    let pertain_map = convert("PERTAIN", &cls.getattr("PERTAIN")?)?;
+    let tzoffset: HashMap<String, i32> = cls
+        .getattr("TZOFFSET")?
+        .extract::<HashMap<String, i32>>()?
+        .into_iter()
+        .map(|(k, v)| (k.to_lowercase(), v))
+        .collect();
 
     Ok(ParserInfo {
         jump: jump_map.into_keys().collect(),
@@ -261,14 +290,7 @@ fn parse_py<'py>(
     tzinfos: Option<Bound<'py, pyo3::PyAny>>,
 ) -> PyResult<Bound<'py, pyo3::PyAny>> {
     let pi_ref = parserinfo.as_ref().map(|pi| pi.borrow());
-    let (info_ref, df, yf) = match pi_ref {
-        Some(ref pi) => (
-            Some(&pi.inner),
-            dayfirst.unwrap_or(pi.dayfirst),
-            yearfirst.unwrap_or(pi.yearfirst),
-        ),
-        None => (None, dayfirst.unwrap_or(false), yearfirst.unwrap_or(false)),
-    };
+    let (info_ref, df, yf) = resolve_pi_args(&pi_ref, dayfirst, yearfirst);
 
     let res = parser::parse_to_result(timestr, df, yf, info_ref)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
@@ -335,14 +357,7 @@ fn parse_to_dict_py<'py>(
     yearfirst: Option<bool>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let pi_ref = parserinfo.as_ref().map(|pi| pi.borrow());
-    let (info_ref, df, yf) = match pi_ref {
-        Some(ref pi) => (
-            Some(&pi.inner),
-            dayfirst.unwrap_or(pi.dayfirst),
-            yearfirst.unwrap_or(pi.yearfirst),
-        ),
-        None => (None, dayfirst.unwrap_or(false), yearfirst.unwrap_or(false)),
-    };
+    let (info_ref, df, yf) = resolve_pi_args(&pi_ref, dayfirst, yearfirst);
 
     let res = parser::parse_to_result(timestr, df, yf, info_ref)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;

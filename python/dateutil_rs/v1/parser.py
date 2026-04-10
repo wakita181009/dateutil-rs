@@ -9,9 +9,9 @@ class parserinfo(_ParserInfoBase):
     Subclass and override ``WEEKDAYS``, ``MONTHS``, etc. for non-English dates.
     """
 
-    def __init__(self, **_: object) -> None:
-        # __new__ (Rust) already set dayfirst/yearfirst.
-        # _build reads class variables (including subclass overrides).
+    def __init__(self, dayfirst: bool = False, yearfirst: bool = False) -> None:
+        # dayfirst/yearfirst are captured by __new__ (Rust side).
+        # _build reads class variables (incl. subclass overrides).
         self._build(type(self))
 
 

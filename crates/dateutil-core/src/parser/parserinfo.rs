@@ -142,13 +142,14 @@ impl ParserInfo {
     }
 
     /// Look up a known timezone abbreviation. Returns offset in seconds.
-    /// UTC-equivalent zones return `Some(0)`.
+    /// UTC-equivalent zones return `Some(0)`. Matching is case-insensitive.
     #[inline]
     pub fn tzoffset(&self, name: &str) -> Option<i32> {
         if self.utczone(name) {
             return Some(0);
         }
-        self.tzoffset.get(name).copied()
+        let buf = lowercase_buf(name)?;
+        self.tzoffset.get(lower_str(name, &buf)).copied()
     }
 }
 
@@ -264,10 +265,13 @@ mod tests {
     #[test]
     fn test_parserinfo_tzoffset() {
         let mut info = ParserInfo::default();
-        info.tzoffset.insert("EST".into(), -18000);
-        info.tzoffset.insert("CST".into(), -21600);
+        info.tzoffset.insert("est".into(), -18000);
+        info.tzoffset.insert("cst".into(), -21600);
 
+        // Case-insensitive lookup
         assert_eq!(info.tzoffset("EST"), Some(-18000));
+        assert_eq!(info.tzoffset("est"), Some(-18000));
+        assert_eq!(info.tzoffset("Est"), Some(-18000));
         assert_eq!(info.tzoffset("CST"), Some(-21600));
         assert_eq!(info.tzoffset("UTC"), Some(0)); // utczone fallback
         assert_eq!(info.tzoffset("XYZ"), None);
@@ -303,9 +307,10 @@ mod tests {
     #[test]
     fn test_dispatch_with_info_uses_custom() {
         let mut info = ParserInfo::default();
-        info.tzoffset.insert("EST".into(), -18000);
+        info.tzoffset.insert("est".into(), -18000);
 
         assert_eq!(do_tzoffset("EST", Some(&info)), Some(-18000));
+        assert_eq!(do_tzoffset("est", Some(&info)), Some(-18000));
         assert_eq!(do_month("January", Some(&info)), Some(1));
     }
 }

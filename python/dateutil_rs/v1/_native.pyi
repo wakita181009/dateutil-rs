@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import sys
 from collections.abc import Callable, Iterator, Mapping
-from typing import Any, Final, Literal, TypedDict
+from typing import Final, Literal, TypedDict
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -98,7 +98,7 @@ _TzInfos = Mapping[str, _TzData] | Callable[[str, int], _TzData]
 
 def parse(
     timestr: str,
-    parserinfo: Any | None = None,
+    parserinfo: _ParserInfoBase | None = None,
     *,
     dayfirst: bool | None = None,
     yearfirst: bool | None = None,
@@ -109,7 +109,7 @@ def parse(
 def parse_to_dict(
     timestr: str,
     *,
-    parserinfo: Any | None = None,
+    parserinfo: _ParserInfoBase | None = None,
     dayfirst: bool | None = None,
     yearfirst: bool | None = None,
 ) -> ParseResultDict: ...
