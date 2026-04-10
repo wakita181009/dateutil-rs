@@ -455,7 +455,7 @@ wheels = [
 
 [[package]]
 name = "python-dateutil-rs"
-version = "0.0.8"
+version = "0.0.10"
 source = { editable = "." }
 
 [package.optional-dependencies]

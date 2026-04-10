@@ -4,7 +4,7 @@ pub mod tokenizer;
 pub use isoparser::isoparse;
 
 use crate::error::ParseError;
-use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use std::borrow::Cow;
 
 // ---------------------------------------------------------------------------
@@ -379,19 +379,24 @@ fn days_in_month(year: i32, month: u32) -> u32 {
 // parse() — main entry point
 // ---------------------------------------------------------------------------
 
-/// Parse a date/time string into a NaiveDateTime.
+/// Parse a date/time string into a `NaiveDateTime`.
 ///
-/// This is a Rust-optimized port of `dateutil.parser.parse()` with:
-/// - Zero-copy tokenizer (no String allocations during tokenization)
-/// - Compile-time phf hash maps for token lookup
-/// - Stack-allocated buffers for lowercase conversion
-pub fn parse(timestr: &str, dayfirst: bool, yearfirst: bool) -> Result<NaiveDateTime, ParseError> {
+/// Missing fields are filled from `default`. If `None`, uses today at midnight
+/// (matching python-dateutil). Two-digit years are always resolved against the
+/// current year.
+pub fn parse(
+    timestr: &str,
+    dayfirst: bool,
+    yearfirst: bool,
+    default: Option<NaiveDateTime>,
+) -> Result<NaiveDateTime, ParseError> {
     let now = chrono::Local::now().naive_local();
-    let res = parse_to_result_inner(timestr, dayfirst, yearfirst, now)?;
-    build_naive(&res, now)
+    let default = default.unwrap_or_else(|| now.date().and_hms_opt(0, 0, 0).unwrap());
+    let res = parse_to_result_with_year(timestr, dayfirst, yearfirst, now.year())?;
+    build_naive(&res, default)
 }
 
-/// Parse returning the raw ParseResult (for advanced usage).
+/// Parse returning the raw `ParseResult` (for advanced usage).
 ///
 /// Use this when you need access to individual parsed fields (e.g. `tzname`,
 /// `tzoffset`, `weekday`) that are not available from `NaiveDateTime`.
@@ -400,15 +405,15 @@ pub fn parse_to_result(
     dayfirst: bool,
     yearfirst: bool,
 ) -> Result<ParseResult<'_>, ParseError> {
-    let now = chrono::Local::now().naive_local();
-    parse_to_result_inner(timestr, dayfirst, yearfirst, now)
+    let current_year = chrono::Local::now().naive_local().year();
+    parse_to_result_with_year(timestr, dayfirst, yearfirst, current_year)
 }
 
-fn parse_to_result_inner(
+fn parse_to_result_with_year(
     timestr: &str,
     dayfirst: bool,
     yearfirst: bool,
-    now: NaiveDateTime,
+    current_year: i32,
 ) -> Result<ParseResult<'_>, ParseError> {
     let tokens = tokenizer::tokenize(timestr);
     let mut res = ParseResult::default();
@@ -437,7 +442,7 @@ fn parse_to_result_inner(
     res.century_specified = ymd.century_specified;
 
     if let Some(y) = res.year {
-        res.year = Some(convertyear(y, res.century_specified, now.year()));
+        res.year = Some(convertyear(y, res.century_specified, current_year));
     }
 
     // UTC zone normalization
@@ -714,14 +719,14 @@ fn parse_tzoffset(s: &str) -> Option<i32> {
     Some(sign * (hours * 3600 + minutes * 60))
 }
 
-fn build_naive(res: &ParseResult<'_>, now: NaiveDateTime) -> Result<NaiveDateTime, ParseError> {
-    let year = res.year.unwrap_or(now.year());
-    let month = res.month.unwrap_or(now.month());
-    let day = res.day.unwrap_or(now.day());
-    let hour = res.hour.unwrap_or(0);
-    let minute = res.minute.unwrap_or(0);
-    let second = res.second.unwrap_or(0);
-    let microsecond = res.microsecond.unwrap_or(0);
+fn build_naive(res: &ParseResult<'_>, default: NaiveDateTime) -> Result<NaiveDateTime, ParseError> {
+    let year = res.year.unwrap_or(default.year());
+    let month = res.month.unwrap_or(default.month());
+    let day = res.day.unwrap_or(default.day());
+    let hour = res.hour.unwrap_or(default.hour());
+    let minute = res.minute.unwrap_or(default.minute());
+    let second = res.second.unwrap_or(default.second());
+    let microsecond = res.microsecond.unwrap_or(default.nanosecond() / 1000);
 
     let date = NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| {
         ParseError::ValueError(format!("invalid date: {year}-{month}-{day}").into_boxed_str())
@@ -740,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_parse_iso_basic() {
-        let dt = parse("2024-01-15", false, false).unwrap();
+        let dt = parse("2024-01-15", false, false, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 15);
@@ -748,7 +753,7 @@ mod tests {
 
     #[test]
     fn test_parse_datetime() {
-        let dt = parse("2024-01-15 10:30:45", false, false).unwrap();
+        let dt = parse("2024-01-15 10:30:45", false, false, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 15);
@@ -759,7 +764,7 @@ mod tests {
 
     #[test]
     fn test_parse_month_name() {
-        let dt = parse("January 15, 2024", false, false).unwrap();
+        let dt = parse("January 15, 2024", false, false, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 15);
@@ -767,7 +772,7 @@ mod tests {
 
     #[test]
     fn test_parse_month_abbrev() {
-        let dt = parse("15 Jan 2024", false, false).unwrap();
+        let dt = parse("15 Jan 2024", false, false, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 15);
@@ -776,7 +781,7 @@ mod tests {
     #[test]
     fn test_parse_us_format() {
         // MM/DD/YYYY (default, dayfirst=false)
-        let dt = parse("01/15/2024", false, false).unwrap();
+        let dt = parse("01/15/2024", false, false, None).unwrap();
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 15);
     }
@@ -784,14 +789,14 @@ mod tests {
     #[test]
     fn test_parse_dayfirst() {
         // DD/MM/YYYY
-        let dt = parse("15/01/2024", true, false).unwrap();
+        let dt = parse("15/01/2024", true, false, None).unwrap();
         assert_eq!(dt.day(), 15);
         assert_eq!(dt.month(), 1);
     }
 
     #[test]
     fn test_parse_yearfirst() {
-        let dt = parse("2024/01/15", false, true).unwrap();
+        let dt = parse("2024/01/15", false, true, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 15);
@@ -809,14 +814,14 @@ mod tests {
 
     #[test]
     fn test_parse_ampm() {
-        let dt = parse("January 15, 2024 3:30 PM", false, false).unwrap();
+        let dt = parse("January 15, 2024 3:30 PM", false, false, None).unwrap();
         assert_eq!(dt.hour(), 15);
         assert_eq!(dt.minute(), 30);
     }
 
     #[test]
     fn test_parse_microseconds() {
-        let dt = parse("2024-01-15 10:30:45.123456", false, false).unwrap();
+        let dt = parse("2024-01-15 10:30:45.123456", false, false, None).unwrap();
         assert_eq!(dt.second(), 45);
         assert_eq!(dt.nanosecond() / 1000, 123456);
     }
@@ -841,12 +846,12 @@ mod tests {
 
     #[test]
     fn test_parse_empty_string() {
-        assert!(parse("", false, false).is_err());
+        assert!(parse("", false, false, None).is_err());
     }
 
     #[test]
     fn test_parse_no_date() {
-        assert!(parse("hello world", false, false).is_err());
+        assert!(parse("hello world", false, false, None).is_err());
     }
 
     #[test]
@@ -896,21 +901,21 @@ mod tests {
 
     #[test]
     fn test_parse_12am_midnight() {
-        let dt = parse("January 15, 2024 12:00 AM", false, false).unwrap();
+        let dt = parse("January 15, 2024 12:00 AM", false, false, None).unwrap();
         assert_eq!(dt.hour(), 0);
         assert_eq!(dt.minute(), 0);
     }
 
     #[test]
     fn test_parse_12pm_noon() {
-        let dt = parse("January 15, 2024 12:00 PM", false, false).unwrap();
+        let dt = parse("January 15, 2024 12:00 PM", false, false, None).unwrap();
         assert_eq!(dt.hour(), 12);
         assert_eq!(dt.minute(), 0);
     }
 
     #[test]
     fn test_parse_midnight_2359() {
-        let dt = parse("2024-01-15 23:59:59", false, false).unwrap();
+        let dt = parse("2024-01-15 23:59:59", false, false, None).unwrap();
         assert_eq!(dt.hour(), 23);
         assert_eq!(dt.minute(), 59);
         assert_eq!(dt.second(), 59);
@@ -918,7 +923,7 @@ mod tests {
 
     #[test]
     fn test_parse_whitespace_only() {
-        assert!(parse("   ", false, false).is_err());
+        assert!(parse("   ", false, false, None).is_err());
     }
 
     #[test]
@@ -956,7 +961,7 @@ mod tests {
             ("September", 9), ("October", 10), ("November", 11), ("December", 12),
         ];
         for (name, expected) in months {
-            let dt = parse(&format!("{name} 15, 2024"), false, false).unwrap();
+            let dt = parse(&format!("{name} 15, 2024"), false, false, None).unwrap();
             assert_eq!(dt.month(), expected, "Failed for {name}");
         }
     }
@@ -969,14 +974,14 @@ mod tests {
             ("Sep", 9), ("Oct", 10), ("Nov", 11), ("Dec", 12),
         ];
         for (name, expected) in months {
-            let dt = parse(&format!("15 {name} 2024"), false, false).unwrap();
+            let dt = parse(&format!("15 {name} 2024"), false, false, None).unwrap();
             assert_eq!(dt.month(), expected, "Failed for {name}");
         }
     }
 
     #[test]
     fn test_parse_sept_abbreviation() {
-        let dt = parse("15 Sept 2024", false, false).unwrap();
+        let dt = parse("15 Sept 2024", false, false, None).unwrap();
         assert_eq!(dt.month(), 9);
     }
 
@@ -1015,7 +1020,7 @@ mod tests {
 
     #[test]
     fn test_parse_single_digit_values() {
-        let dt = parse("2024-1-5", false, false).unwrap();
+        let dt = parse("2024-1-5", false, false, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 5);
@@ -1024,11 +1029,11 @@ mod tests {
     #[test]
     fn test_parse_dayfirst_ambiguous() {
         // 05/06/2024 — dayfirst=true → June 5; dayfirst=false → May 6
-        let dt_df = parse("05/06/2024", true, false).unwrap();
+        let dt_df = parse("05/06/2024", true, false, None).unwrap();
         assert_eq!(dt_df.day(), 5);
         assert_eq!(dt_df.month(), 6);
 
-        let dt_mf = parse("05/06/2024", false, false).unwrap();
+        let dt_mf = parse("05/06/2024", false, false, None).unwrap();
         assert_eq!(dt_mf.day(), 6);
         assert_eq!(dt_mf.month(), 5);
     }
@@ -1036,7 +1041,7 @@ mod tests {
     #[test]
     fn test_parse_yearfirst_ambiguous() {
         // 2024/05/06 yearfirst=true → May 6
-        let dt = parse("2024/05/06", false, true).unwrap();
+        let dt = parse("2024/05/06", false, true, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 5);
         assert_eq!(dt.day(), 6);
@@ -1229,13 +1234,13 @@ mod tests {
 
     #[test]
     fn test_ymd_resolve_mstridx_len3_mi2() {
-        let dt = parse("15 20 Jan", false, false).unwrap();
+        let dt = parse("15 20 Jan", false, false, None).unwrap();
         assert_eq!(dt.month(), 1);
     }
 
     #[test]
     fn test_ymd_resolve_mstridx_len3_va_gt31() {
-        let dt = parse("2024 Jan 15", false, false).unwrap();
+        let dt = parse("2024 Jan 15", false, false, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 15);
@@ -1243,7 +1248,7 @@ mod tests {
 
     #[test]
     fn test_ymd_resolve_mstridx_len3_dayfirst() {
-        let dt = parse("15 Jan 20", true, false).unwrap();
+        let dt = parse("15 Jan 20", true, false, None).unwrap();
         assert_eq!(dt.day(), 15);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.year(), 2020);
@@ -1251,7 +1256,7 @@ mod tests {
 
     #[test]
     fn test_ymd_resolve_mstridx_len3_not_dayfirst() {
-        let dt = parse("15 Jan 20", false, false).unwrap();
+        let dt = parse("15 Jan 20", false, false, None).unwrap();
         assert_eq!(dt.day(), 20);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.year(), 2015);
@@ -1259,7 +1264,7 @@ mod tests {
 
     #[test]
     fn test_convertyear_high_two_digit() {
-        let dt = parse("Jan 15 99", false, false).unwrap();
+        let dt = parse("Jan 15 99", false, false, None).unwrap();
         assert_eq!(dt.year(), 1999);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 15);
@@ -1305,12 +1310,12 @@ mod tests {
 
     #[test]
     fn test_parse_invalid_date() {
-        assert!(parse("2024-02-30", false, false).is_err());
+        assert!(parse("2024-02-30", false, false, None).is_err());
     }
 
     #[test]
     fn test_parse_invalid_time() {
-        assert!(parse("2024-01-15 99:00:00", false, false).is_err());
+        assert!(parse("2024-01-15 99:00:00", false, false, None).is_err());
     }
 
     // ==== Edge case tests ====
@@ -1319,7 +1324,7 @@ mod tests {
 
     #[test]
     fn test_parse_year_1() {
-        let dt = parse("0001-01-01", false, false).unwrap();
+        let dt = parse("0001-01-01", false, false, None).unwrap();
         assert_eq!(dt.year(), 1);
         assert_eq!(dt.month(), 1);
         assert_eq!(dt.day(), 1);
@@ -1327,7 +1332,7 @@ mod tests {
 
     #[test]
     fn test_parse_year_9999() {
-        let dt = parse("9999-12-31", false, false).unwrap();
+        let dt = parse("9999-12-31", false, false, None).unwrap();
         assert_eq!(dt.year(), 9999);
         assert_eq!(dt.month(), 12);
         assert_eq!(dt.day(), 31);
@@ -1337,7 +1342,7 @@ mod tests {
 
     #[test]
     fn test_parse_dayfirst_and_yearfirst_both_true() {
-        let dt = parse("2024/05/06", true, true).unwrap();
+        let dt = parse("2024/05/06", true, true, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 5);
         assert_eq!(dt.day(), 6);
@@ -1347,13 +1352,13 @@ mod tests {
 
     #[test]
     fn test_parse_two_digit_year_00() {
-        let dt = parse("01/15/00", false, false).unwrap();
+        let dt = parse("01/15/00", false, false, None).unwrap();
         assert_eq!(dt.year(), 2000);
     }
 
     #[test]
     fn test_parse_two_digit_year_99() {
-        let dt = parse("01/15/99", false, false).unwrap();
+        let dt = parse("01/15/99", false, false, None).unwrap();
         assert_eq!(dt.year(), 1999);
     }
 
@@ -1361,24 +1366,24 @@ mod tests {
 
     #[test]
     fn test_parse_feb29_leap_year() {
-        let dt = parse("February 29, 2024", false, false).unwrap();
+        let dt = parse("February 29, 2024", false, false, None).unwrap();
         assert_eq!(dt.month(), 2);
         assert_eq!(dt.day(), 29);
     }
 
     #[test]
     fn test_parse_feb29_non_leap_year_error() {
-        assert!(parse("February 29, 2023", false, false).is_err());
+        assert!(parse("February 29, 2023", false, false, None).is_err());
     }
 
     #[test]
     fn test_parse_feb29_century_non_leap() {
-        assert!(parse("February 29, 1900", false, false).is_err());
+        assert!(parse("February 29, 1900", false, false, None).is_err());
     }
 
     #[test]
     fn test_parse_feb29_century_leap() {
-        let dt = parse("February 29, 2000", false, false).unwrap();
+        let dt = parse("February 29, 2000", false, false, None).unwrap();
         assert_eq!(dt.day(), 29);
     }
 
@@ -1401,7 +1406,7 @@ mod tests {
     #[test]
     fn test_parse_only_digits_and_separators() {
         // All-numeric input with various separators should not panic
-        let result = parse("2024!01!15", false, false);
+        let result = parse("2024!01!15", false, false, None);
         let _ = result; // may fail but should not panic
     }
 
@@ -1409,37 +1414,37 @@ mod tests {
 
     #[test]
     fn test_parse_jan31() {
-        let dt = parse("January 31, 2024", false, false).unwrap();
+        let dt = parse("January 31, 2024", false, false, None).unwrap();
         assert_eq!(dt.day(), 31);
     }
 
     #[test]
     fn test_parse_apr30() {
-        let dt = parse("April 30, 2024", false, false).unwrap();
+        let dt = parse("April 30, 2024", false, false, None).unwrap();
         assert_eq!(dt.day(), 30);
     }
 
     #[test]
     fn test_parse_apr31_invalid() {
-        assert!(parse("April 31, 2024", false, false).is_err());
+        assert!(parse("April 31, 2024", false, false, None).is_err());
     }
 
     #[test]
     fn test_parse_jun30_valid() {
-        let dt = parse("June 30, 2024", false, false).unwrap();
+        let dt = parse("June 30, 2024", false, false, None).unwrap();
         assert_eq!(dt.day(), 30);
     }
 
     #[test]
     fn test_parse_jun31_invalid() {
-        assert!(parse("June 31, 2024", false, false).is_err());
+        assert!(parse("June 31, 2024", false, false, None).is_err());
     }
 
     // ---- Time edge cases ----
 
     #[test]
     fn test_parse_midnight_0000() {
-        let dt = parse("2024-01-15 00:00:00", false, false).unwrap();
+        let dt = parse("2024-01-15 00:00:00", false, false, None).unwrap();
         assert_eq!(dt.hour(), 0);
         assert_eq!(dt.minute(), 0);
         assert_eq!(dt.second(), 0);
@@ -1447,7 +1452,7 @@ mod tests {
 
     #[test]
     fn test_parse_end_of_day_235959() {
-        let dt = parse("2024-01-15 23:59:59", false, false).unwrap();
+        let dt = parse("2024-01-15 23:59:59", false, false, None).unwrap();
         assert_eq!(dt.hour(), 23);
         assert_eq!(dt.minute(), 59);
         assert_eq!(dt.second(), 59);
@@ -1457,13 +1462,13 @@ mod tests {
 
     #[test]
     fn test_parse_fractional_1_digit() {
-        let dt = parse("2024-01-15 10:30:45.1", false, false).unwrap();
+        let dt = parse("2024-01-15 10:30:45.1", false, false, None).unwrap();
         assert_eq!(dt.nanosecond() / 1000, 100_000);
     }
 
     #[test]
     fn test_parse_fractional_6_digits() {
-        let dt = parse("2024-01-15 10:30:45.123456", false, false).unwrap();
+        let dt = parse("2024-01-15 10:30:45.123456", false, false, None).unwrap();
         assert_eq!(dt.nanosecond() / 1000, 123_456);
     }
 
@@ -1479,6 +1484,68 @@ mod tests {
 
     #[test]
     fn test_parse_time_only_no_panic() {
-        let _ = parse("10:30:45", false, false);
+        let _ = parse("10:30:45", false, false, None);
+    }
+
+    // ---- parse_with_default ----
+
+    #[test]
+    fn test_parse_with_default_fills_date() {
+        let default = NaiveDate::from_ymd_opt(2020, 6, 15)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("10:30", false, false, Some(default)).unwrap();
+        assert_eq!(dt.year(), 2020);
+        assert_eq!(dt.month(), 6);
+        assert_eq!(dt.day(), 15);
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 0);
+    }
+
+    #[test]
+    fn test_parse_with_default_fills_time() {
+        let default = NaiveDate::from_ymd_opt(2020, 1, 1)
+            .unwrap()
+            .and_hms_opt(14, 30, 45)
+            .unwrap();
+        let dt = parse("2024-03-20", false, false, Some(default)).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
+        assert_eq!(dt.day(), 20);
+        // Time from default
+        assert_eq!(dt.hour(), 14);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    #[test]
+    fn test_parse_with_default_full_override() {
+        let default = NaiveDate::from_ymd_opt(2020, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("2024-03-20 10:30:45", false, false, Some(default)).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
+        assert_eq!(dt.day(), 20);
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    #[test]
+    fn test_parse_with_default_year_only() {
+        let default = NaiveDate::from_ymd_opt(2020, 6, 15)
+            .unwrap()
+            .and_hms_opt(8, 0, 0)
+            .unwrap();
+        // Parsing just a month-day should fill year from default
+        let dt = parse("March 10", false, false, Some(default)).unwrap();
+        assert_eq!(dt.year(), 2020);
+        assert_eq!(dt.month(), 3);
+        assert_eq!(dt.day(), 10);
+        assert_eq!(dt.hour(), 8);
     }
 }

@@ -106,6 +106,28 @@ impl PyRelativeDelta {
     fn microseconds(&self) -> i64 { self.inner.microseconds() }
     #[getter]
     fn weeks(&self) -> i32 { self.inner.weeks() }
+    #[getter]
+    fn leapdays(&self) -> i32 { self.inner.leapdays() }
+
+    // Absolute field getters (None if not set)
+    #[getter]
+    fn year(&self) -> Option<i32> { self.inner.year() }
+    #[getter]
+    fn month(&self) -> Option<i32> { self.inner.month() }
+    #[getter]
+    fn day(&self) -> Option<i32> { self.inner.day() }
+    #[getter]
+    fn hour(&self) -> Option<i32> { self.inner.hour() }
+    #[getter]
+    fn minute(&self) -> Option<i32> { self.inner.minute() }
+    #[getter]
+    fn second(&self) -> Option<i32> { self.inner.second() }
+    #[getter]
+    fn microsecond(&self) -> Option<i32> { self.inner.microsecond() }
+    #[getter]
+    fn weekday(&self) -> Option<PyWeekday> {
+        self.inner.weekday().map(|w| PyWeekday::from(*w))
+    }
 
     fn has_time(&self) -> bool { self.inner.has_time() }
     fn is_zero(&self) -> bool { self.inner.is_zero() }
@@ -127,6 +149,18 @@ impl PyRelativeDelta {
     fn __neg__(&self) -> Self {
         Self {
             inner: self.inner.neg(),
+        }
+    }
+
+    fn __mul__(&self, factor: f64) -> Self {
+        Self {
+            inner: self.inner.mul(factor),
+        }
+    }
+
+    fn __rmul__(&self, factor: f64) -> Self {
+        Self {
+            inner: self.inner.mul(factor),
         }
     }
 

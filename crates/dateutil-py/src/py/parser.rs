@@ -7,9 +7,14 @@ use pyo3::types::PyDict;
 /// Returns a naive datetime. Use `parse_to_dict` for access to parsed
 /// fields including timezone info.
 #[pyfunction]
-#[pyo3(name = "parse", signature = (timestr, dayfirst=false, yearfirst=false))]
-fn parse_py(timestr: &str, dayfirst: bool, yearfirst: bool) -> PyResult<chrono::NaiveDateTime> {
-    parser::parse(timestr, dayfirst, yearfirst)
+#[pyo3(name = "parse", signature = (timestr, dayfirst=false, yearfirst=false, default=None))]
+fn parse_py(
+    timestr: &str,
+    dayfirst: bool,
+    yearfirst: bool,
+    default: Option<chrono::NaiveDateTime>,
+) -> PyResult<chrono::NaiveDateTime> {
+    parser::parse(timestr, dayfirst, yearfirst, default)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 

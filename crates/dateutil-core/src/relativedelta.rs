@@ -555,14 +555,44 @@ impl RelativeDelta {
         self.days / 7
     }
 
-    // Getters — decompose packed fields on demand
+    // Getters — decompose packed fields on demand (relative)
     pub fn years(&self) -> i32 { self.years }
     pub fn months(&self) -> i32 { self.months }
     pub fn days(&self) -> i32 { self.days }
+    pub fn leapdays(&self) -> i32 { self.leapdays }
     pub fn hours(&self) -> i32 { self.time.hours() }
     pub fn minutes(&self) -> i32 { self.time.minutes() }
     pub fn seconds(&self) -> i32 { self.time.seconds() }
     pub fn microseconds(&self) -> i64 { self.time.microseconds() }
+
+    // Getters — absolute fields (None if not set)
+    pub fn year(&self) -> Option<i32> { self.abs.get_year() }
+    pub fn month(&self) -> Option<i32> { self.abs.get_month() }
+    pub fn day(&self) -> Option<i32> { self.abs.get_day() }
+    pub fn hour(&self) -> Option<i32> { self.abs.get_hour() }
+    pub fn minute(&self) -> Option<i32> { self.abs.get_minute() }
+    pub fn second(&self) -> Option<i32> { self.abs.get_second() }
+    pub fn microsecond(&self) -> Option<i32> { self.abs.get_microsecond() }
+    pub fn weekday(&self) -> Option<&Weekday> { self.weekday.as_ref() }
+
+    /// Multiply all relative fields by a scalar. Absolute fields are preserved as-is.
+    pub fn mul(&self, factor: f64) -> Self {
+        let total_months = (self.years * 12 + self.months) as f64 * factor;
+        let total_months_i = total_months.round() as i32;
+        let days = (self.days as f64 * factor).round() as i32;
+        let time_us = (self.time.total_us as f64 * factor).round() as i64;
+        let time = RelativeTime { total_us: time_us.rem_euclid(86_400_000_000) };
+        let extra_days = time_us.div_euclid(86_400_000_000) as i32;
+        Self {
+            years: total_months_i / 12,
+            months: total_months_i % 12,
+            days: days + extra_days,
+            leapdays: self.leapdays,
+            time,
+            abs: self.abs,
+            weekday: self.weekday,
+        }
+    }
 
     // ---- internals ----
 
@@ -1443,5 +1473,128 @@ mod tests {
     fn test_add_to_naive_date_negative_days() {
         let result = rd(0, 0, -31).add_to_naive_date(date(2024, 3, 31));
         assert_eq!(result, date(2024, 2, 29));
+    }
+
+    #[test]
+    fn test_absolute_field_getters() {
+        let delta = RelativeDelta::builder()
+            .years(1)
+            .months(2)
+            .year(2025)
+            .month(6)
+            .day(15)
+            .hour(10)
+            .minute(30)
+            .second(45)
+            .microsecond(123456)
+            .build()
+            .unwrap();
+
+        // Absolute fields return Some
+        assert_eq!(delta.year(), Some(2025));
+        assert_eq!(delta.month(), Some(6));
+        assert_eq!(delta.day(), Some(15));
+        assert_eq!(delta.hour(), Some(10));
+        assert_eq!(delta.minute(), Some(30));
+        assert_eq!(delta.second(), Some(45));
+        assert_eq!(delta.microsecond(), Some(123456));
+
+        // Relative fields
+        assert_eq!(delta.years(), 1);
+        assert_eq!(delta.months(), 2);
+    }
+
+    #[test]
+    fn test_absolute_field_getters_none() {
+        let delta = rd(1, 2, 3);
+        assert_eq!(delta.year(), None);
+        assert_eq!(delta.month(), None);
+        assert_eq!(delta.day(), None);
+        assert_eq!(delta.hour(), None);
+        assert_eq!(delta.minute(), None);
+        assert_eq!(delta.second(), None);
+        assert_eq!(delta.microsecond(), None);
+        assert_eq!(delta.weekday(), None);
+    }
+
+    #[test]
+    fn test_mul_basic() {
+        let delta = rd(1, 2, 3);
+        let doubled = delta.mul(2.0);
+        assert_eq!(doubled.years(), 2);
+        assert_eq!(doubled.months(), 4);
+        assert_eq!(doubled.days(), 6);
+    }
+
+    #[test]
+    fn test_mul_fractional() {
+        let delta = RelativeDelta::builder()
+            .hours(3)
+            .build()
+            .unwrap();
+        let halved = delta.mul(0.5);
+        assert_eq!(halved.hours(), 1);
+        assert_eq!(halved.minutes(), 30);
+    }
+
+    #[test]
+    fn test_mul_preserves_absolute_fields() {
+        let delta = RelativeDelta::builder()
+            .years(1)
+            .month(6)
+            .day(15)
+            .build()
+            .unwrap();
+        let doubled = delta.mul(2.0);
+        assert_eq!(doubled.years(), 2);
+        // Absolute fields preserved as-is
+        assert_eq!(doubled.month(), Some(6));
+        assert_eq!(doubled.day(), Some(15));
+    }
+
+    #[test]
+    fn test_weekday_getter() {
+        let delta = RelativeDelta::builder()
+            .weekday(Weekday::new(0, Some(2)).unwrap()) // MO(+2)
+            .build()
+            .unwrap();
+        let wd = delta.weekday().unwrap();
+        assert_eq!(wd.weekday(), 0);
+        assert_eq!(wd.n(), Some(2));
+    }
+
+    #[test]
+    fn test_leapdays_getter() {
+        let delta = RelativeDelta::builder()
+            .leapdays(1)
+            .build()
+            .unwrap();
+        assert_eq!(delta.leapdays(), 1);
+    }
+
+    #[test]
+    fn test_mul_negative() {
+        let delta = rd(1, 3, 10);
+        let neg = delta.mul(-1.0);
+        assert_eq!(neg.years(), -1);
+        assert_eq!(neg.months(), -3);
+        assert_eq!(neg.days(), -10);
+        // Should match neg()
+        let via_neg = delta.neg();
+        assert_eq!(neg, via_neg);
+    }
+
+    #[test]
+    fn test_mul_negative_time() {
+        let delta = RelativeDelta::builder()
+            .hours(2)
+            .minutes(30)
+            .build()
+            .unwrap();
+        let neg = delta.mul(-1.0);
+        // -2h30m = -1 day + 21h30m (normalized via rem_euclid)
+        assert_eq!(neg.days(), -1);
+        assert_eq!(neg.hours(), 21);
+        assert_eq!(neg.minutes(), 30);
     }
 }
