@@ -15,7 +15,6 @@ Feature gaps between python-dateutil v2.9.0 and dateutil-rs v1 (dateutil-core / 
 - [ ] `resolve_imaginary(dt)` — Shift imaginary datetime forward
 
 ### Parser: Missing Parameters
-- [x] `default` parameter — Fallback datetime for missing components
 - [ ] `tzinfos` callback — Custom timezone name → tzinfo resolution
 
 ## Medium Priority
@@ -30,11 +29,6 @@ Feature gaps between python-dateutil v2.9.0 and dateutil-rs v1 (dateutil-core / 
 
 ### Parser
 - [ ] `fuzzy_with_tokens()` — Return `(datetime, tuple_of_tokens)`
-
-### RelativeDelta
-- [ ] `__truediv__` — Division by scalar
-- [ ] `__abs__` — Absolute value
-- [ ] `__hash__` — Hashable for use in sets/dicts
 
 ### RRule
 - [ ] `cache` parameter — Cache generated occurrences

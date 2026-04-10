@@ -2,6 +2,7 @@ use crate::common::Weekday;
 use crate::error::RelativeDeltaError;
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 const YDAY_IDX: [i32; 12] = [31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 366];
 
@@ -594,6 +595,24 @@ impl RelativeDelta {
         }
     }
 
+    /// Divide all relative fields by a scalar. Absolute fields are preserved as-is.
+    pub fn div(&self, factor: f64) -> Self {
+        self.mul(1.0 / factor)
+    }
+
+    /// Absolute value of all relative fields. Absolute fields are preserved as-is.
+    pub fn abs(&self) -> Self {
+        Self {
+            years: self.years.abs(),
+            months: self.months.abs(),
+            days: self.days.abs(),
+            leapdays: self.leapdays,
+            time: RelativeTime { total_us: self.time.total_us.abs() },
+            abs: self.abs,
+            weekday: self.weekday,
+        }
+    }
+
     // ---- internals ----
 
     #[inline]
@@ -655,6 +674,32 @@ impl PartialEq for RelativeDelta {
 }
 
 impl Eq for RelativeDelta {}
+
+impl Hash for RelativeDelta {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.years.hash(state);
+        self.months.hash(state);
+        self.days.hash(state);
+        self.leapdays.hash(state);
+        self.time.total_us.hash(state);
+        self.abs.flags.hash(state);
+        if self.abs.has(AbsoluteFields::YEAR) { self.abs.year.hash(state); }
+        if self.abs.has(AbsoluteFields::MONTH) { self.abs.month.hash(state); }
+        if self.abs.has(AbsoluteFields::DAY) { self.abs.day.hash(state); }
+        if self.abs.has(AbsoluteFields::HOUR) { self.abs.hour.hash(state); }
+        if self.abs.has(AbsoluteFields::MINUTE) { self.abs.minute.hash(state); }
+        if self.abs.has(AbsoluteFields::SECOND) { self.abs.second.hash(state); }
+        if self.abs.has(AbsoluteFields::MICROSECOND) { self.abs.microsecond.hash(state); }
+        match &self.weekday {
+            None => 0u8.hash(state),
+            Some(wd) => {
+                1u8.hash(state);
+                wd.weekday().hash(state);
+                normalize_n(wd.n()).hash(state);
+            }
+        }
+    }
+}
 
 fn weekday_eq(a: &Option<Weekday>, b: &Option<Weekday>) -> bool {
     match (a, b) {
@@ -1596,5 +1641,86 @@ mod tests {
         assert_eq!(neg.days(), -1);
         assert_eq!(neg.hours(), 21);
         assert_eq!(neg.minutes(), 30);
+    }
+
+    #[test]
+    fn test_div() {
+        let delta = rd(2, 6, 10);
+        let halved = delta.div(2.0);
+        assert_eq!(halved.years(), 1);
+        assert_eq!(halved.months(), 3);
+        assert_eq!(halved.days(), 5);
+    }
+
+    #[test]
+    fn test_abs() {
+        let delta = rd(-2, -3, -10);
+        let a = delta.abs();
+        assert_eq!(a.years(), 2);
+        assert_eq!(a.months(), 3);
+        assert_eq!(a.days(), 10);
+    }
+
+    #[test]
+    fn test_abs_preserves_absolute_fields() {
+        let delta = RelativeDelta::builder()
+            .years(-1)
+            .month(6)
+            .build()
+            .unwrap();
+        let a = delta.abs();
+        assert_eq!(a.years(), 1);
+        assert_eq!(a.month(), Some(6));
+    }
+
+    #[test]
+    fn test_hash_equal_values() {
+        use std::collections::hash_map::DefaultHasher;
+
+        let a = rd(1, 2, 3);
+        let b = rd(1, 2, 3);
+        assert_eq!(a, b);
+
+        let hash_a = {
+            let mut h = DefaultHasher::new();
+            a.hash(&mut h);
+            h.finish()
+        };
+        let hash_b = {
+            let mut h = DefaultHasher::new();
+            b.hash(&mut h);
+            h.finish()
+        };
+        assert_eq!(hash_a, hash_b);
+    }
+
+    #[test]
+    fn test_hash_different_values() {
+        use std::collections::hash_map::DefaultHasher;
+
+        let a = rd(1, 2, 3);
+        let b = rd(1, 2, 4);
+
+        let hash_a = {
+            let mut h = DefaultHasher::new();
+            a.hash(&mut h);
+            h.finish()
+        };
+        let hash_b = {
+            let mut h = DefaultHasher::new();
+            b.hash(&mut h);
+            h.finish()
+        };
+        assert_ne!(hash_a, hash_b);
+    }
+
+    #[test]
+    fn test_hash_set_usage() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(rd(1, 2, 3));
+        set.insert(rd(1, 2, 3)); // duplicate
+        set.insert(rd(0, 0, 1));
+        assert_eq!(set.len(), 2);
     }
 }

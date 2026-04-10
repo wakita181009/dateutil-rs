@@ -164,8 +164,27 @@ impl PyRelativeDelta {
         }
     }
 
+    fn __truediv__(&self, factor: f64) -> Self {
+        Self {
+            inner: self.inner.div(factor),
+        }
+    }
+
+    fn __abs__(&self) -> Self {
+        Self {
+            inner: self.inner.abs(),
+        }
+    }
+
     fn __eq__(&self, other: &PyRelativeDelta) -> bool {
         self.inner == other.inner
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.inner.hash(&mut hasher);
+        hasher.finish()
     }
 
     fn __bool__(&self) -> bool {
