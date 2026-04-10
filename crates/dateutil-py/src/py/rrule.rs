@@ -1,8 +1,11 @@
+use std::sync::{Arc, Mutex, OnceLock};
+
 use super::common::PyWeekday;
 use dateutil_core::common::Weekday;
+use dateutil_core::rrule::iter::RRuleIter as CoreRRuleIter;
 use dateutil_core::rrule::{Frequency, Recurrence, RRule, RRuleBuilder};
 use dateutil_core::rrule::parse::{rrulestr as core_rrulestr, RRuleStrResult};
-use dateutil_core::rrule::set::RRuleSet;
+use dateutil_core::rrule::set::{RRuleSet, RRuleSetIter as CoreRRuleSetIter};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
@@ -64,6 +67,18 @@ fn extract_byweekday(list: &Bound<'_, PyList>) -> PyResult<Vec<Weekday>> {
 #[derive(Clone)]
 pub struct PyRRule {
     inner: RRule,
+    cache_enabled: bool,
+    cache: OnceLock<Arc<Vec<chrono::NaiveDateTime>>>,
+}
+
+impl PyRRule {
+    /// Return the cached result list if caching is enabled.
+    fn get_cache(&self) -> Option<&Arc<Vec<chrono::NaiveDateTime>>> {
+        if !self.cache_enabled {
+            return None;
+        }
+        Some(self.cache.get_or_init(|| Arc::new(self.inner.all())))
+    }
 }
 
 #[pymethods]
@@ -86,6 +101,7 @@ impl PyRRule {
         byhour=None,
         byminute=None,
         bysecond=None,
+        cache=false,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -105,6 +121,7 @@ impl PyRRule {
         byhour: Option<Vec<u8>>,
         byminute: Option<Vec<u8>>,
         bysecond: Option<Vec<u8>>,
+        cache: bool,
     ) -> PyResult<Self> {
         let f = freq_from_int(freq)?;
         let mut builder = RRuleBuilder::new(f).interval(interval);
@@ -155,8 +172,17 @@ impl PyRRule {
         let inner = builder
             .build()
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(Self { inner })
+        let cache_enabled = cache && inner.is_finite();
+        Ok(Self {
+            inner,
+            cache_enabled,
+            cache: OnceLock::new(),
+        })
     }
+
+    // -----------------------------------------------------------------------
+    // Property getters
+    // -----------------------------------------------------------------------
 
     #[getter]
     fn freq(&self) -> u8 {
@@ -168,7 +194,89 @@ impl PyRRule {
         self.inner.dtstart()
     }
 
+    #[getter]
+    fn interval(&self) -> u32 {
+        self.inner.interval()
+    }
+
+    #[getter]
+    fn wkst(&self) -> u8 {
+        self.inner.wkst()
+    }
+
+    #[getter]
+    fn count(&self) -> Option<u32> {
+        self.inner.count()
+    }
+
+    #[getter]
+    fn until(&self) -> Option<chrono::NaiveDateTime> {
+        self.inner.until()
+    }
+
+    #[getter]
+    fn bysetpos(&self) -> Option<Vec<i32>> {
+        self.inner.bysetpos().map(|s| s.to_vec())
+    }
+
+    #[getter]
+    fn bymonth(&self) -> Option<Vec<u32>> {
+        self.inner
+            .bymonth()
+            .map(|s| s.iter().map(|&v| v as u32).collect())
+    }
+
+    #[getter]
+    fn byyearday(&self) -> Option<Vec<i32>> {
+        self.inner.byyearday().map(|s| s.to_vec())
+    }
+
+    #[getter]
+    fn byeaster(&self) -> Option<Vec<i32>> {
+        self.inner.byeaster().map(|s| s.to_vec())
+    }
+
+    #[getter]
+    fn byweekno(&self) -> Option<Vec<i32>> {
+        self.inner.byweekno().map(|s| s.to_vec())
+    }
+
+    #[getter]
+    fn byweekday(&self) -> Option<Vec<PyWeekday>> {
+        self.inner
+            .byweekday()
+            .map(|wds| wds.iter().copied().map(PyWeekday::from).collect())
+    }
+
+    #[getter]
+    fn byhour(&self) -> Option<Vec<u32>> {
+        self.inner
+            .byhour()
+            .map(|s| s.iter().map(|&v| v as u32).collect())
+    }
+
+    #[getter]
+    fn byminute(&self) -> Option<Vec<u32>> {
+        self.inner
+            .byminute()
+            .map(|s| s.iter().map(|&v| v as u32).collect())
+    }
+
+    #[getter]
+    fn bysecond(&self) -> Option<Vec<u32>> {
+        self.inner
+            .bysecond()
+            .map(|s| s.iter().map(|&v| v as u32).collect())
+    }
+
+    // -----------------------------------------------------------------------
+    // Query methods (with cache support)
+    // -----------------------------------------------------------------------
+
     fn all(&self) -> PyResult<Vec<chrono::NaiveDateTime>> {
+        if let Some(cached) = self.get_cache() {
+            return Ok(cached.to_vec());
+        }
         if !self.inner.is_finite() {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "all() called on infinite recurrence (set count or until)",
@@ -179,11 +287,27 @@ impl PyRRule {
 
     #[pyo3(signature = (dt, inc=false))]
     fn before(&self, dt: chrono::NaiveDateTime, inc: bool) -> Option<chrono::NaiveDateTime> {
+        if let Some(cached) = self.get_cache() {
+            let idx = if inc {
+                cached.partition_point(|&x| x <= dt)
+            } else {
+                cached.partition_point(|&x| x < dt)
+            };
+            return if idx > 0 { Some(cached[idx - 1]) } else { None };
+        }
         self.inner.before(dt, inc)
     }
 
     #[pyo3(signature = (dt, inc=false))]
     fn after(&self, dt: chrono::NaiveDateTime, inc: bool) -> Option<chrono::NaiveDateTime> {
+        if let Some(cached) = self.get_cache() {
+            let idx = if inc {
+                cached.partition_point(|&x| x < dt)
+            } else {
+                cached.partition_point(|&x| x <= dt)
+            };
+            return cached.get(idx).copied();
+        }
         self.inner.after(dt, inc)
     }
 
@@ -194,12 +318,30 @@ impl PyRRule {
         before: chrono::NaiveDateTime,
         inc: bool,
     ) -> Vec<chrono::NaiveDateTime> {
+        if let Some(cached) = self.get_cache() {
+            let start = if inc {
+                cached.partition_point(|&x| x < after)
+            } else {
+                cached.partition_point(|&x| x <= after)
+            };
+            let end = if inc {
+                cached.partition_point(|&x| x <= before)
+            } else {
+                cached.partition_point(|&x| x < before)
+            };
+            return cached[start..end].to_vec();
+        }
         self.inner.between(after, before, inc)
     }
 
     fn __iter__(slf: PyRef<'_, Self>) -> PyRRuleIter {
+        if let Some(cached) = slf.get_cache() {
+            return PyRRuleIter {
+                inner: PyRRuleIterInner::Cached { data: Arc::clone(cached), idx: 0 },
+            };
+        }
         PyRRuleIter {
-            inner: slf.inner.iter().collect::<Vec<_>>().into_iter(),
+            inner: PyRRuleIterInner::Lazy(Box::new(slf.inner.iter())),
         }
     }
 
@@ -213,12 +355,17 @@ impl PyRRule {
 }
 
 // ---------------------------------------------------------------------------
-// PyRRuleIter — Python iterator for rrule
+// PyRRuleIter — Python iterator for rrule (lazy or cached)
 // ---------------------------------------------------------------------------
+
+enum PyRRuleIterInner {
+    Lazy(Box<CoreRRuleIter>),
+    Cached { data: Arc<Vec<chrono::NaiveDateTime>>, idx: usize },
+}
 
 #[pyclass]
 struct PyRRuleIter {
-    inner: std::vec::IntoIter<chrono::NaiveDateTime>,
+    inner: PyRRuleIterInner,
 }
 
 #[pymethods]
@@ -228,7 +375,14 @@ impl PyRRuleIter {
     }
 
     fn __next__(&mut self) -> Option<chrono::NaiveDateTime> {
-        self.inner.next()
+        match &mut self.inner {
+            PyRRuleIterInner::Lazy(iter) => iter.next(),
+            PyRRuleIterInner::Cached { data, idx } => {
+                let val = data.get(*idx).copied();
+                if val.is_some() { *idx += 1; }
+                val
+            }
+        }
     }
 }
 
@@ -239,34 +393,65 @@ impl PyRRuleIter {
 #[pyclass(name = "rruleset")]
 pub struct PyRRuleSet {
     inner: RRuleSet,
+    cache_enabled: bool,
+    cache: Mutex<Option<Arc<Vec<chrono::NaiveDateTime>>>>,
+}
+
+impl PyRRuleSet {
+    /// Return the cached result list, populating it on first access if caching is enabled.
+    fn get_or_populate_cache(&self) -> Option<Arc<Vec<chrono::NaiveDateTime>>> {
+        if !self.cache_enabled {
+            return None;
+        }
+        let mut guard = self.cache.lock().unwrap();
+        if let Some(ref cached) = *guard {
+            return Some(Arc::clone(cached));
+        }
+        if !self.inner.is_finite() {
+            return None;
+        }
+        let result = Arc::new(self.inner.all());
+        *guard = Some(Arc::clone(&result));
+        Some(result)
+    }
 }
 
 #[pymethods]
 impl PyRRuleSet {
     #[new]
-    fn new() -> Self {
+    #[pyo3(signature = (cache=false))]
+    fn new(cache: bool) -> Self {
         Self {
             inner: RRuleSet::new(),
+            cache_enabled: cache,
+            cache: Mutex::new(None),
         }
     }
 
     fn rrule(&mut self, rule: &PyRRule) {
         self.inner.rrule(rule.inner.clone());
+        *self.cache.get_mut().unwrap() = None;
     }
 
     fn rdate(&mut self, dt: chrono::NaiveDateTime) {
         self.inner.rdate(dt);
+        *self.cache.get_mut().unwrap() = None;
     }
 
     fn exrule(&mut self, rule: &PyRRule) {
         self.inner.exrule(rule.inner.clone());
+        *self.cache.get_mut().unwrap() = None;
     }
 
     fn exdate(&mut self, dt: chrono::NaiveDateTime) {
         self.inner.exdate(dt);
+        *self.cache.get_mut().unwrap() = None;
     }
 
     fn all(&self) -> PyResult<Vec<chrono::NaiveDateTime>> {
+        if let Some(cached) = self.get_or_populate_cache() {
+            return Ok(cached.to_vec());
+        }
         if !self.inner.is_finite() {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "all() called on infinite recurrence (set count or until)",
@@ -277,11 +462,27 @@ impl PyRRuleSet {
 
     #[pyo3(signature = (dt, inc=false))]
     fn before(&self, dt: chrono::NaiveDateTime, inc: bool) -> Option<chrono::NaiveDateTime> {
+        if let Some(cached) = self.get_or_populate_cache() {
+            let idx = if inc {
+                cached.partition_point(|&x| x <= dt)
+            } else {
+                cached.partition_point(|&x| x < dt)
+            };
+            return if idx > 0 { Some(cached[idx - 1]) } else { None };
+        }
         self.inner.before(dt, inc)
     }
 
     #[pyo3(signature = (dt, inc=false))]
     fn after(&self, dt: chrono::NaiveDateTime, inc: bool) -> Option<chrono::NaiveDateTime> {
+        if let Some(cached) = self.get_or_populate_cache() {
+            let idx = if inc {
+                cached.partition_point(|&x| x < dt)
+            } else {
+                cached.partition_point(|&x| x <= dt)
+            };
+            return cached.get(idx).copied();
+        }
         self.inner.after(dt, inc)
     }
 
@@ -292,12 +493,30 @@ impl PyRRuleSet {
         before: chrono::NaiveDateTime,
         inc: bool,
     ) -> Vec<chrono::NaiveDateTime> {
+        if let Some(cached) = self.get_or_populate_cache() {
+            let start = if inc {
+                cached.partition_point(|&x| x < after)
+            } else {
+                cached.partition_point(|&x| x <= after)
+            };
+            let end = if inc {
+                cached.partition_point(|&x| x <= before)
+            } else {
+                cached.partition_point(|&x| x < before)
+            };
+            return cached[start..end].to_vec();
+        }
         self.inner.between(after, before, inc)
     }
 
     fn __iter__(slf: PyRef<'_, Self>) -> PyRRuleSetIter {
+        if let Some(cached) = slf.get_or_populate_cache() {
+            return PyRRuleSetIter {
+                inner: PyRRuleSetIterInner::Cached { data: cached, idx: 0 },
+            };
+        }
         PyRRuleSetIter {
-            inner: slf.inner.iter().collect::<Vec<_>>().into_iter(),
+            inner: PyRRuleSetIterInner::Lazy(Box::new(slf.inner.iter())),
         }
     }
 }
@@ -306,9 +525,14 @@ impl PyRRuleSet {
 // PyRRuleSetIter
 // ---------------------------------------------------------------------------
 
+enum PyRRuleSetIterInner {
+    Lazy(Box<CoreRRuleSetIter>),
+    Cached { data: Arc<Vec<chrono::NaiveDateTime>>, idx: usize },
+}
+
 #[pyclass]
 struct PyRRuleSetIter {
-    inner: std::vec::IntoIter<chrono::NaiveDateTime>,
+    inner: PyRRuleSetIterInner,
 }
 
 #[pymethods]
@@ -318,7 +542,14 @@ impl PyRRuleSetIter {
     }
 
     fn __next__(&mut self) -> Option<chrono::NaiveDateTime> {
-        self.inner.next()
+        match &mut self.inner {
+            PyRRuleSetIterInner::Lazy(iter) => iter.next(),
+            PyRRuleSetIterInner::Cached { data, idx } => {
+                let val = data.get(*idx).copied();
+                if val.is_some() { *idx += 1; }
+                val
+            }
+        }
     }
 }
 
@@ -327,7 +558,7 @@ impl PyRRuleSetIter {
 // ---------------------------------------------------------------------------
 
 #[pyfunction]
-#[pyo3(name = "rrulestr", signature = (s, dtstart=None, forceset=false, compatible=false, unfold=false))]
+#[pyo3(name = "rrulestr", signature = (s, dtstart=None, forceset=false, compatible=false, unfold=false, cache=false))]
 fn rrulestr_py(
     py: Python<'_>,
     s: &str,
@@ -335,15 +566,31 @@ fn rrulestr_py(
     forceset: bool,
     compatible: bool,
     unfold: bool,
+    cache: bool,
 ) -> PyResult<Py<PyAny>> {
     let result = core_rrulestr(s, dtstart, forceset, compatible, unfold)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     match result {
         RRuleStrResult::Single(rule) => {
-            Ok(PyRRule { inner: *rule }.into_pyobject(py)?.into_any().unbind())
+            let cache_enabled = cache && rule.is_finite();
+            Ok(PyRRule {
+                inner: *rule,
+                cache_enabled,
+                cache: OnceLock::new(),
+            }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind())
         }
         RRuleStrResult::Set(set) => {
-            Ok(PyRRuleSet { inner: set }.into_pyobject(py)?.into_any().unbind())
+            Ok(PyRRuleSet {
+                inner: set,
+                cache_enabled: cache,
+                cache: Mutex::new(None),
+            }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind())
         }
     }
 }

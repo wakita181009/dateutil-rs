@@ -402,6 +402,70 @@ impl RRule {
     pub fn dtstart(&self) -> NaiveDateTime {
         self.dtstart
     }
+
+    pub fn interval(&self) -> u32 {
+        self.interval
+    }
+
+    pub fn wkst(&self) -> u8 {
+        self.wkst
+    }
+
+    pub fn count(&self) -> Option<u32> {
+        self.count
+    }
+
+    pub fn until(&self) -> Option<NaiveDateTime> {
+        self.until
+    }
+
+    pub fn bysetpos(&self) -> Option<&[i32]> {
+        self.bysetpos.as_deref()
+    }
+
+    pub fn bymonth(&self) -> Option<&[u8]> {
+        self.bymonth.as_deref()
+    }
+
+    pub fn bymonthday(&self) -> &[i32] {
+        &self.bymonthday
+    }
+
+    pub fn bynmonthday(&self) -> &[i32] {
+        &self.bynmonthday
+    }
+
+    pub fn byyearday(&self) -> Option<&[i32]> {
+        self.byyearday.as_ref().map(|v| v.values.as_slice())
+    }
+
+    pub fn byeaster(&self) -> Option<&[i32]> {
+        self.byeaster.as_deref()
+    }
+
+    pub fn byweekno(&self) -> Option<&[i32]> {
+        self.byweekno.as_deref()
+    }
+
+    pub fn byweekday(&self) -> Option<&[Weekday]> {
+        self.orig_byweekday.as_deref()
+    }
+
+    pub fn bynweekday(&self) -> Option<&[(u8, i32)]> {
+        self.bynweekday.as_deref()
+    }
+
+    pub fn byhour(&self) -> Option<&[u8]> {
+        self.byhour.as_deref()
+    }
+
+    pub fn byminute(&self) -> Option<&[u8]> {
+        self.byminute.as_deref()
+    }
+
+    pub fn bysecond(&self) -> Option<&[u8]> {
+        self.bysecond.as_deref()
+    }
 }
 
 impl Recurrence for RRule {
