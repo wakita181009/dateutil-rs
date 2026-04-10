@@ -96,13 +96,20 @@ def _import_v1():
             TH,
             TU,
             WE,
+            datetime_ambiguous as _v1_datetime_ambiguous,
+            datetime_exists as _v1_datetime_exists,
             easter as _v1_easter_fn,
+            gettz as _v1_gettz,
             isoparse as _v1_isoparse_fn,
             parse as _v1_parse_fn,
             relativedelta as _v1_rd_cls,
+            resolve_imaginary as _v1_resolve_imaginary,
             rrule as _v1_rrule_cls,
             rruleset as _v1_rruleset_cls,
             rrulestr as _v1_rrulestr_fn,
+            tzlocal as _v1_tzlocal,
+            tzoffset as _v1_tzoffset,
+            tzutc as _v1_tzutc,
         )
     except ImportError:
         return None
@@ -200,13 +207,26 @@ def _import_v1():
         isoparse=_v1_isoparse_fn,
     )
 
+    # --- v1 tz namespace ---
+
+    v1_tz_module = SimpleNamespace(
+        tzutc=_v1_tzutc,
+        tzoffset=_v1_tzoffset,
+        tzlocal=_v1_tzlocal,
+        gettz=_v1_gettz,
+        UTC=_v1_tzutc(),
+        datetime_exists=_v1_datetime_exists,
+        datetime_ambiguous=_v1_datetime_ambiguous,
+        resolve_imaginary=_v1_resolve_imaginary,
+    )
+
     return SimpleNamespace(
         name="v1",
         easter=v1_easter_module,
         parser=v1_parser_module,
         relativedelta=v1_rd_module,
         rrule=v1_rrule_module,
-        tz=None,
+        tz=v1_tz_module,
         utils=None,
     )
 
@@ -238,9 +258,5 @@ def du(request):
     # v1
     if _v1 is None:
         pytest.skip("dateutil_rs v1 not installed (run: maturin develop --manifest-path crates/dateutil-py/Cargo.toml -F python)")
-
-    test_path = request.node.nodeid
-    if "bench_tz" in test_path:
-        pytest.skip("v1 does not include tz module")
 
     return _v1

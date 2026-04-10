@@ -2,6 +2,8 @@
 
 import datetime
 
+import pytest
+
 # --- Timezone creation benchmarks ---
 
 
@@ -32,14 +34,20 @@ def test_tz_gettz_named(benchmark, du):
 
 def test_tz_gettz_offset(benchmark, du):
     """Look up a fixed-offset timezone via gettz: '+05:00'."""
+    if du.name == "v1":
+        pytest.skip("v1 gettz does not support offset strings")
     benchmark(du.tz.gettz, "+05:00")
 
 
 # --- Timezone conversion benchmarks ---
+# These require tzinfo protocol (datetime.astimezone), which v1 tz types
+# do not implement. v1 uses a separate API (fromutc method).
 
 
 def test_tz_convert_utc_to_eastern(benchmark, du):
     """Convert UTC datetime to US/Eastern."""
+    if du.name == "v1":
+        pytest.skip("v1 tz types do not implement datetime.tzinfo protocol")
     UTC_DT = datetime.datetime(2024, 7, 15, 14, 30, 0, tzinfo=du.tz.UTC)
     eastern = du.tz.gettz("America/New_York")
 
@@ -51,6 +59,8 @@ def test_tz_convert_utc_to_eastern(benchmark, du):
 
 def test_tz_convert_utc_to_jst(benchmark, du):
     """Convert UTC datetime to Asia/Tokyo."""
+    if du.name == "v1":
+        pytest.skip("v1 tz types do not implement datetime.tzinfo protocol")
     UTC_DT = datetime.datetime(2024, 7, 15, 14, 30, 0, tzinfo=du.tz.UTC)
     jst = du.tz.gettz("Asia/Tokyo")
 
@@ -62,6 +72,8 @@ def test_tz_convert_utc_to_jst(benchmark, du):
 
 def test_tz_localize_naive(benchmark, du):
     """Attach timezone to naive datetime via replace."""
+    if du.name == "v1":
+        pytest.skip("v1 tz types do not implement datetime.tzinfo protocol")
     NAIVE_DT = datetime.datetime(2024, 7, 15, 14, 30, 0)
     jst = du.tz.gettz("Asia/Tokyo")
 
@@ -73,6 +85,8 @@ def test_tz_localize_naive(benchmark, du):
 
 def test_tz_convert_chain(benchmark, du):
     """Chain conversion: UTC -> Eastern -> Pacific -> JST."""
+    if du.name == "v1":
+        pytest.skip("v1 tz types do not implement datetime.tzinfo protocol")
     UTC_DT = datetime.datetime(2024, 7, 15, 14, 30, 0, tzinfo=du.tz.UTC)
     eastern = du.tz.gettz("America/New_York")
     pacific = du.tz.gettz("America/Los_Angeles")
@@ -88,27 +102,41 @@ def test_tz_convert_chain(benchmark, du):
 
 
 # --- Utility function benchmarks ---
+# python-dateutil / v0: datetime_exists(aware_dt, tz=None) — tz from dt.tzinfo
+# v1: datetime_exists(naive_dt, tz) — separate args
 
 
 def test_tz_datetime_exists(benchmark, du):
     """Check if a datetime exists (DST gap check)."""
     eastern = du.tz.gettz("America/New_York")
-    dt = datetime.datetime(2024, 3, 10, 2, 30, 0, tzinfo=eastern)
-    benchmark(du.tz.datetime_exists, dt)
+    if du.name == "v1":
+        dt = datetime.datetime(2024, 3, 10, 2, 30, 0)
+        benchmark(du.tz.datetime_exists, dt, eastern)
+    else:
+        dt = datetime.datetime(2024, 3, 10, 2, 30, 0, tzinfo=eastern)
+        benchmark(du.tz.datetime_exists, dt)
 
 
 def test_tz_datetime_ambiguous(benchmark, du):
     """Check if a datetime is ambiguous (DST overlap check)."""
     eastern = du.tz.gettz("America/New_York")
-    dt = datetime.datetime(2024, 11, 3, 1, 30, 0, tzinfo=eastern)
-    benchmark(du.tz.datetime_ambiguous, dt)
+    if du.name == "v1":
+        dt = datetime.datetime(2024, 11, 3, 1, 30, 0)
+        benchmark(du.tz.datetime_ambiguous, dt, eastern)
+    else:
+        dt = datetime.datetime(2024, 11, 3, 1, 30, 0, tzinfo=eastern)
+        benchmark(du.tz.datetime_ambiguous, dt)
 
 
 def test_tz_resolve_imaginary(benchmark, du):
     """Resolve an imaginary datetime (in DST gap)."""
     eastern = du.tz.gettz("America/New_York")
-    dt = datetime.datetime(2024, 3, 10, 2, 30, 0, tzinfo=eastern)
-    benchmark(du.tz.resolve_imaginary, dt)
+    if du.name == "v1":
+        dt = datetime.datetime(2024, 3, 10, 2, 30, 0)
+        benchmark(du.tz.resolve_imaginary, dt, eastern)
+    else:
+        dt = datetime.datetime(2024, 3, 10, 2, 30, 0, tzinfo=eastern)
+        benchmark(du.tz.resolve_imaginary, dt)
 
 
 # --- Batch timezone lookups ---
