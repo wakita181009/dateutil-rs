@@ -6,6 +6,7 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use smallvec::SmallVec;
 
 use super::*;
+use crate::common::{days_in_month, is_leap_year};
 
 // ---------------------------------------------------------------------------
 // IterInfo — cached year/month masks with reusable buffers

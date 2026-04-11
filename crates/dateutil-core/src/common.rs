@@ -97,6 +97,35 @@ pub const SU: Weekday = Weekday {
     n: None,
 };
 
+// ---------------------------------------------------------------------------
+// Calendar helpers
+// ---------------------------------------------------------------------------
+
+/// Returns `true` if `year` is a leap year (Gregorian calendar).
+#[inline]
+pub(crate) fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+/// Returns the number of days in the given `month` of `year`.
+///
+/// `month` must be in `1..=12`; out-of-range values return `0`.
+#[inline]
+pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,5 +298,35 @@ mod tests {
     fn test_weekday_try_from_invalid() {
         let result: Result<Weekday, _> = 7u8.try_into();
         assert!(result.is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // Calendar helpers
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_is_leap_year() {
+        assert!(is_leap_year(2024));
+        assert!(!is_leap_year(2023));
+        assert!(!is_leap_year(1900)); // century non-leap
+        assert!(is_leap_year(2000)); // 400-year leap
+        assert!(!is_leap_year(2100)); // century non-leap
+    }
+
+    #[test]
+    fn test_days_in_month() {
+        assert_eq!(days_in_month(2024, 1), 31);
+        assert_eq!(days_in_month(2024, 2), 29); // leap year
+        assert_eq!(days_in_month(2023, 2), 28); // non-leap
+        assert_eq!(days_in_month(2024, 4), 30);
+        assert_eq!(days_in_month(2024, 12), 31);
+        assert_eq!(days_in_month(1900, 2), 28);
+        assert_eq!(days_in_month(2000, 2), 29);
+    }
+
+    #[test]
+    fn test_days_in_month_invalid() {
+        assert_eq!(days_in_month(2024, 0), 0);
+        assert_eq!(days_in_month(2024, 13), 0);
     }
 }

@@ -411,18 +411,6 @@ fn convertyear(year: i32, century_specified: bool, now_year: i32) -> i32 {
     }
 }
 
-#[allow(dead_code)]
-fn days_in_month(year: i32, month: u32) -> u32 {
-    const DAYS: [u32; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    if month == 2 && (year % 4 == 0 && year % 100 != 0 || year % 400 == 0) {
-        29
-    } else if (1..=12).contains(&month) {
-        DAYS[month as usize]
-    } else {
-        31
-    }
-}
-
 // ---------------------------------------------------------------------------
 // parse() — main entry point
 // ---------------------------------------------------------------------------
@@ -1462,17 +1450,6 @@ mod tests {
         assert!(!ymd.could_be_day(32));
         ymd.dstridx = Some(0);
         assert!(!ymd.could_be_day(15));
-    }
-
-    #[test]
-    fn test_days_in_month_direct() {
-        assert_eq!(days_in_month(2024, 2), 29);
-        assert_eq!(days_in_month(2023, 2), 28);
-        assert_eq!(days_in_month(2024, 1), 31);
-        assert_eq!(days_in_month(2024, 4), 30);
-        assert_eq!(days_in_month(2024, 0), 31);
-        assert_eq!(days_in_month(1900, 2), 28);
-        assert_eq!(days_in_month(2000, 2), 29);
     }
 
     #[test]

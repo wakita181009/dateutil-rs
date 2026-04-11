@@ -8,6 +8,7 @@ use std::sync::Arc;
 use chrono::{Datelike, NaiveDateTime, TimeDelta};
 use smallvec::SmallVec;
 
+use crate::common::days_in_month;
 use crate::error::TzError;
 
 // ---------------------------------------------------------------------------
@@ -699,7 +700,7 @@ impl TransitionRule {
         let mut day = 1 + days_ahead + (self.week as i32 - 1) * 7;
 
         // Week 5 means "last occurrence" — clamp to valid days in month.
-        let days_in_month = days_in_month_of(year, self.month as u32);
+        let days_in_month = days_in_month(year, self.month as u32);
         if day > days_in_month as i32 {
             day -= 7;
         }
@@ -786,26 +787,6 @@ fn timestamp_to_datetime(ts: i64) -> NaiveDateTime {
     chrono::DateTime::from_timestamp(ts, 0)
         .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
         .naive_utc()
-}
-
-/// Number of days in a given month.
-fn days_in_month_of(year: i32, month: u32) -> u32 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            if is_leap(year) {
-                29
-            } else {
-                28
-            }
-        }
-        _ => 30,
-    }
-}
-
-fn is_leap(year: i32) -> bool {
-    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -1197,28 +1178,6 @@ mod tests {
         let d = timestamp_to_datetime(ts);
         assert_eq!(d.month(), 2);
         assert!(d.day() >= 25);
-    }
-
-    // -----------------------------------------------------------------------
-    // Helper functions: days_in_month_of and is_leap
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_days_in_month() {
-        assert_eq!(days_in_month_of(2024, 1), 31);
-        assert_eq!(days_in_month_of(2024, 2), 29); // leap year
-        assert_eq!(days_in_month_of(2023, 2), 28); // non-leap
-        assert_eq!(days_in_month_of(2024, 4), 30);
-        assert_eq!(days_in_month_of(2024, 12), 31);
-    }
-
-    #[test]
-    fn test_is_leap() {
-        assert!(is_leap(2024));
-        assert!(!is_leap(2023));
-        assert!(!is_leap(1900)); // century non-leap
-        assert!(is_leap(2000)); // 400-year leap
-        assert!(!is_leap(2100)); // century non-leap
     }
 
     // -----------------------------------------------------------------------

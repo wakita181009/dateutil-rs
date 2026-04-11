@@ -1,26 +1,10 @@
-use crate::common::Weekday;
+use crate::common::{days_in_month, is_leap_year, Weekday};
 use crate::error::RelativeDeltaError;
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
 const YDAY_IDX: [i32; 12] = [31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 366];
-
-#[inline]
-fn is_leap_year(year: i32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
-}
-
-#[inline]
-fn days_in_month(year: i32, month: u32) -> u32 {
-    debug_assert!((1..=12).contains(&month), "month out of range: {month}");
-    const DAYS: [u32; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    if month == 2 && is_leap_year(year) {
-        29
-    } else {
-        DAYS[month as usize]
-    }
-}
 
 /// Normalized relative time, stored as a single microsecond count.
 /// This avoids cascading overflow checks in fix() and gives one

@@ -1356,27 +1356,6 @@ pub(crate) fn mod_distance(
     None
 }
 
-#[inline]
-pub(crate) fn is_leap_year(year: i32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
-}
-
-#[inline]
-pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            if is_leap_year(year) {
-                29
-            } else {
-                28
-            }
-        }
-        _ => 0,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3713,14 +3692,6 @@ mod tests {
         // No matching value within base iterations
         let result = mod_distance(0, &[], 60, 1);
         assert_eq!(result, None);
-    }
-
-    // ---- Coverage: days_in_month invalid month ----
-
-    #[test]
-    fn test_days_in_month_invalid() {
-        assert_eq!(days_in_month(2024, 0), 0);
-        assert_eq!(days_in_month(2024, 13), 0);
     }
 
     // ---- Coverage: invalid wkst ----
