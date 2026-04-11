@@ -645,4 +645,42 @@ mod tests {
             ]
         );
     }
+
+    // ---- Coverage: Default impl ----
+
+    #[test]
+    fn test_rruleset_default() {
+        let rset: RRuleSet = Default::default();
+        assert!(rset.is_finite()); // empty set is finite
+    }
+
+    // ---- Coverage: exrule exclusion ----
+
+    #[test]
+    fn test_rruleset_exrule() {
+        let mut rset = RRuleSet::new();
+        // Daily for 10 days
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(10)
+            .build()
+            .unwrap();
+        rset.rrule(rule);
+
+        // Exclude every other day (interval=2)
+        let exrule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 2, 0, 0, 0))
+            .interval(2)
+            .count(5)
+            .build()
+            .unwrap();
+        rset.exrule(exrule);
+
+        let results = rset.all();
+        // Should exclude Jan 2, 4, 6, 8, 10
+        assert!(results.contains(&dt(2020, 1, 1, 0, 0, 0)));
+        assert!(!results.contains(&dt(2020, 1, 2, 0, 0, 0)));
+        assert!(results.contains(&dt(2020, 1, 3, 0, 0, 0)));
+        assert!(!results.contains(&dt(2020, 1, 4, 0, 0, 0)));
+    }
 }

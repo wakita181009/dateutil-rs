@@ -230,4 +230,16 @@ mod tests {
         set.insert(a);
         assert!(set.contains(&b));
     }
+
+    #[test]
+    fn test_display_name_method() {
+        let named = TzOffset::new(Some("EST"), -5 * 3600);
+        assert_eq!(named.display_name(), "EST");
+
+        let unnamed = TzOffset::new(None, 5 * 3600 + 1800);
+        assert_eq!(unnamed.display_name(), "UTC+05:30");
+
+        let utc = TzOffset::new(None, 0);
+        assert_eq!(utc.display_name(), "UTC");
+    }
 }

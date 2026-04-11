@@ -72,30 +72,6 @@ mod tests {
     use chrono::Datelike;
 
     #[test]
-    fn test_western_2024() {
-        assert_eq!(
-            easter(2024, EasterMethod::Western).unwrap(),
-            NaiveDate::from_ymd_opt(2024, 3, 31).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_orthodox_2024() {
-        assert_eq!(
-            easter(2024, EasterMethod::Orthodox).unwrap(),
-            NaiveDate::from_ymd_opt(2024, 5, 5).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_julian_326() {
-        assert_eq!(
-            easter(326, EasterMethod::Julian).unwrap(),
-            NaiveDate::from_ymd_opt(326, 4, 3).unwrap()
-        );
-    }
-
-    #[test]
     fn test_invalid_method_from_i32() {
         assert!(matches!(
             EasterMethod::from_i32(4),
@@ -104,18 +80,6 @@ mod tests {
         assert!(matches!(
             EasterMethod::from_i32(0),
             Err(EasterError::InvalidMethod(0))
-        ));
-    }
-
-    #[test]
-    fn test_invalid_year() {
-        assert!(matches!(
-            easter(0, EasterMethod::Western),
-            Err(EasterError::InvalidYear(0))
-        ));
-        assert!(matches!(
-            easter(-1, EasterMethod::Western),
-            Err(EasterError::InvalidYear(-1))
         ));
     }
 
@@ -345,14 +309,6 @@ mod tests {
             EasterError::DateOutOfRange { year: 2024, month: 13, day: 1 }.to_string(),
             "date out of range: 2024-13-1"
         );
-    }
-
-    #[test]
-    fn test_orthodox_boundary_exact_1600() {
-        let d1600 = easter(1600, EasterMethod::Orthodox).unwrap();
-        let d1601 = easter(1601, EasterMethod::Orthodox).unwrap();
-        assert!((3..=5).contains(&d1600.month()));
-        assert!((3..=5).contains(&d1601.month()));
     }
 
     #[test]

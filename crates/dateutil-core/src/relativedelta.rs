@@ -1769,4 +1769,156 @@ mod tests {
         set.insert(rd(0, 0, 1));
         assert_eq!(set.len(), 2);
     }
+
+    // ---- Coverage: Display impl for absolute fields ----
+
+    #[test]
+    fn test_display_with_absolute_fields() {
+        let delta = RelativeDelta::builder()
+            .year(2024)
+            .month(3)
+            .day(15)
+            .hour(10)
+            .minute(30)
+            .second(45)
+            .microsecond(123456)
+            .build()
+            .unwrap();
+        let s = delta.to_string();
+        assert!(s.contains("year=2024"));
+        assert!(s.contains("month=3"));
+        assert!(s.contains("day=15"));
+        assert!(s.contains("hour=10"));
+        assert!(s.contains("minute=30"));
+        assert!(s.contains("second=45"));
+        assert!(s.contains("microsecond=123456"));
+    }
+
+    #[test]
+    fn test_display_with_weekday() {
+        use crate::common::MO;
+        let delta = RelativeDelta::builder()
+            .weekday(MO)
+            .build()
+            .unwrap();
+        let s = delta.to_string();
+        assert!(s.contains("weekday=MO"));
+    }
+
+    #[test]
+    fn test_display_relative_parts() {
+        let delta = rd(1, 2, 3);
+        let s = delta.to_string();
+        assert!(s.starts_with("relativedelta("));
+        assert!(s.contains("years=+1"));
+        assert!(s.contains("months=+2"));
+        assert!(s.contains("days=+3"));
+        assert!(s.ends_with(')'));
+    }
+
+    // ---- Coverage: set_weeks ----
+
+    #[test]
+    fn test_set_weeks() {
+        let mut delta = RelativeDelta::builder()
+            .days(10)
+            .build()
+            .unwrap();
+        assert_eq!(delta.weeks(), 1);
+        delta.set_weeks(3);
+        assert_eq!(delta.days(), 24); // 3*7 + 3 = 24
+        assert_eq!(delta.weeks(), 3);
+    }
+
+    // ---- Coverage: leapdays with march+ in leap year ----
+
+    #[test]
+    fn test_leapdays_in_leap_year() {
+        let delta = RelativeDelta::builder()
+            .leapdays(1)
+            .build()
+            .unwrap();
+        let base = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap(); // Leap year, March
+        let result = delta.add_to_naive_date(base);
+        // March in a leap year: leapdays should be added
+        assert_eq!(result, NaiveDate::from_ymd_opt(2024, 3, 2).unwrap());
+    }
+
+    // ---- Coverage: weekday_eq / normalize_n ----
+
+    #[test]
+    fn test_weekday_equality_in_relativedelta() {
+        use crate::common::{MO, TU};
+        let a = RelativeDelta::builder()
+            .weekday(MO)
+            .build()
+            .unwrap();
+        let b = RelativeDelta::builder()
+            .weekday(MO)
+            .build()
+            .unwrap();
+        assert_eq!(a, b);
+
+        let c = RelativeDelta::builder()
+            .weekday(TU)
+            .build()
+            .unwrap();
+        assert_ne!(a, c);
+
+        let d = RelativeDelta::builder().build().unwrap();
+        assert_ne!(a, d);
+    }
+
+    #[test]
+    fn test_hash_with_weekday() {
+        use crate::common::MO;
+        use std::collections::hash_map::DefaultHasher;
+
+        let a = RelativeDelta::builder()
+            .weekday(MO)
+            .build()
+            .unwrap();
+        let b = RelativeDelta::builder()
+            .weekday(MO)
+            .build()
+            .unwrap();
+
+        let hash_a = {
+            let mut h = DefaultHasher::new();
+            a.hash(&mut h);
+            h.finish()
+        };
+        let hash_b = {
+            let mut h = DefaultHasher::new();
+            b.hash(&mut h);
+            h.finish()
+        };
+        assert_eq!(hash_a, hash_b);
+    }
+
+    #[test]
+    fn test_hash_with_microsecond() {
+        use std::collections::hash_map::DefaultHasher;
+
+        let a = RelativeDelta::builder()
+            .microsecond(500)
+            .build()
+            .unwrap();
+        let b = RelativeDelta::builder()
+            .microsecond(500)
+            .build()
+            .unwrap();
+
+        let hash_a = {
+            let mut h = DefaultHasher::new();
+            a.hash(&mut h);
+            h.finish()
+        };
+        let hash_b = {
+            let mut h = DefaultHasher::new();
+            b.hash(&mut h);
+            h.finish()
+        };
+        assert_eq!(hash_a, hash_b);
+    }
 }

@@ -1107,4 +1107,29 @@ mod tests {
         );
         assert!(err.is_err());
     }
+
+    // ---- Coverage: error paths in parse ----
+
+    #[test]
+    fn test_rrulestr_invalid_param_without_equals() {
+        // "FREQ" without "=" should error
+        let result = rrulestr("FREQ", None, false, false, false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_unknown_param_name() {
+        // "XRULE:FREQ=DAILY" — unknown type prefix
+        let result = rrulestr("XRULE:FREQ=DAILY;COUNT=3", None, false, false, true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rrulestr_line_unfold() {
+        // Test RFC line unfolding (continuation lines starting with space)
+        let input = "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;\n COUNT=3";
+        let result = rrulestr(input, None, false, false, true);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().all().len(), 3);
+    }
 }

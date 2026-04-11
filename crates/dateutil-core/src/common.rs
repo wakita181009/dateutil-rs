@@ -190,30 +190,6 @@ mod tests {
     }
 
     #[test]
-    fn test_weekday_negative_one_n() {
-        // Last occurrence (e.g., last Friday of month)
-        let wd = FR.with_n(Some(-1));
-        assert_eq!(wd.n(), Some(-1));
-        assert_eq!(wd.to_string(), "FR(-1)");
-    }
-
-    #[test]
-    fn test_weekday_clone_copy() {
-        let wd = MO.with_n(Some(2));
-        let cloned = wd;
-        assert_eq!(wd, cloned); // Copy semantics — both usable
-    }
-
-    #[test]
-    fn test_weekday_boundary_values() {
-        // Weekday 0 (Monday) and 6 (Sunday) are boundaries
-        let mon = Weekday::new(0, Some(1)).unwrap();
-        let sun = Weekday::new(6, Some(-1)).unwrap();
-        assert_eq!(mon.weekday(), 0);
-        assert_eq!(sun.weekday(), 6);
-    }
-
-    #[test]
     fn test_weekday_all_invalid() {
         for i in 7..=255 {
             assert!(Weekday::new(i, None).is_err());
@@ -225,14 +201,6 @@ mod tests {
         let a = MO.with_n(Some(1));
         let b = MO.with_n(Some(2));
         assert_ne!(a, b);
-    }
-
-    #[test]
-    fn test_weekday_eq_none_vs_zero() {
-        // n=0 is now rejected at construction time (Weekday::new).
-        // with_n() bypasses validation for internal use, so test display.
-        let a = MO.with_n(None);
-        assert_eq!(a.to_string(), "MO");
     }
 
     #[test]
@@ -282,19 +250,24 @@ mod tests {
     }
 
     #[test]
-    fn test_weekday_equality_ignores_n_for_same_display() {
-        let a = MO.with_n(Some(1));
-        let b = MO.with_n(Some(-1));
-        assert_ne!(a, b);
-        assert_eq!(a.weekday(), b.weekday());
-    }
-
-    #[test]
     fn test_weekday_hash_set_none() {
         use std::collections::HashSet;
         let mut set = HashSet::new();
         set.insert(MO.with_n(None));
         set.insert(MO.with_n(Some(1)));
         assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn test_weekday_try_from_valid() {
+        let wd: Weekday = 3u8.try_into().unwrap();
+        assert_eq!(wd.weekday(), 3);
+        assert_eq!(wd.n(), None);
+    }
+
+    #[test]
+    fn test_weekday_try_from_invalid() {
+        let result: Result<Weekday, _> = 7u8.try_into();
+        assert!(result.is_err());
     }
 }

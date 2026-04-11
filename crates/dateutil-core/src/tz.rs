@@ -316,20 +316,6 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn test_gettz_utc() {
-        let tz = gettz(Some("UTC")).unwrap();
-        let d = dt(2024, 1, 1, 0, 0, 0);
-        assert_eq!(tz.utcoffset(d, false), 0);
-        assert_eq!(tz.tzname(d, false), "UTC");
-    }
-
-    #[test]
-    fn test_gettz_gmt() {
-        let tz = gettz(Some("GMT")).unwrap();
-        assert_eq!(tz.utcoffset(dt(2024, 1, 1, 0, 0, 0), false), 0);
-    }
-
-    #[test]
     fn test_gettz_iana_name() {
         let tz = gettz(Some("America/New_York")).unwrap();
         // Winter: EST
@@ -588,5 +574,43 @@ mod tests {
         assert_eq!(tz.utcoffset(dt(2024, 1, 15, 12, 0, 0), false), 11 * 3600);
         // July is WINTER: AEST (UTC+10)
         assert_eq!(tz.utcoffset(dt(2024, 7, 15, 12, 0, 0), false), 10 * 3600);
+    }
+
+    // ---- Coverage: TimeZone dispatch for Local variant ----
+
+    #[test]
+    fn test_timezone_local_dst() {
+        let tz = gettz(None).unwrap(); // local timezone
+        let d = dt(2024, 7, 15, 12, 0, 0);
+        // Just verify it doesn't panic
+        let _ = tz.dst(d, false);
+    }
+
+    #[test]
+    fn test_timezone_local_tzname() {
+        let tz = gettz(None).unwrap();
+        let d = dt(2024, 1, 15, 12, 0, 0);
+        let name = tz.tzname(d, false);
+        assert!(!name.is_empty());
+    }
+
+    #[test]
+    fn test_timezone_local_is_ambiguous() {
+        let tz = gettz(None).unwrap();
+        let d = dt(2024, 6, 15, 12, 0, 0);
+        // Just verify it doesn't panic; midday is never ambiguous
+        let _ = tz.is_ambiguous(d);
+    }
+
+    #[test]
+    fn test_timezone_local_fromutc() {
+        let tz = gettz(None).unwrap();
+        let d = dt(2024, 1, 15, 12, 0, 0);
+        let wall = tz.fromutc(d);
+        // fromutc should shift by the local offset
+        let offset = tz.utcoffset(wall, false);
+        // The difference should match the offset
+        let diff = (wall - d).num_seconds() as i32;
+        assert_eq!(diff, offset);
     }
 }

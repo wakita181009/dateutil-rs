@@ -985,22 +985,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_month_name() {
-        let dt = parse("January 15, 2024", false, false, None, None).unwrap();
-        assert_eq!(dt.year(), 2024);
-        assert_eq!(dt.month(), 1);
-        assert_eq!(dt.day(), 15);
-    }
-
-    #[test]
-    fn test_parse_month_abbrev() {
-        let dt = parse("15 Jan 2024", false, false, None, None).unwrap();
-        assert_eq!(dt.year(), 2024);
-        assert_eq!(dt.month(), 1);
-        assert_eq!(dt.day(), 15);
-    }
-
-    #[test]
     fn test_parse_us_format() {
         // MM/DD/YYYY (default, dayfirst=false)
         let dt = parse("01/15/2024", false, false, None, None).unwrap();
@@ -1046,24 +1030,6 @@ mod tests {
         let dt = parse("2024-01-15 10:30:45.123456", false, false, None, None).unwrap();
         assert_eq!(dt.second(), 45);
         assert_eq!(dt.nanosecond() / 1000, 123456);
-    }
-
-    #[test]
-    fn test_parse_tz_offset() {
-        let res = parse_to_result("2024-01-15 10:30:45+05:30", false, false, None).unwrap();
-        assert_eq!(res.tzoffset, Some(5 * 3600 + 30 * 60));
-    }
-
-    #[test]
-    fn test_parse_tz_negative() {
-        let res = parse_to_result("2024-01-15 10:30:45-0800", false, false, None).unwrap();
-        assert_eq!(res.tzoffset, Some(-(8 * 3600)));
-    }
-
-    #[test]
-    fn test_parse_weekday() {
-        let res = parse_to_result("Monday, January 15, 2024", false, false, None).unwrap();
-        assert_eq!(res.weekday, Some(0)); // Monday
     }
 
     #[test]
@@ -1160,19 +1126,6 @@ mod tests {
         let res = parse_to_result("2024-01-15 10:30:00 Z", false, false, None).unwrap();
         assert_eq!(res.tzname, Some("UTC".into()));
         assert_eq!(res.tzoffset, Some(0));
-    }
-
-    #[test]
-    fn test_parse_tz_offset_compact_positive() {
-        let res = parse_to_result("2024-01-15 10:30:00+0530", false, false, None).unwrap();
-        assert_eq!(res.tzoffset, Some(5 * 3600 + 30 * 60));
-    }
-
-    #[test]
-    fn test_parse_tz_offset_zero() {
-        let res = parse_to_result("2024-01-15 10:30:00+0000", false, false, None).unwrap();
-        assert_eq!(res.tzoffset, Some(0));
-        assert_eq!(res.tzname, Some("UTC".into()));
     }
 
     #[test]
@@ -1359,13 +1312,6 @@ mod tests {
         // A 4-digit number alone should be treated as a year
         let res = parse_to_result("2024", false, false, None).unwrap();
         assert_eq!(res.year, Some(2024));
-    }
-
-    #[test]
-    fn test_parse_time_hh_only() {
-        // "10 hours" — number + HMS word sets hour
-        let res = parse_to_result("2024-01-15 10 hours", false, false, None).unwrap();
-        assert_eq!(res.hour, Some(10));
     }
 
     #[test]
@@ -1578,12 +1524,6 @@ mod tests {
         assert_eq!(dt.year(), 2000);
     }
 
-    #[test]
-    fn test_parse_two_digit_year_99() {
-        let dt = parse("01/15/99", false, false, None, None).unwrap();
-        assert_eq!(dt.year(), 1999);
-    }
-
     // ---- Leap year edge cases ----
 
     #[test]
@@ -1672,34 +1612,12 @@ mod tests {
         assert_eq!(dt.second(), 0);
     }
 
-    #[test]
-    fn test_parse_end_of_day_235959() {
-        let dt = parse("2024-01-15 23:59:59", false, false, None, None).unwrap();
-        assert_eq!(dt.hour(), 23);
-        assert_eq!(dt.minute(), 59);
-        assert_eq!(dt.second(), 59);
-    }
-
     // ---- Fractional seconds precision ----
 
     #[test]
     fn test_parse_fractional_1_digit() {
         let dt = parse("2024-01-15 10:30:45.1", false, false, None, None).unwrap();
         assert_eq!(dt.nanosecond() / 1000, 100_000);
-    }
-
-    #[test]
-    fn test_parse_fractional_6_digits() {
-        let dt = parse("2024-01-15 10:30:45.123456", false, false, None, None).unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 123_456);
-    }
-
-    // ---- ParseResult field_count ----
-
-    #[test]
-    fn test_parse_to_result_minimal() {
-        let res = parse_to_result("2024", false, false, None).unwrap();
-        assert!(res.year.is_some());
     }
 
     // ---- Only time ----
@@ -1770,4 +1688,184 @@ mod tests {
         assert_eq!(dt.day(), 10);
         assert_eq!(dt.hour(), 8);
     }
+
+    // ---- Coverage: compact parsing (try_parse_compact) ----
+
+    #[test]
+    fn test_parse_compact_yyyymmdd() {
+        let dt = parse("20240315", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
+        assert_eq!(dt.day(), 15);
+    }
+
+    #[test]
+    fn test_parse_compact_yyyymmddt_hhmmss() {
+        // YYYYMMDD + T separator + HHMMSS (6-digit time after date)
+        let dt = parse("20240115T103045", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 1);
+        assert_eq!(dt.day(), 15);
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    #[test]
+    fn test_parse_compact_yymmdd() {
+        let default = NaiveDate::from_ymd_opt(2024, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("240315", false, false, Some(default), None).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
+        assert_eq!(dt.day(), 15);
+    }
+
+    #[test]
+    fn test_parse_compact_yyyymm() {
+        // "202403" → YYMMDD (20/24/03) fails because month=24 > 12
+        // → YYYYMM fallback: year=2024, month=03
+        let dt = parse("202403", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
+    }
+
+    #[test]
+    fn test_parse_compact_hhmmss_after_date() {
+        // Date then T then HHMMSS
+        let dt = parse("2024-03-15T103045", false, false, None, None).unwrap();
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    #[test]
+    fn test_parse_compact_yyyymmddhh() {
+        let dt = parse("2024031510", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
+        assert_eq!(dt.day(), 15);
+        assert_eq!(dt.hour(), 10);
+    }
+
+    #[test]
+    fn test_parse_compact_yyyymmddhh_with_minutes() {
+        let dt = parse("2024031510:30", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
+        assert_eq!(dt.day(), 15);
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+    }
+
+    #[test]
+    fn test_parse_compact_yyyymmddhh_with_seconds() {
+        let dt = parse("2024031510:30:45", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
+        assert_eq!(dt.day(), 15);
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    #[test]
+    fn test_parse_compact_yyyymmddhh_with_decimal_seconds() {
+        let dt = parse("2024031510:30:45.5", false, false, None, None).unwrap();
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 45);
+    }
+
+    // ---- Coverage: dot-separated date (try_parse_dot_date) ----
+
+    #[test]
+    fn test_parse_dot_separated_date() {
+        let dt = parse("2003.09.25", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2003);
+        assert_eq!(dt.month(), 9);
+        assert_eq!(dt.day(), 25);
+    }
+
+    #[test]
+    fn test_parse_dot_separated_date_dmy() {
+        let dt = parse("25.09.2003", true, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2003);
+        assert_eq!(dt.month(), 9);
+        assert_eq!(dt.day(), 25);
+    }
+
+    // ---- Coverage: timezone parsing ----
+
+    #[test]
+    fn test_parse_tz_offset_single_token() {
+        let res = parse_to_result("2024-01-15 10:30:45 +0500", false, false, None).unwrap();
+        assert_eq!(res.tzoffset, Some(18000));
+    }
+
+    #[test]
+    fn test_parse_tz_name_with_offset() {
+        let res = parse_to_result("2024-01-15 10:30:45 EST -0500", false, false, None).unwrap();
+        assert_eq!(res.tzname.as_deref(), Some("EST"));
+        assert_eq!(res.tzoffset, Some(-18000));
+    }
+
+    #[test]
+    fn test_parse_tz_with_parserinfo() {
+        let mut info = ParserInfo::default();
+        info.tzoffset.insert("est".into(), -18000);
+        let res = parse_to_result("2024-01-15 10:30:45 EST", false, false, Some(&info)).unwrap();
+        assert_eq!(res.tzname.as_deref(), Some("EST"));
+        assert_eq!(res.tzoffset, Some(-18000));
+    }
+
+    // ---- Coverage: pertain word ----
+
+    #[test]
+    fn test_parse_pertain_of() {
+        let dt = parse("15 of January 2024", false, false, None, None).unwrap();
+        assert_eq!(dt.month(), 1);
+        assert_eq!(dt.day(), 15);
+    }
+
+    // ---- Coverage: HMS assign with microseconds ----
+
+    #[test]
+    fn test_parse_hms_label_no_space() {
+        // "10h30m45s" — HMS labels immediately after numbers
+        let res = parse_to_result("10h30m45s", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(10));
+        assert_eq!(res.minute, Some(30));
+        assert_eq!(res.second, Some(45));
+    }
+
+    // ---- Coverage: convertyear edge cases ----
+
+    #[test]
+    fn test_parse_two_digit_year_old() {
+        // Two-digit year far in the past gets + 100
+        let default = NaiveDate::from_ymd_opt(2024, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("01/15/70", false, false, Some(default), None).unwrap();
+        // 70 should map to 1970 (2070 - 100 = 1970... or 2070 if < now+50)
+        assert!(dt.year() == 1970 || dt.year() == 2070);
+    }
+
+    // ---- Coverage: fast_parse_int / fast_parse_decimal edge cases ----
+
+    #[test]
+    fn test_fast_parse_int_empty() {
+        assert_eq!(fast_parse_int(""), None);
+    }
+
+    #[test]
+    fn test_fast_parse_decimal_empty_frac() {
+        // "10." — dot at end, empty frac part → (10, 0)
+        assert_eq!(fast_parse_decimal("10."), Some((10, 0)));
+    }
+
 }

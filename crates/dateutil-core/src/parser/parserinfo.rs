@@ -315,4 +315,44 @@ mod tests {
         assert_eq!(do_tzoffset("est", Some(&info)), Some(-18000));
         assert_eq!(do_month("January", Some(&info)), Some(1));
     }
+
+    #[test]
+    fn test_parserinfo_hms() {
+        let info = ParserInfo::default();
+        assert_eq!(info.hms("hour"), Some(0));
+        assert_eq!(info.hms("HOURS"), Some(0));
+        assert_eq!(info.hms("minute"), Some(1));
+        assert_eq!(info.hms("s"), Some(2));
+        assert_eq!(info.hms("xyz"), None);
+    }
+
+    #[test]
+    fn test_parserinfo_ampm() {
+        let info = ParserInfo::default();
+        assert_eq!(info.ampm("am"), Some(0));
+        assert_eq!(info.ampm("AM"), Some(0));
+        assert_eq!(info.ampm("p"), Some(1));
+        assert_eq!(info.ampm("PM"), Some(1));
+        assert_eq!(info.ampm("xyz"), None);
+    }
+
+    #[test]
+    fn test_parserinfo_pertain() {
+        let info = ParserInfo::default();
+        assert!(info.pertain("of"));
+        assert!(info.pertain("OF"));
+        assert!(!info.pertain("xyz"));
+    }
+
+    #[test]
+    fn test_dispatch_with_some_info() {
+        let info = ParserInfo::default();
+        assert!(do_jump(",", Some(&info)));
+        assert_eq!(do_weekday("Monday", Some(&info)), Some(0));
+        assert_eq!(do_month("January", Some(&info)), Some(1));
+        assert_eq!(do_hms("hour", Some(&info)), Some(0));
+        assert_eq!(do_ampm("AM", Some(&info)), Some(0));
+        assert!(do_pertain("of", Some(&info)));
+        assert!(do_utczone("UTC", Some(&info)));
+    }
 }

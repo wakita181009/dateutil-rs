@@ -3344,4 +3344,225 @@ mod tests {
         let result = rule.take_slice(5, 5, 1);
         assert!(result.is_empty());
     }
+
+    // ---- Coverage: getter methods ----
+
+    #[test]
+    fn test_rrule_getters() {
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .interval(2)
+            .count(5)
+            .bymonth(vec![1, 6])
+            .bysetpos(vec![1, -1])
+            .byweekno(vec![1, 52])
+            .byyearday(vec![1, 365])
+            .byeaster(vec![0])
+            .byhour(vec![9, 17])
+            .byminute(vec![0, 30])
+            .bysecond(vec![0])
+            .build()
+            .unwrap();
+
+        assert_eq!(rule.freq(), Frequency::Monthly);
+        assert_eq!(rule.dtstart(), dt(2020, 1, 1, 9, 0, 0));
+        assert_eq!(rule.interval(), 2);
+        assert_eq!(rule.wkst(), 0);
+        assert_eq!(rule.count(), Some(5));
+        assert_eq!(rule.until(), None);
+        assert!(rule.bysetpos().is_some());
+        assert!(rule.bymonth().is_some());
+        assert!(rule.byyearday().is_some());
+        assert!(rule.byeaster().is_some());
+        assert!(rule.byweekno().is_some());
+        assert!(rule.byhour().is_some());
+        assert!(rule.byminute().is_some());
+        assert!(rule.bysecond().is_some());
+    }
+
+    #[test]
+    fn test_rrule_bymonthday_and_bynmonthday() {
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 15, 0, 0, 0))
+            .count(3)
+            .build()
+            .unwrap();
+        // Default bymonthday should be dtstart day
+        assert!(!rule.bymonthday().is_empty());
+        assert!(rule.bynmonthday().is_empty());
+    }
+
+    #[test]
+    fn test_rrule_byweekday_getter() {
+        use crate::common::{MO, FR};
+        let rule = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(5)
+            .byweekday(vec![MO, FR])
+            .build()
+            .unwrap();
+        assert!(rule.byweekday().is_some());
+    }
+
+    #[test]
+    fn test_rrule_bynweekday_getter() {
+        use crate::common::MO;
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .byweekday(vec![MO.with_n(Some(2))])
+            .build()
+            .unwrap();
+        assert!(rule.bynweekday().is_some());
+    }
+
+    // ---- Coverage: is_empty, all() panic ----
+
+    #[test]
+    fn test_recurrence_is_empty() {
+        // Rule that produces no results (month 13 doesn't exist)
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(0)
+            .build()
+            .unwrap();
+        assert!(rule.is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "all() called on infinite")]
+    fn test_all_panics_on_infinite() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .build()
+            .unwrap();
+        let _ = rule.all();
+    }
+
+    // ---- Coverage: len() ----
+
+    #[test]
+    fn test_recurrence_len_finite_and_infinite() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(5)
+            .build()
+            .unwrap();
+        assert_eq!(rule.len(), Some(5));
+
+        let infinite = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .build()
+            .unwrap();
+        assert_eq!(infinite.len(), None);
+    }
+
+    // ---- Coverage: Arc<RRule> iter ----
+
+    #[test]
+    fn test_arc_rrule_iter() {
+        let rule = Arc::new(
+            RRuleBuilder::new(Frequency::Daily)
+                .dtstart(dt(2020, 1, 1, 0, 0, 0))
+                .count(3)
+                .build()
+                .unwrap(),
+        );
+        let results: Vec<_> = rule.iter().collect();
+        assert_eq!(results.len(), 3);
+        assert!(rule.is_finite());
+    }
+
+    // ---- Coverage: Display impl for RRULE ----
+
+    #[test]
+    fn test_rrule_display_with_bysetpos() {
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .bysetpos(vec![1, -1])
+            .bymonth(vec![1, 6])
+            .byyearday(vec![1, 100])
+            .byweekno(vec![1, 52])
+            .byhour(vec![9, 17])
+            .byminute(vec![0, 30])
+            .bysecond(vec![0])
+            .byeaster(vec![0, -2])
+            .build()
+            .unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYSETPOS=1,-1"));
+        assert!(s.contains("BYMONTH="));
+        assert!(s.contains("BYYEARDAY="));
+        assert!(s.contains("BYWEEKNO="));
+        assert!(s.contains("BYHOUR="));
+        assert!(s.contains("BYMINUTE="));
+        assert!(s.contains("BYSECOND="));
+        assert!(s.contains("BYEASTER="));
+    }
+
+    #[test]
+    fn test_rrule_display_with_bymonthday() {
+        let rule = RRuleBuilder::new(Frequency::Monthly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(3)
+            .bymonthday(vec![1, 15])
+            .build()
+            .unwrap();
+        let s = rule.to_string();
+        assert!(s.contains("BYMONTHDAY="));
+    }
+
+    // ---- Coverage: construct_byset empty error ----
+
+    #[test]
+    fn test_construct_byset_empty() {
+        // interval=2, start=0, byxxx=[1] → gcd(2,24)=2, 1%2=1≠0 → empty
+        let result = construct_byset(0, &[1], 24, 2);
+        assert!(result.is_err());
+    }
+
+    // ---- Coverage: mod_distance returns None ----
+
+    #[test]
+    fn test_mod_distance_none() {
+        // No matching value within base iterations
+        let result = mod_distance(0, &[], 60, 1);
+        assert_eq!(result, None);
+    }
+
+    // ---- Coverage: days_in_month invalid month ----
+
+    #[test]
+    fn test_days_in_month_invalid() {
+        assert_eq!(days_in_month(2024, 0), 0);
+        assert_eq!(days_in_month(2024, 13), 0);
+    }
+
+    // ---- Coverage: invalid wkst ----
+
+    #[test]
+    fn test_builder_invalid_wkst_7() {
+        let result = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .wkst(7)
+            .build();
+        assert!(result.is_err());
+    }
+
+    // ---- Coverage: freq > Monthly with nth weekday (flattened to plain) ----
+
+    #[test]
+    fn test_weekly_nth_weekday_flattened() {
+        use crate::common::MO;
+        // nth weekday with freq > Monthly → pushed to plain weekday
+        let rule = RRuleBuilder::new(Frequency::Weekly)
+            .dtstart(dt(2020, 1, 6, 0, 0, 0)) // Monday
+            .count(3)
+            .byweekday(vec![MO.with_n(Some(2))])
+            .build()
+            .unwrap();
+        let results = rule.all();
+        assert_eq!(results.len(), 3);
+    }
 }

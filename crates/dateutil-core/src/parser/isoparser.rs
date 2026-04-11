@@ -591,4 +591,25 @@ mod tests {
     fn test_iso_leap_second_rejected() {
         assert!(isoparse("2024-01-15T23:59:60").is_err());
     }
+
+    #[test]
+    fn test_iso_hhmm_colon_format() {
+        let dt = isoparse("2024-01-15T10:30").unwrap();
+        assert_eq!(dt.hour(), 10);
+        assert_eq!(dt.minute(), 30);
+        assert_eq!(dt.second(), 0);
+    }
+
+    #[test]
+    fn test_iso_unrecognized_time_format() {
+        let result = isoparse("2024-01-15TX");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_iso_fractional_dot_only() {
+        let dt = isoparse("2024-01-15T10:30:45.").unwrap();
+        assert_eq!(dt.second(), 45);
+        assert_eq!(dt.nanosecond(), 0);
+    }
 }
