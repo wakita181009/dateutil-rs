@@ -286,7 +286,8 @@ impl PyTzLocal {
 #[pyfunction]
 #[pyo3(name = "gettz", signature = (name=None))]
 fn gettz_py(py: Python<'_>, name: Option<&str>) -> PyResult<Py<PyAny>> {
-    let tz = tz::gettz(name)
+    let tz = py
+        .detach(|| tz::gettz(name))
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     match tz {

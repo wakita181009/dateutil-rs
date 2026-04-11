@@ -235,7 +235,8 @@ fn parse_py<'py>(
     let pi_ref = parserinfo.as_ref().map(|pi| pi.borrow());
     let (info_ref, df, yf) = resolve_pi_args(&pi_ref, dayfirst, yearfirst);
 
-    let res = parser::parse_to_result(timestr, df, yf, info_ref)
+    let res = py
+        .detach(|| parser::parse_to_result(timestr, df, yf, info_ref))
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     let now = chrono::Local::now().naive_local();
@@ -302,7 +303,8 @@ fn parse_to_dict_py<'py>(
     let pi_ref = parserinfo.as_ref().map(|pi| pi.borrow());
     let (info_ref, df, yf) = resolve_pi_args(&pi_ref, dayfirst, yearfirst);
 
-    let res = parser::parse_to_result(timestr, df, yf, info_ref)
+    let res = py
+        .detach(|| parser::parse_to_result(timestr, df, yf, info_ref))
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     let dict = PyDict::new(py);

@@ -11,7 +11,7 @@ use dateutil::rrule::{
 use dateutil::rrule::parse::{rrulestr as core_rrulestr, RRuleStrResult};
 use dateutil::rrule::set::{RRuleSet, RRuleSetIter as CoreRRuleSetIter};
 use pyo3::prelude::*;
-use pyo3::types::{PyAnyMethods, PySlice};
+use pyo3::types::{PyAnyMethods, PyList, PySlice};
 
 // ---------------------------------------------------------------------------
 // Helper: accept weekday scalar-or-sequence for byweekday parameter
@@ -72,7 +72,7 @@ const SECONDLY: u8 = Frequency::Secondly as u8;
 #[pyclass(name = "rrule", frozen, from_py_object)]
 #[derive(Clone)]
 pub struct PyRRule {
-    inner: RRule,
+    inner: Arc<RRule>,
     cache_enabled: bool,
     cache: OnceLock<Arc<Vec<chrono::NaiveDateTime>>>,
 }
@@ -200,7 +200,7 @@ impl PyRRule {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let cache_enabled = cache && inner.is_finite();
         Ok(Self {
-            inner,
+            inner: Arc::new(inner),
             cache_enabled,
             cache: OnceLock::new(),
         })
@@ -211,8 +211,11 @@ impl PyRRule {
     // -----------------------------------------------------------------------
 
     #[getter]
-    fn _cache(&self) -> Option<Vec<chrono::NaiveDateTime>> {
-        self.cache.get().map(|arc| arc.as_ref().clone())
+    fn _cache<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyList>>> {
+        match self.cache.get() {
+            Some(arc) => Ok(Some(PyList::new(py, arc.iter().copied())?)),
+            None => Ok(None),
+        }
     }
 
     #[getter]
@@ -304,7 +307,7 @@ impl PyRRule {
     // Query methods (with cache support)
     // -----------------------------------------------------------------------
 
-    fn all(&self) -> PyResult<Vec<chrono::NaiveDateTime>> {
+    fn all(&self, py: Python<'_>) -> PyResult<Vec<chrono::NaiveDateTime>> {
         if let Some(cached) = self.get_cache() {
             return Ok(cached.to_vec());
         }
@@ -313,7 +316,8 @@ impl PyRRule {
                 "all() called on infinite recurrence (set count or until)",
             ));
         }
-        Ok(self.inner.all())
+        let inner = &self.inner;
+        Ok(py.detach(|| inner.all()))
     }
 
     #[pyo3(signature = (dt, inc=false))]
@@ -557,7 +561,7 @@ impl PyRRule {
         let cache_val = cache.unwrap_or(self.cache_enabled);
         let cache_enabled = cache_val && inner.is_finite();
         Ok(Self {
-            inner,
+            inner: Arc::new(inner),
             cache_enabled,
             cache: OnceLock::new(),
         })
@@ -759,13 +763,19 @@ impl PyRRuleSet {
     }
 
     #[getter]
-    fn _cache(&self) -> Option<Vec<chrono::NaiveDateTime>> {
-        let guard = self.cache.lock().unwrap();
-        guard.as_ref().map(|arc| arc.as_ref().clone())
+    fn _cache<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyList>>> {
+        let arc_opt = {
+            let guard = self.cache.lock().unwrap();
+            guard.as_ref().map(Arc::clone)
+        };
+        match arc_opt {
+            Some(arc) => Ok(Some(PyList::new(py, arc.iter().copied())?)),
+            None => Ok(None),
+        }
     }
 
     fn rrule(&mut self, rule: &PyRRule) {
-        self.inner.rrule(rule.inner.clone());
+        self.inner.rrule_shared(Arc::clone(&rule.inner));
         *self.cache.get_mut().unwrap() = None;
     }
 
@@ -775,7 +785,7 @@ impl PyRRuleSet {
     }
 
     fn exrule(&mut self, rule: &PyRRule) {
-        self.inner.exrule(rule.inner.clone());
+        self.inner.exrule_shared(Arc::clone(&rule.inner));
         *self.cache.get_mut().unwrap() = None;
     }
 
@@ -784,7 +794,7 @@ impl PyRRuleSet {
         *self.cache.get_mut().unwrap() = None;
     }
 
-    fn all(&self) -> PyResult<Vec<chrono::NaiveDateTime>> {
+    fn all(&self, py: Python<'_>) -> PyResult<Vec<chrono::NaiveDateTime>> {
         if let Some(cached) = self.get_or_populate_cache() {
             return Ok(cached.to_vec());
         }
@@ -793,7 +803,8 @@ impl PyRRuleSet {
                 "all() called on infinite recurrence (set count or until)",
             ));
         }
-        Ok(self.inner.all())
+        let inner = &self.inner;
+        Ok(py.detach(|| inner.all()))
     }
 
     #[pyo3(signature = (dt, inc=false))]
@@ -1030,13 +1041,14 @@ fn rrulestr_py(
     cache: bool,
 ) -> PyResult<Py<PyAny>> {
     let dtstart = dtstart.map(py_any_to_naive_datetime).transpose()?;
-    let result = core_rrulestr(s, dtstart, forceset, compatible, unfold)
+    let result = py
+        .detach(|| core_rrulestr(s, dtstart, forceset, compatible, unfold))
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     match result {
         RRuleStrResult::Single(rule) => {
             let cache_enabled = cache && rule.is_finite();
             Ok(PyRRule {
-                inner: *rule,
+                inner: Arc::from(rule),
                 cache_enabled,
                 cache: OnceLock::new(),
             }

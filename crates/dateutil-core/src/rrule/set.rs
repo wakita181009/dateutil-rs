@@ -35,6 +35,11 @@ impl RRuleSet {
         self.rrules.push(Arc::new(rule));
     }
 
+    /// Add a rule that is already wrapped in an `Arc` (avoids cloning).
+    pub fn rrule_shared(&mut self, rule: Arc<RRule>) {
+        self.rrules.push(rule);
+    }
+
     pub fn rdate(&mut self, dt: NaiveDateTime) {
         let rdates = Arc::make_mut(&mut self.rdates);
         let pos = rdates.binary_search(&dt).unwrap_or_else(|i| i);
@@ -43,6 +48,11 @@ impl RRuleSet {
 
     pub fn exrule(&mut self, rule: RRule) {
         self.exrules.push(Arc::new(rule));
+    }
+
+    /// Add an exclusion rule that is already wrapped in an `Arc`.
+    pub fn exrule_shared(&mut self, rule: Arc<RRule>) {
+        self.exrules.push(rule);
     }
 
     pub fn exdate(&mut self, dt: NaiveDateTime) {
