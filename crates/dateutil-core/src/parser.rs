@@ -137,11 +137,7 @@ fn lower_str<'a>(s: &str, buf: &'a [u8; 16]) -> &'a str {
 
 #[inline]
 fn lookup_jump(s: &str) -> bool {
-    if let Some(buf) = lowercase_buf(s) {
-        JUMP.contains(lower_str(s, &buf))
-    } else {
-        false
-    }
+    lowercase_buf(s).is_some_and(|buf| JUMP.contains(lower_str(s, &buf)))
 }
 
 #[inline]
@@ -181,20 +177,12 @@ fn lookup_ampm(s: &str) -> Option<usize> {
 
 #[inline]
 fn lookup_pertain(s: &str) -> bool {
-    if let Some(buf) = lowercase_buf(s) {
-        PERTAIN.contains(lower_str(s, &buf))
-    } else {
-        false
-    }
+    lowercase_buf(s).is_some_and(|buf| PERTAIN.contains(lower_str(s, &buf)))
 }
 
 #[inline]
 fn lookup_utczone(s: &str) -> bool {
-    if let Some(buf) = lowercase_buf(s) {
-        UTCZONE.contains(lower_str(s, &buf))
-    } else {
-        false
-    }
+    lowercase_buf(s).is_some_and(|buf| UTCZONE.contains(lower_str(s, &buf)))
 }
 
 // ---------------------------------------------------------------------------
@@ -219,38 +207,16 @@ pub struct ParseResult<'a> {
 
 impl ParseResult<'_> {
     fn field_count(&self) -> usize {
-        let mut n = 0;
-        if self.year.is_some() {
-            n += 1;
-        }
-        if self.month.is_some() {
-            n += 1;
-        }
-        if self.day.is_some() {
-            n += 1;
-        }
-        if self.weekday.is_some() {
-            n += 1;
-        }
-        if self.hour.is_some() {
-            n += 1;
-        }
-        if self.minute.is_some() {
-            n += 1;
-        }
-        if self.second.is_some() {
-            n += 1;
-        }
-        if self.microsecond.is_some() {
-            n += 1;
-        }
-        if self.tzname.is_some() {
-            n += 1;
-        }
-        if self.tzoffset.is_some() {
-            n += 1;
-        }
-        n
+        self.year.is_some() as usize
+            + self.month.is_some() as usize
+            + self.day.is_some() as usize
+            + self.weekday.is_some() as usize
+            + self.hour.is_some() as usize
+            + self.minute.is_some() as usize
+            + self.second.is_some() as usize
+            + self.microsecond.is_some() as usize
+            + self.tzname.is_some() as usize
+            + self.tzoffset.is_some() as usize
     }
 }
 
@@ -530,17 +496,14 @@ fn try_parse_dot_date(token: &str, ymd: &mut Ymd) -> bool {
         return false;
     }
 
-    let v0 = match fast_parse_int(p0) {
-        Some(v) => v,
-        None => return false,
+    let Some(v0) = fast_parse_int(p0) else {
+        return false;
     };
-    let v1 = match fast_parse_int(p1) {
-        Some(v) => v,
-        None => return false,
+    let Some(v1) = fast_parse_int(p1) else {
+        return false;
     };
-    let v2 = match fast_parse_int(p2) {
-        Some(v) => v,
-        None => return false,
+    let Some(v2) = fast_parse_int(p2) else {
+        return false;
     };
 
     if p0.len() >= 4 || p2.len() >= 4 {
@@ -573,17 +536,14 @@ fn try_parse_compact<'a>(
 
     match slen {
         8 | 12 | 14 if ymd.count == 0 => {
-            let year = match fast_parse_int(&token[0..4]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(year) = fast_parse_int(&token[0..4]) else {
+                return 0;
             };
-            let month = match fast_parse_int(&token[4..6]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(month) = fast_parse_int(&token[4..6]) else {
+                return 0;
             };
-            let day = match fast_parse_int(&token[6..8]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(day) = fast_parse_int(&token[6..8]) else {
+                return 0;
             };
 
             if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
@@ -608,17 +568,14 @@ fn try_parse_compact<'a>(
         }
         6 if ymd.count == 0 => {
             // Try YYMMDD first; fallback to YYYYMM if month invalid
-            let p0 = match fast_parse_int(&token[0..2]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(p0) = fast_parse_int(&token[0..2]) else {
+                return 0;
             };
-            let p1 = match fast_parse_int(&token[2..4]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(p1) = fast_parse_int(&token[2..4]) else {
+                return 0;
             };
-            let p2 = match fast_parse_int(&token[4..6]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(p2) = fast_parse_int(&token[4..6]) else {
+                return 0;
             };
 
             if (1..=12).contains(&p1) && (1..=31).contains(&p2) {
@@ -630,13 +587,11 @@ fn try_parse_compact<'a>(
                 1
             } else {
                 // Fallback: YYYYMM
-                let year = match fast_parse_int(&token[0..4]) {
-                    Some(v) => v,
-                    None => return 0,
+                let Some(year) = fast_parse_int(&token[0..4]) else {
+                    return 0;
                 };
-                let month = match fast_parse_int(&token[4..6]) {
-                    Some(v) => v,
-                    None => return 0,
+                let Some(month) = fast_parse_int(&token[4..6]) else {
+                    return 0;
                 };
                 if (1..=12).contains(&month) {
                     ymd.century_specified = true;
@@ -651,17 +606,14 @@ fn try_parse_compact<'a>(
         }
         6 if ymd.count == 3 && res.hour.is_none() => {
             // HHMMSS after date is already parsed (e.g., after "T" separator)
-            let hour = match fast_parse_int(&token[0..2]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(hour) = fast_parse_int(&token[0..2]) else {
+                return 0;
             };
-            let minute = match fast_parse_int(&token[2..4]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(minute) = fast_parse_int(&token[2..4]) else {
+                return 0;
             };
-            let second = match fast_parse_int(&token[4..6]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(second) = fast_parse_int(&token[4..6]) else {
+                return 0;
             };
 
             if hour <= 23 && minute <= 59 && second <= 59 {
@@ -675,21 +627,17 @@ fn try_parse_compact<'a>(
         }
         10 if ymd.count == 0 => {
             // YYYYMMDDHH — optionally followed by :MM(:SS)?
-            let year = match fast_parse_int(&token[0..4]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(year) = fast_parse_int(&token[0..4]) else {
+                return 0;
             };
-            let month = match fast_parse_int(&token[4..6]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(month) = fast_parse_int(&token[4..6]) else {
+                return 0;
             };
-            let day = match fast_parse_int(&token[6..8]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(day) = fast_parse_int(&token[6..8]) else {
+                return 0;
             };
-            let hour = match fast_parse_int(&token[8..10]) {
-                Some(v) => v,
-                None => return 0,
+            let Some(hour) = fast_parse_int(&token[8..10]) else {
+                return 0;
             };
 
             if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 {

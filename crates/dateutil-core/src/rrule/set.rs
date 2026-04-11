@@ -643,5 +643,4 @@ mod tests {
         let rset: RRuleSet = Default::default();
         assert!(rset.is_finite()); // empty set is finite
     }
-
 }

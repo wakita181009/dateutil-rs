@@ -624,9 +624,7 @@ impl PyRRuleIter {
             }
             PyRRuleIterInner::Cached { data, idx } => {
                 let val = data.get(*idx).copied();
-                if val.is_some() {
-                    *idx += 1;
-                }
+                *idx += val.is_some() as usize;
                 Ok(val)
             }
         }
@@ -880,9 +878,7 @@ impl PyRRuleSetIter {
             PyRRuleSetIterInner::Lazy(iter) => iter.next(),
             PyRRuleSetIterInner::Cached { data, idx } => {
                 let val = data.get(*idx).copied();
-                if val.is_some() {
-                    *idx += 1;
-                }
+                *idx += val.is_some() as usize;
                 val
             }
         }

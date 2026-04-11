@@ -954,61 +954,24 @@ impl fmt::Display for RelativeDelta {
             }
         }
         // Absolute fields
-        if let Some(y) = self.abs.get_year() {
-            if !first {
-                write!(f, ", ")?;
-            }
-            write!(f, "year={y}")?;
-            first = false;
+        macro_rules! write_abs {
+            ($val:expr, $name:expr) => {
+                if let Some(v) = $val {
+                    if !first { write!(f, ", ")?; }
+                    write!(f, concat!($name, "={}"), v)?;
+                    #[allow(unused_assignments)]
+                    { first = false; }
+                }
+            };
         }
-        if let Some(m) = self.abs.get_month() {
-            if !first {
-                write!(f, ", ")?;
-            }
-            write!(f, "month={m}")?;
-            first = false;
-        }
-        if let Some(d) = self.abs.get_day() {
-            if !first {
-                write!(f, ", ")?;
-            }
-            write!(f, "day={d}")?;
-            first = false;
-        }
-        if let Some(ref wd) = self.weekday {
-            if !first {
-                write!(f, ", ")?;
-            }
-            write!(f, "weekday={wd}")?;
-            first = false;
-        }
-        if let Some(h) = self.abs.get_hour() {
-            if !first {
-                write!(f, ", ")?;
-            }
-            write!(f, "hour={h}")?;
-            first = false;
-        }
-        if let Some(mi) = self.abs.get_minute() {
-            if !first {
-                write!(f, ", ")?;
-            }
-            write!(f, "minute={mi}")?;
-            first = false;
-        }
-        if let Some(s) = self.abs.get_second() {
-            if !first {
-                write!(f, ", ")?;
-            }
-            write!(f, "second={s}")?;
-            first = false;
-        }
-        if let Some(us) = self.abs.get_microsecond() {
-            if !first {
-                write!(f, ", ")?;
-            }
-            write!(f, "microsecond={us}")?;
-        }
+        write_abs!(self.abs.get_year(), "year");
+        write_abs!(self.abs.get_month(), "month");
+        write_abs!(self.abs.get_day(), "day");
+        write_abs!(self.weekday.as_ref(), "weekday");
+        write_abs!(self.abs.get_hour(), "hour");
+        write_abs!(self.abs.get_minute(), "minute");
+        write_abs!(self.abs.get_second(), "second");
+        write_abs!(self.abs.get_microsecond(), "microsecond");
         write!(f, ")")
     }
 }

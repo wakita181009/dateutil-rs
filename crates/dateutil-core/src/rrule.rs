@@ -276,19 +276,6 @@ const FREQ_NAMES: [&str; 7] = [
 ];
 
 impl Frequency {
-    pub fn from_name(s: &str) -> Result<Self, RRuleError> {
-        match s {
-            "YEARLY" => Ok(Self::Yearly),
-            "MONTHLY" => Ok(Self::Monthly),
-            "WEEKLY" => Ok(Self::Weekly),
-            "DAILY" => Ok(Self::Daily),
-            "HOURLY" => Ok(Self::Hourly),
-            "MINUTELY" => Ok(Self::Minutely),
-            "SECONDLY" => Ok(Self::Secondly),
-            _ => Err(RRuleError::InvalidFrequency(s.into())),
-        }
-    }
-
     #[inline]
     pub fn as_str(self) -> &'static str {
         FREQ_NAMES[self as usize]
@@ -949,15 +936,9 @@ impl RRuleBuilder {
                 explicit |= ExplicitFields::BYMONTH;
             }
         } else {
-            if bymonth.is_some() {
-                explicit |= ExplicitFields::BYMONTH;
-            }
-            if bymonthday.is_some() {
-                explicit |= ExplicitFields::BYMONTHDAY;
-            }
-            if byweekday.is_some() {
-                explicit |= ExplicitFields::BYWEEKDAY;
-            }
+            explicit.set(ExplicitFields::BYMONTH, bymonth.is_some());
+            explicit.set(ExplicitFields::BYMONTHDAY, bymonthday.is_some());
+            explicit.set(ExplicitFields::BYWEEKDAY, byweekday.is_some());
         }
 
         // bymonth
@@ -1011,8 +992,8 @@ impl RRuleBuilder {
 
         // byweekday -> plain / nth
         let (byweekday_flat, bynweekday, orig_byweekday) = if let Some(bwd) = byweekday {
-            let mut plain: Vec<u8> = Vec::new();
-            let mut nth: Vec<(u8, i32)> = Vec::new();
+            let mut plain: Vec<u8> = Vec::with_capacity(bwd.len());
+            let mut nth: Vec<(u8, i32)> = Vec::with_capacity(bwd.len());
 
             for wd in &bwd {
                 match wd.n() {
@@ -1125,18 +1106,10 @@ impl RRuleBuilder {
 
         // Pre-compute presence mask for optional byxxx fields
         let mut by_present = ByPresent::empty();
-        if byweekno.is_some() {
-            by_present |= ByPresent::WEEKNO;
-        }
-        if bynweekday.is_some() {
-            by_present |= ByPresent::NWEEKDAY;
-        }
-        if byeaster.is_some() {
-            by_present |= ByPresent::EASTER;
-        }
-        if byyearday.is_some() {
-            by_present |= ByPresent::YEARDAY;
-        }
+        by_present.set(ByPresent::WEEKNO, byweekno.is_some());
+        by_present.set(ByPresent::NWEEKDAY, bynweekday.is_some());
+        by_present.set(ByPresent::EASTER, byeaster.is_some());
+        by_present.set(ByPresent::YEARDAY, byyearday.is_some());
 
         // Pre-compute bitmasks for O(1) filter checks
         let bymonth_mask = bymonth
@@ -1196,10 +1169,11 @@ impl RRuleBuilder {
 
 impl fmt::Display for RRule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut output = Vec::new();
+        let mut output = Vec::with_capacity(2);
         output.push(self.dtstart.format("DTSTART:%Y%m%dT%H%M%S").to_string());
 
-        let mut parts = vec![format!("FREQ={}", self.freq)];
+        let mut parts = Vec::with_capacity(12);
+        parts.push(format!("FREQ={}", self.freq));
 
         if self.interval != 1 {
             parts.push(format!("INTERVAL={}", self.interval));
@@ -1219,17 +1193,15 @@ impl fmt::Display for RRule {
         if self.explicit.contains(ExplicitFields::BYWEEKDAY) {
             if let Some(ref bwd) = self.orig_byweekday {
                 if !bwd.is_empty() {
+                    const DAY_NAMES: [&str; 7] =
+                        ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
                     let strs: Vec<String> = bwd
                         .iter()
                         .map(|w| {
-                            if let Some(n) = w.n() {
-                                if n != 0 {
-                                    let name = &["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
-                                        [w.weekday() as usize];
-                                    return format!("{n:+}{name}");
-                                }
-                            }
-                            w.to_string()
+                            w.n()
+                                .filter(|&n| n != 0)
+                                .map(|n| format!("{n:+}{}", DAY_NAMES[w.weekday() as usize]))
+                                .unwrap_or_else(|| w.to_string())
                         })
                         .collect();
                     parts.push(format!("BYDAY={}", strs.join(",")));
@@ -1358,16 +1330,6 @@ pub(crate) fn mod_distance(
 mod tests {
     use super::*;
     use crate::common::dt;
-
-    #[test]
-    fn test_frequency_from_name() {
-        assert_eq!(Frequency::from_name("YEARLY").unwrap(), Frequency::Yearly);
-        assert_eq!(
-            Frequency::from_name("SECONDLY").unwrap(),
-            Frequency::Secondly
-        );
-        assert!(Frequency::from_name("INVALID").is_err());
-    }
 
     #[test]
     fn test_frequency_ordering() {

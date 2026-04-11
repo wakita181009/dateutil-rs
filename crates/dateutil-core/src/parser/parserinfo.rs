@@ -190,66 +190,42 @@ impl ParserInfo {
 
 #[inline]
 pub(super) fn do_jump(s: &str, info: Option<&ParserInfo>) -> bool {
-    match info {
-        Some(i) => i.jump(s),
-        None => lookup_jump(s),
-    }
+    info.map_or_else(|| lookup_jump(s), |i| i.jump(s))
 }
 
 #[inline]
 pub(super) fn do_weekday(s: &str, info: Option<&ParserInfo>) -> Option<usize> {
-    match info {
-        Some(i) => i.weekday(s),
-        None => lookup_weekday(s),
-    }
+    info.map_or_else(|| lookup_weekday(s), |i| i.weekday(s))
 }
 
 #[inline]
 pub(super) fn do_month(s: &str, info: Option<&ParserInfo>) -> Option<usize> {
-    match info {
-        Some(i) => i.month(s),
-        None => lookup_month(s),
-    }
+    info.map_or_else(|| lookup_month(s), |i| i.month(s))
 }
 
 #[inline]
 pub(super) fn do_hms(s: &str, info: Option<&ParserInfo>) -> Option<usize> {
-    match info {
-        Some(i) => i.hms(s),
-        None => lookup_hms(s),
-    }
+    info.map_or_else(|| lookup_hms(s), |i| i.hms(s))
 }
 
 #[inline]
 pub(super) fn do_ampm(s: &str, info: Option<&ParserInfo>) -> Option<usize> {
-    match info {
-        Some(i) => i.ampm(s),
-        None => lookup_ampm(s),
-    }
+    info.map_or_else(|| lookup_ampm(s), |i| i.ampm(s))
 }
 
 #[inline]
 pub(super) fn do_pertain(s: &str, info: Option<&ParserInfo>) -> bool {
-    match info {
-        Some(i) => i.pertain(s),
-        None => lookup_pertain(s),
-    }
+    info.map_or_else(|| lookup_pertain(s), |i| i.pertain(s))
 }
 
 #[inline]
 pub(super) fn do_utczone(s: &str, info: Option<&ParserInfo>) -> bool {
-    match info {
-        Some(i) => i.utczone(s),
-        None => lookup_utczone(s),
-    }
+    info.map_or_else(|| lookup_utczone(s), |i| i.utczone(s))
 }
 
 #[inline]
 pub(super) fn do_tzoffset(name: &str, info: Option<&ParserInfo>) -> Option<i32> {
-    match info {
-        Some(i) => i.tzoffset(name),
-        None => None, // default PHF has no tzoffset map
-    }
+    info.and_then(|i| i.tzoffset(name))
 }
 
 #[cfg(test)]

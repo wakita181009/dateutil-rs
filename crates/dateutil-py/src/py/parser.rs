@@ -13,8 +13,8 @@ use pyo3::types::{PyDict, PyType, PyTzInfo};
 /// Convert a Python list of `str | tuple[str, …]` into a lowercased
 /// `HashMap<String, usize>` where each string maps to its group index.
 fn convert(attr_name: &str, list: &Bound<'_, pyo3::PyAny>) -> PyResult<HashMap<String, usize>> {
-    let mut map = HashMap::new();
     let seq: Vec<Bound<'_, pyo3::PyAny>> = list.extract()?;
+    let mut map = HashMap::with_capacity(seq.len() * 2);
     for (i, item) in seq.iter().enumerate() {
         if let Ok(s) = item.extract::<String>() {
             map.insert(s.to_lowercase(), i);

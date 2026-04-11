@@ -396,12 +396,12 @@ fn py_any_to_ndt_for_diff(obj: &Bound<'_, PyAny>) -> PyResult<(NaiveDateTime, bo
     // datetime first (subclass of date)
     if let Ok(dt) = obj.cast::<PyDateTime>() {
         let ndt = conv::pydt_to_naive(dt);
-        let aware = if let Some(ref tzinfo) = dt.get_tzinfo() {
-            let utcoffset_obj = tzinfo.call_method1("utcoffset", (obj,))?;
-            !utcoffset_obj.is_none()
-        } else {
-            false
-        };
+        let aware = dt
+            .get_tzinfo()
+            .as_ref()
+            .map(|tzinfo| tzinfo.call_method1("utcoffset", (obj,)).map(|o| !o.is_none()))
+            .transpose()?
+            .unwrap_or(false);
         return Ok((ndt, aware));
     }
     // date or other — always naive
