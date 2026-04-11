@@ -14,8 +14,7 @@ pub const EASTER_WESTERN: i32 = 3;
 fn easter_py(year: i32, method: i32) -> PyResult<chrono::NaiveDate> {
     let m = EasterMethod::from_i32(method)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    easter::easter(year, m)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    easter::easter(year, m).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

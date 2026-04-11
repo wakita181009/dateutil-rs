@@ -9,7 +9,7 @@ use crate::common::Weekday;
 use crate::error::RRuleError;
 
 use super::set::RRuleSet;
-use super::{Frequency, Recurrence, RRule, RRuleBuilder};
+use super::{Frequency, RRule, RRuleBuilder, Recurrence};
 
 // ---------------------------------------------------------------------------
 // PHF lookup tables
@@ -188,10 +188,7 @@ impl RRuleStrResult {
 // Internal parsing
 // ---------------------------------------------------------------------------
 
-fn parse_rfc_rrule(
-    line: &str,
-    dtstart: Option<NaiveDateTime>,
-) -> Result<RRule, RRuleError> {
+fn parse_rfc_rrule(line: &str, dtstart: Option<NaiveDateTime>) -> Result<RRule, RRuleError> {
     let value = if let Some((name, val)) = line.split_once(':') {
         if !name.eq_ignore_ascii_case("RRULE") {
             return Err(RRuleError::ValueError(
@@ -236,17 +233,18 @@ fn parse_rfc_rrule(
                 );
             }
             "INTERVAL" => {
-                builder_interval = val
-                    .parse()
-                    .map_err(|_| RRuleError::ValueError(format!("invalid INTERVAL: {val}").into()))?;
+                builder_interval = val.parse().map_err(|_| {
+                    RRuleError::ValueError(format!("invalid INTERVAL: {val}").into())
+                })?;
             }
             "WKST" => {
                 builder_wkst = Some(parse_weekday_name(val)?);
             }
             "COUNT" => {
-                builder_count = Some(val.parse().map_err(|_| {
-                    RRuleError::ValueError(format!("invalid COUNT: {val}").into())
-                })?);
+                builder_count =
+                    Some(val.parse().map_err(|_| {
+                        RRuleError::ValueError(format!("invalid COUNT: {val}").into())
+                    })?);
             }
             "UNTIL" => {
                 builder_until = Some(parse_rfc_datetime(val).ok_or_else(|| {
@@ -255,12 +253,7 @@ fn parse_rfc_rrule(
             }
             "BYSETPOS" => bysetpos = Some(parse_int_list(val)?),
             "BYMONTH" => {
-                bymonth = Some(
-                    parse_int_list(val)?
-                        .into_iter()
-                        .map(|x| x as u8)
-                        .collect(),
-                );
+                bymonth = Some(parse_int_list(val)?.into_iter().map(|x| x as u8).collect());
             }
             "BYMONTHDAY" => bymonthday = Some(parse_int_list(val)?),
             "BYYEARDAY" => byyearday = Some(parse_int_list(val)?),
@@ -268,28 +261,13 @@ fn parse_rfc_rrule(
             "BYWEEKNO" => byweekno = Some(parse_int_list(val)?),
             "BYDAY" | "BYWEEKDAY" => byweekday = Some(parse_weekday_list(val)?),
             "BYHOUR" => {
-                byhour = Some(
-                    parse_int_list(val)?
-                        .into_iter()
-                        .map(|x| x as u8)
-                        .collect(),
-                );
+                byhour = Some(parse_int_list(val)?.into_iter().map(|x| x as u8).collect());
             }
             "BYMINUTE" => {
-                byminute = Some(
-                    parse_int_list(val)?
-                        .into_iter()
-                        .map(|x| x as u8)
-                        .collect(),
-                );
+                byminute = Some(parse_int_list(val)?.into_iter().map(|x| x as u8).collect());
             }
             "BYSECOND" => {
-                bysecond = Some(
-                    parse_int_list(val)?
-                        .into_iter()
-                        .map(|x| x as u8)
-                        .collect(),
-                );
+                bysecond = Some(parse_int_list(val)?.into_iter().map(|x| x as u8).collect());
             }
             _ => {
                 return Err(RRuleError::ValueError(
@@ -396,19 +374,15 @@ fn parse_weekday_list(s: &str) -> Result<Vec<Weekday>, RRuleError> {
             ));
         }
         let w = parse_weekday_name(w_str)?;
-        let n = if n_str.is_empty() {
-            None
-        } else {
-            Some(
-                n_str
-                    .parse::<i32>()
-                    .map_err(|_| RRuleError::ValueError(format!("invalid BYDAY: {wday_str}").into()))?,
-            )
-        };
-        result.push(
-            Weekday::new(w, n)
-                .map_err(|e| RRuleError::ValueError(e.to_string().into()))?,
-        );
+        let n =
+            if n_str.is_empty() {
+                None
+            } else {
+                Some(n_str.parse::<i32>().map_err(|_| {
+                    RRuleError::ValueError(format!("invalid BYDAY: {wday_str}").into())
+                })?)
+            };
+        result.push(Weekday::new(w, n).map_err(|e| RRuleError::ValueError(e.to_string().into()))?);
     }
     Ok(result)
 }
@@ -674,10 +648,7 @@ mod tests {
         // Should be sorted
         assert_eq!(
             all,
-            vec![
-                dt(2020, 1, 5, 0, 0, 0),
-                dt(2020, 1, 15, 0, 0, 0),
-            ]
+            vec![dt(2020, 1, 5, 0, 0, 0), dt(2020, 1, 15, 0, 0, 0),]
         );
     }
 
@@ -932,10 +903,7 @@ mod tests {
         let all = result.all();
         assert_eq!(
             all,
-            vec![
-                dt(1997, 9, 2, 9, 0, 0),
-                dt(1997, 9, 2, 17, 0, 0),
-            ]
+            vec![dt(1997, 9, 2, 9, 0, 0), dt(1997, 9, 2, 17, 0, 0),]
         );
     }
 
@@ -1103,13 +1071,7 @@ mod tests {
 
     #[test]
     fn test_rrulestr_no_rrule() {
-        let err = rrulestr(
-            "DTSTART:20200101T000000",
-            None,
-            false,
-            false,
-            true,
-        );
+        let err = rrulestr("DTSTART:20200101T000000", None, false, false, true);
         assert!(err.is_err());
     }
 

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use chrono::NaiveDateTime;
 
 use super::iter::RRuleIter;
-use super::{Recurrence, RRule};
+use super::{RRule, Recurrence};
 
 // ---------------------------------------------------------------------------
 // RRuleSet
@@ -86,7 +86,10 @@ impl Default for RRuleSet {
 
 enum IterSource {
     Rule(Box<RRuleIter>),
-    Dates { data: Arc<Vec<NaiveDateTime>>, cursor: usize },
+    Dates {
+        data: Arc<Vec<NaiveDateTime>>,
+        cursor: usize,
+    },
 }
 
 impl IterSource {
@@ -273,8 +276,8 @@ mod tests {
     use chrono::NaiveDate;
     use chrono::NaiveDateTime;
 
-    use crate::rrule::{Frequency, Recurrence, RRuleBuilder};
     use super::RRuleSet;
+    use crate::rrule::{Frequency, RRuleBuilder, Recurrence};
 
     fn dt(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTime {
         NaiveDate::from_ymd_opt(y, m, d)
@@ -406,10 +409,7 @@ mod tests {
         let results = rset.all();
         assert_eq!(
             results,
-            vec![
-                dt(2020, 1, 4, 0, 0, 0),
-                dt(2020, 1, 6, 0, 0, 0),
-            ]
+            vec![dt(2020, 1, 4, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0),]
         );
     }
 
@@ -482,11 +482,7 @@ mod tests {
             .build()
             .unwrap();
         rset.rrule(rule);
-        let results = rset.between(
-            dt(2020, 1, 3, 0, 0, 0),
-            dt(2020, 1, 6, 0, 0, 0),
-            true,
-        );
+        let results = rset.between(dt(2020, 1, 3, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0), true);
         assert_eq!(
             results,
             vec![
@@ -507,17 +503,10 @@ mod tests {
             .build()
             .unwrap();
         rset.rrule(rule);
-        let results = rset.between(
-            dt(2020, 1, 3, 0, 0, 0),
-            dt(2020, 1, 6, 0, 0, 0),
-            false,
-        );
+        let results = rset.between(dt(2020, 1, 3, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0), false);
         assert_eq!(
             results,
-            vec![
-                dt(2020, 1, 4, 0, 0, 0),
-                dt(2020, 1, 5, 0, 0, 0),
-            ]
+            vec![dt(2020, 1, 4, 0, 0, 0), dt(2020, 1, 5, 0, 0, 0),]
         );
     }
 

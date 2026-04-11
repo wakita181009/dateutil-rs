@@ -129,47 +129,96 @@ impl AbsoluteFields {
 
     #[inline]
     fn year_or(&self, default: i32) -> i32 {
-        if self.has(Self::YEAR) { self.year } else { default }
+        if self.has(Self::YEAR) {
+            self.year
+        } else {
+            default
+        }
     }
     #[inline]
     fn month_or(&self, default: i32) -> i32 {
-        if self.has(Self::MONTH) { self.month } else { default }
+        if self.has(Self::MONTH) {
+            self.month
+        } else {
+            default
+        }
     }
     #[inline]
     fn day_or(&self, default: i32) -> i32 {
-        if self.has(Self::DAY) { self.day } else { default }
+        if self.has(Self::DAY) {
+            self.day
+        } else {
+            default
+        }
     }
     #[inline]
     fn hour_or(&self, default: i32) -> i32 {
-        if self.has(Self::HOUR) { self.hour } else { default }
+        if self.has(Self::HOUR) {
+            self.hour
+        } else {
+            default
+        }
     }
     #[inline]
     fn minute_or(&self, default: i32) -> i32 {
-        if self.has(Self::MINUTE) { self.minute } else { default }
+        if self.has(Self::MINUTE) {
+            self.minute
+        } else {
+            default
+        }
     }
     #[inline]
     fn second_or(&self, default: i32) -> i32 {
-        if self.has(Self::SECOND) { self.second } else { default }
+        if self.has(Self::SECOND) {
+            self.second
+        } else {
+            default
+        }
     }
     #[inline]
     fn microsecond_or(&self, default: i32) -> i32 {
-        if self.has(Self::MICROSECOND) { self.microsecond } else { default }
+        if self.has(Self::MICROSECOND) {
+            self.microsecond
+        } else {
+            default
+        }
     }
 
     #[inline]
-    fn set_year(&mut self, v: i32) { self.flags |= Self::YEAR; self.year = v; }
+    fn set_year(&mut self, v: i32) {
+        self.flags |= Self::YEAR;
+        self.year = v;
+    }
     #[inline]
-    fn set_month(&mut self, v: i32) { self.flags |= Self::MONTH; self.month = v; }
+    fn set_month(&mut self, v: i32) {
+        self.flags |= Self::MONTH;
+        self.month = v;
+    }
     #[inline]
-    fn set_day(&mut self, v: i32) { self.flags |= Self::DAY; self.day = v; }
+    fn set_day(&mut self, v: i32) {
+        self.flags |= Self::DAY;
+        self.day = v;
+    }
     #[inline]
-    fn set_hour(&mut self, v: i32) { self.flags |= Self::HOUR; self.hour = v; }
+    fn set_hour(&mut self, v: i32) {
+        self.flags |= Self::HOUR;
+        self.hour = v;
+    }
     #[inline]
-    fn set_minute(&mut self, v: i32) { self.flags |= Self::MINUTE; self.minute = v; }
+    fn set_minute(&mut self, v: i32) {
+        self.flags |= Self::MINUTE;
+        self.minute = v;
+    }
     #[inline]
-    fn set_second(&mut self, v: i32) { self.flags |= Self::SECOND; self.second = v; }
+    fn set_second(&mut self, v: i32) {
+        self.flags |= Self::SECOND;
+        self.second = v;
+    }
     #[inline]
-    fn set_microsecond(&mut self, v: i32) { self.flags |= Self::MICROSECOND; self.microsecond = v; }
+    fn set_microsecond(&mut self, v: i32) {
+        self.flags |= Self::MICROSECOND;
+        self.microsecond = v;
+    }
 
     #[inline]
     fn has_time(&self) -> bool {
@@ -184,37 +233,79 @@ impl AbsoluteFields {
     fn merge_prefer_other(&self, other: &Self) -> Self {
         let mut result = *self;
         let mask = other.flags;
-        if mask & Self::YEAR != 0 { result.year = other.year; }
-        if mask & Self::MONTH != 0 { result.month = other.month; }
-        if mask & Self::DAY != 0 { result.day = other.day; }
-        if mask & Self::HOUR != 0 { result.hour = other.hour; }
-        if mask & Self::MINUTE != 0 { result.minute = other.minute; }
-        if mask & Self::SECOND != 0 { result.second = other.second; }
-        if mask & Self::MICROSECOND != 0 { result.microsecond = other.microsecond; }
+        if mask & Self::YEAR != 0 {
+            result.year = other.year;
+        }
+        if mask & Self::MONTH != 0 {
+            result.month = other.month;
+        }
+        if mask & Self::DAY != 0 {
+            result.day = other.day;
+        }
+        if mask & Self::HOUR != 0 {
+            result.hour = other.hour;
+        }
+        if mask & Self::MINUTE != 0 {
+            result.minute = other.minute;
+        }
+        if mask & Self::SECOND != 0 {
+            result.second = other.second;
+        }
+        if mask & Self::MICROSECOND != 0 {
+            result.microsecond = other.microsecond;
+        }
         result.flags |= mask;
         result
     }
 
     fn get_year(&self) -> Option<i32> {
-        if self.has(Self::YEAR) { Some(self.year) } else { None }
+        if self.has(Self::YEAR) {
+            Some(self.year)
+        } else {
+            None
+        }
     }
     fn get_month(&self) -> Option<i32> {
-        if self.has(Self::MONTH) { Some(self.month) } else { None }
+        if self.has(Self::MONTH) {
+            Some(self.month)
+        } else {
+            None
+        }
     }
     fn get_day(&self) -> Option<i32> {
-        if self.has(Self::DAY) { Some(self.day) } else { None }
+        if self.has(Self::DAY) {
+            Some(self.day)
+        } else {
+            None
+        }
     }
     fn get_hour(&self) -> Option<i32> {
-        if self.has(Self::HOUR) { Some(self.hour) } else { None }
+        if self.has(Self::HOUR) {
+            Some(self.hour)
+        } else {
+            None
+        }
     }
     fn get_minute(&self) -> Option<i32> {
-        if self.has(Self::MINUTE) { Some(self.minute) } else { None }
+        if self.has(Self::MINUTE) {
+            Some(self.minute)
+        } else {
+            None
+        }
     }
     fn get_second(&self) -> Option<i32> {
-        if self.has(Self::SECOND) { Some(self.second) } else { None }
+        if self.has(Self::SECOND) {
+            Some(self.second)
+        } else {
+            None
+        }
     }
     fn get_microsecond(&self) -> Option<i32> {
-        if self.has(Self::MICROSECOND) { Some(self.microsecond) } else { None }
+        if self.has(Self::MICROSECOND) {
+            Some(self.microsecond)
+        } else {
+            None
+        }
     }
 }
 
@@ -261,27 +352,84 @@ impl RelativeDeltaBuilder {
         Self::default()
     }
 
-    pub fn years(mut self, v: i32) -> Self { self.years = v; self }
-    pub fn months(mut self, v: i32) -> Self { self.months = v; self }
-    pub fn days(mut self, v: i32) -> Self { self.days = v; self }
-    pub fn weeks(mut self, v: i32) -> Self { self.weeks = v; self }
-    pub fn hours(mut self, v: i32) -> Self { self.hours = v; self }
-    pub fn minutes(mut self, v: i32) -> Self { self.minutes = v; self }
-    pub fn seconds(mut self, v: i32) -> Self { self.seconds = v; self }
-    pub fn microseconds(mut self, v: i64) -> Self { self.microseconds = v; self }
-    pub fn leapdays(mut self, v: i32) -> Self { self.leapdays = v; self }
+    pub fn years(mut self, v: i32) -> Self {
+        self.years = v;
+        self
+    }
+    pub fn months(mut self, v: i32) -> Self {
+        self.months = v;
+        self
+    }
+    pub fn days(mut self, v: i32) -> Self {
+        self.days = v;
+        self
+    }
+    pub fn weeks(mut self, v: i32) -> Self {
+        self.weeks = v;
+        self
+    }
+    pub fn hours(mut self, v: i32) -> Self {
+        self.hours = v;
+        self
+    }
+    pub fn minutes(mut self, v: i32) -> Self {
+        self.minutes = v;
+        self
+    }
+    pub fn seconds(mut self, v: i32) -> Self {
+        self.seconds = v;
+        self
+    }
+    pub fn microseconds(mut self, v: i64) -> Self {
+        self.microseconds = v;
+        self
+    }
+    pub fn leapdays(mut self, v: i32) -> Self {
+        self.leapdays = v;
+        self
+    }
 
-    pub fn year(mut self, v: i32) -> Self { self.abs.set_year(v); self }
-    pub fn month(mut self, v: i32) -> Self { self.abs.set_month(v); self }
-    pub fn day(mut self, v: i32) -> Self { self.abs.set_day(v); self }
-    pub fn hour(mut self, v: i32) -> Self { self.abs.set_hour(v); self }
-    pub fn minute(mut self, v: i32) -> Self { self.abs.set_minute(v); self }
-    pub fn second(mut self, v: i32) -> Self { self.abs.set_second(v); self }
-    pub fn microsecond(mut self, v: i32) -> Self { self.abs.set_microsecond(v); self }
+    pub fn year(mut self, v: i32) -> Self {
+        self.abs.set_year(v);
+        self
+    }
+    pub fn month(mut self, v: i32) -> Self {
+        self.abs.set_month(v);
+        self
+    }
+    pub fn day(mut self, v: i32) -> Self {
+        self.abs.set_day(v);
+        self
+    }
+    pub fn hour(mut self, v: i32) -> Self {
+        self.abs.set_hour(v);
+        self
+    }
+    pub fn minute(mut self, v: i32) -> Self {
+        self.abs.set_minute(v);
+        self
+    }
+    pub fn second(mut self, v: i32) -> Self {
+        self.abs.set_second(v);
+        self
+    }
+    pub fn microsecond(mut self, v: i32) -> Self {
+        self.abs.set_microsecond(v);
+        self
+    }
 
-    pub fn weekday(mut self, v: Weekday) -> Self { self.weekday = Some(v); self }
-    pub fn yearday(mut self, v: i32) -> Self { self.yearday = Some(v); self }
-    pub fn nlyearday(mut self, v: i32) -> Self { self.nlyearday = Some(v); self }
+    pub fn weekday(mut self, v: Weekday) -> Self {
+        self.weekday = Some(v);
+        self
+    }
+    pub fn yearday(mut self, v: i32) -> Self {
+        self.yearday = Some(v);
+        self
+    }
+    pub fn nlyearday(mut self, v: i32) -> Self {
+        self.nlyearday = Some(v);
+        self
+    }
 
     pub fn build(self) -> Result<RelativeDelta, RelativeDeltaError> {
         RelativeDelta::new(
@@ -330,13 +478,27 @@ impl RelativeDelta {
         microsecond: Option<i32>,
     ) -> Result<Self, RelativeDeltaError> {
         let mut abs = AbsoluteFields::default();
-        if let Some(v) = year { abs.set_year(v); }
-        if let Some(v) = month { abs.set_month(v); }
-        if let Some(v) = day { abs.set_day(v); }
-        if let Some(v) = hour { abs.set_hour(v); }
-        if let Some(v) = minute { abs.set_minute(v); }
-        if let Some(v) = second { abs.set_second(v); }
-        if let Some(v) = microsecond { abs.set_microsecond(v); }
+        if let Some(v) = year {
+            abs.set_year(v);
+        }
+        if let Some(v) = month {
+            abs.set_month(v);
+        }
+        if let Some(v) = day {
+            abs.set_day(v);
+        }
+        if let Some(v) = hour {
+            abs.set_hour(v);
+        }
+        if let Some(v) = minute {
+            abs.set_minute(v);
+        }
+        if let Some(v) = second {
+            abs.set_second(v);
+        }
+        if let Some(v) = microsecond {
+            abs.set_microsecond(v);
+        }
 
         let mut leapdays = leapdays;
 
@@ -439,7 +601,9 @@ impl RelativeDelta {
         let total_us = (dt1 - dtm)
             .num_microseconds()
             .expect("microsecond overflow in diff");
-        rd.time = RelativeTime { total_us: total_us % 86_400_000_000 };
+        rd.time = RelativeTime {
+            total_us: total_us % 86_400_000_000,
+        };
         rd.days = (total_us / 86_400_000_000) as i32;
 
         rd
@@ -571,24 +735,56 @@ impl RelativeDelta {
     }
 
     // Getters — decompose packed fields on demand (relative)
-    pub fn years(&self) -> i32 { self.years }
-    pub fn months(&self) -> i32 { self.months }
-    pub fn days(&self) -> i32 { self.days }
-    pub fn leapdays(&self) -> i32 { self.leapdays }
-    pub fn hours(&self) -> i32 { self.time.hours() }
-    pub fn minutes(&self) -> i32 { self.time.minutes() }
-    pub fn seconds(&self) -> i32 { self.time.seconds() }
-    pub fn microseconds(&self) -> i64 { self.time.microseconds() }
+    pub fn years(&self) -> i32 {
+        self.years
+    }
+    pub fn months(&self) -> i32 {
+        self.months
+    }
+    pub fn days(&self) -> i32 {
+        self.days
+    }
+    pub fn leapdays(&self) -> i32 {
+        self.leapdays
+    }
+    pub fn hours(&self) -> i32 {
+        self.time.hours()
+    }
+    pub fn minutes(&self) -> i32 {
+        self.time.minutes()
+    }
+    pub fn seconds(&self) -> i32 {
+        self.time.seconds()
+    }
+    pub fn microseconds(&self) -> i64 {
+        self.time.microseconds()
+    }
 
     // Getters — absolute fields (None if not set)
-    pub fn year(&self) -> Option<i32> { self.abs.get_year() }
-    pub fn month(&self) -> Option<i32> { self.abs.get_month() }
-    pub fn day(&self) -> Option<i32> { self.abs.get_day() }
-    pub fn hour(&self) -> Option<i32> { self.abs.get_hour() }
-    pub fn minute(&self) -> Option<i32> { self.abs.get_minute() }
-    pub fn second(&self) -> Option<i32> { self.abs.get_second() }
-    pub fn microsecond(&self) -> Option<i32> { self.abs.get_microsecond() }
-    pub fn weekday(&self) -> Option<&Weekday> { self.weekday.as_ref() }
+    pub fn year(&self) -> Option<i32> {
+        self.abs.get_year()
+    }
+    pub fn month(&self) -> Option<i32> {
+        self.abs.get_month()
+    }
+    pub fn day(&self) -> Option<i32> {
+        self.abs.get_day()
+    }
+    pub fn hour(&self) -> Option<i32> {
+        self.abs.get_hour()
+    }
+    pub fn minute(&self) -> Option<i32> {
+        self.abs.get_minute()
+    }
+    pub fn second(&self) -> Option<i32> {
+        self.abs.get_second()
+    }
+    pub fn microsecond(&self) -> Option<i32> {
+        self.abs.get_microsecond()
+    }
+    pub fn weekday(&self) -> Option<&Weekday> {
+        self.weekday.as_ref()
+    }
 
     /// Multiply all relative fields by a scalar. Absolute fields are preserved as-is.
     pub fn mul(&self, factor: f64) -> Self {
@@ -596,7 +792,9 @@ impl RelativeDelta {
         let total_months_i = total_months.round() as i32;
         let days = (self.days as f64 * factor).round() as i32;
         let time_us = (self.time.total_us as f64 * factor).round() as i64;
-        let time = RelativeTime { total_us: time_us.rem_euclid(86_400_000_000) };
+        let time = RelativeTime {
+            total_us: time_us.rem_euclid(86_400_000_000),
+        };
         let extra_days = time_us.div_euclid(86_400_000_000) as i32;
         Self {
             years: total_months_i / 12,
@@ -621,7 +819,9 @@ impl RelativeDelta {
             months: self.months.abs(),
             days: self.days.abs(),
             leapdays: self.leapdays,
-            time: RelativeTime { total_us: self.time.total_us.abs() },
+            time: RelativeTime {
+                total_us: self.time.total_us.abs(),
+            },
             abs: self.abs,
             weekday: self.weekday,
         }
@@ -697,13 +897,27 @@ impl Hash for RelativeDelta {
         self.leapdays.hash(state);
         self.time.total_us.hash(state);
         self.abs.flags.hash(state);
-        if self.abs.has(AbsoluteFields::YEAR) { self.abs.year.hash(state); }
-        if self.abs.has(AbsoluteFields::MONTH) { self.abs.month.hash(state); }
-        if self.abs.has(AbsoluteFields::DAY) { self.abs.day.hash(state); }
-        if self.abs.has(AbsoluteFields::HOUR) { self.abs.hour.hash(state); }
-        if self.abs.has(AbsoluteFields::MINUTE) { self.abs.minute.hash(state); }
-        if self.abs.has(AbsoluteFields::SECOND) { self.abs.second.hash(state); }
-        if self.abs.has(AbsoluteFields::MICROSECOND) { self.abs.microsecond.hash(state); }
+        if self.abs.has(AbsoluteFields::YEAR) {
+            self.abs.year.hash(state);
+        }
+        if self.abs.has(AbsoluteFields::MONTH) {
+            self.abs.month.hash(state);
+        }
+        if self.abs.has(AbsoluteFields::DAY) {
+            self.abs.day.hash(state);
+        }
+        if self.abs.has(AbsoluteFields::HOUR) {
+            self.abs.hour.hash(state);
+        }
+        if self.abs.has(AbsoluteFields::MINUTE) {
+            self.abs.minute.hash(state);
+        }
+        if self.abs.has(AbsoluteFields::SECOND) {
+            self.abs.second.hash(state);
+        }
+        if self.abs.has(AbsoluteFields::MICROSECOND) {
+            self.abs.microsecond.hash(state);
+        }
         match &self.weekday {
             None => 0u8.hash(state),
             Some(wd) => {
@@ -748,49 +962,67 @@ impl fmt::Display for RelativeDelta {
         let mut first = true;
         for &(name, val) in parts {
             if val != 0 {
-                if !first { write!(f, ", ")?; }
+                if !first {
+                    write!(f, ", ")?;
+                }
                 write!(f, "{name}={val:+}")?;
                 first = false;
             }
         }
         // Absolute fields
         if let Some(y) = self.abs.get_year() {
-            if !first { write!(f, ", ")?; }
+            if !first {
+                write!(f, ", ")?;
+            }
             write!(f, "year={y}")?;
             first = false;
         }
         if let Some(m) = self.abs.get_month() {
-            if !first { write!(f, ", ")?; }
+            if !first {
+                write!(f, ", ")?;
+            }
             write!(f, "month={m}")?;
             first = false;
         }
         if let Some(d) = self.abs.get_day() {
-            if !first { write!(f, ", ")?; }
+            if !first {
+                write!(f, ", ")?;
+            }
             write!(f, "day={d}")?;
             first = false;
         }
         if let Some(ref wd) = self.weekday {
-            if !first { write!(f, ", ")?; }
+            if !first {
+                write!(f, ", ")?;
+            }
             write!(f, "weekday={wd}")?;
             first = false;
         }
         if let Some(h) = self.abs.get_hour() {
-            if !first { write!(f, ", ")?; }
+            if !first {
+                write!(f, ", ")?;
+            }
             write!(f, "hour={h}")?;
             first = false;
         }
         if let Some(mi) = self.abs.get_minute() {
-            if !first { write!(f, ", ")?; }
+            if !first {
+                write!(f, ", ")?;
+            }
             write!(f, "minute={mi}")?;
             first = false;
         }
         if let Some(s) = self.abs.get_second() {
-            if !first { write!(f, ", ")?; }
+            if !first {
+                write!(f, ", ")?;
+            }
             write!(f, "second={s}")?;
             first = false;
         }
         if let Some(us) = self.abs.get_microsecond() {
-            if !first { write!(f, ", ")?; }
+            if !first {
+                write!(f, ", ")?;
+            }
             write!(f, "microsecond={us}")?;
         }
         write!(f, ")")
@@ -895,7 +1127,10 @@ mod tests {
 
     #[test]
     fn test_microseconds_overflow() {
-        let delta = RelativeDelta::builder().microseconds(2_500_000).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .microseconds(2_500_000)
+            .build()
+            .unwrap();
         assert_eq!(delta.seconds(), 2);
         assert_eq!(delta.microseconds(), 500_000);
     }
@@ -910,7 +1145,10 @@ mod tests {
     #[test]
     fn test_large_microseconds() {
         // 3_661_500_000 us = 1h 1m 1s 500_000us
-        let delta = RelativeDelta::builder().microseconds(3_661_500_000).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .microseconds(3_661_500_000)
+            .build()
+            .unwrap();
         assert_eq!(delta.hours(), 1);
         assert_eq!(delta.minutes(), 1);
         assert_eq!(delta.seconds(), 1);
@@ -921,17 +1159,29 @@ mod tests {
 
     #[test]
     fn test_add_months() {
-        assert_add_dt(rd(0, 1, 0), dt(2024, 1, 31, 0, 0, 0), dt(2024, 2, 29, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(2024, 1, 31, 0, 0, 0),
+            dt(2024, 2, 29, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_add_months_non_leap() {
-        assert_add_dt(rd(0, 1, 0), dt(2023, 1, 31, 0, 0, 0), dt(2023, 2, 28, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(2023, 1, 31, 0, 0, 0),
+            dt(2023, 2, 28, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_add_years() {
-        assert_add_dt(rd(1, 0, 0), dt(2024, 2, 29, 12, 0, 0), dt(2025, 2, 28, 12, 0, 0));
+        assert_add_dt(
+            rd(1, 0, 0),
+            dt(2024, 2, 29, 12, 0, 0),
+            dt(2025, 2, 28, 12, 0, 0),
+        );
     }
 
     #[test]
@@ -965,12 +1215,20 @@ mod tests {
 
     #[test]
     fn test_month_december_plus_1() {
-        assert_add_dt(rd(0, 1, 0), dt(2024, 12, 15, 0, 0, 0), dt(2025, 1, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(2024, 12, 15, 0, 0, 0),
+            dt(2025, 1, 15, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_negative_years_and_months() {
-        assert_add_dt(rd(-2, -6, 0), dt(2024, 3, 15, 0, 0, 0), dt(2021, 9, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(-2, -6, 0),
+            dt(2024, 3, 15, 0, 0, 0),
+            dt(2021, 9, 15, 0, 0, 0),
+        );
     }
 
     #[test]
@@ -987,27 +1245,47 @@ mod tests {
 
     #[test]
     fn test_subtract_1_month_from_january() {
-        assert_add_dt(rd(0, -1, 0), dt(2024, 1, 15, 0, 0, 0), dt(2023, 12, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, -1, 0),
+            dt(2024, 1, 15, 0, 0, 0),
+            dt(2023, 12, 15, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_subtract_13_months() {
-        assert_add_dt(rd(0, -13, 0), dt(2024, 1, 15, 0, 0, 0), dt(2022, 12, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, -13, 0),
+            dt(2024, 1, 15, 0, 0, 0),
+            dt(2022, 12, 15, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_subtract_12_months() {
-        assert_add_dt(rd(0, -12, 0), dt(2024, 3, 15, 0, 0, 0), dt(2023, 3, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, -12, 0),
+            dt(2024, 3, 15, 0, 0, 0),
+            dt(2023, 3, 15, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_subtract_25_months() {
-        assert_add_dt(rd(0, -25, 0), dt(2024, 3, 15, 0, 0, 0), dt(2022, 2, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, -25, 0),
+            dt(2024, 3, 15, 0, 0, 0),
+            dt(2022, 2, 15, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_add_large_positive_months() {
-        assert_add_dt(rd(0, 25, 0), dt(2024, 1, 15, 0, 0, 0), dt(2026, 2, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 25, 0),
+            dt(2024, 1, 15, 0, 0, 0),
+            dt(2026, 2, 15, 0, 0, 0),
+        );
     }
 
     // ---- Leap year & day clamping ----
@@ -1015,31 +1293,59 @@ mod tests {
     #[test]
     fn test_add_month_to_leap_day() {
         // Feb 29 + 1 month → Mar 29 (not clamped)
-        assert_add_dt(rd(0, 1, 0), dt(2024, 2, 29, 0, 0, 0), dt(2024, 3, 29, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(2024, 2, 29, 0, 0, 0),
+            dt(2024, 3, 29, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_add_year_from_leap_day() {
         // Feb 29 2024 + 1 year → Feb 28 2025 (day clamped)
-        assert_add_dt(rd(1, 0, 0), dt(2024, 2, 29, 12, 30, 0), dt(2025, 2, 28, 12, 30, 0));
+        assert_add_dt(
+            rd(1, 0, 0),
+            dt(2024, 2, 29, 12, 30, 0),
+            dt(2025, 2, 28, 12, 30, 0),
+        );
     }
 
     #[test]
     fn test_add_4_years_from_leap_day() {
         // Feb 29 2024 + 4 years → Feb 29 2028 (leap year again)
-        assert_add_dt(rd(4, 0, 0), dt(2024, 2, 29, 0, 0, 0), dt(2028, 2, 29, 0, 0, 0));
+        assert_add_dt(
+            rd(4, 0, 0),
+            dt(2024, 2, 29, 0, 0, 0),
+            dt(2028, 2, 29, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_day_clamping_jan31_plus_1month() {
-        assert_add_dt(rd(0, 1, 0), dt(2024, 1, 31, 0, 0, 0), dt(2024, 2, 29, 0, 0, 0));
-        assert_add_dt(rd(0, 1, 0), dt(2023, 1, 31, 0, 0, 0), dt(2023, 2, 28, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(2024, 1, 31, 0, 0, 0),
+            dt(2024, 2, 29, 0, 0, 0),
+        );
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(2023, 1, 31, 0, 0, 0),
+            dt(2023, 2, 28, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_day_clamping_mar31_minus_1month() {
-        assert_add_dt(rd(0, -1, 0), dt(2024, 3, 31, 0, 0, 0), dt(2024, 2, 29, 0, 0, 0));
-        assert_add_dt(rd(0, -1, 0), dt(2023, 3, 31, 0, 0, 0), dt(2023, 2, 28, 0, 0, 0));
+        assert_add_dt(
+            rd(0, -1, 0),
+            dt(2024, 3, 31, 0, 0, 0),
+            dt(2024, 2, 29, 0, 0, 0),
+        );
+        assert_add_dt(
+            rd(0, -1, 0),
+            dt(2023, 3, 31, 0, 0, 0),
+            dt(2023, 2, 28, 0, 0, 0),
+        );
     }
 
     // ---- add_to_naive_date ----
@@ -1101,7 +1407,11 @@ mod tests {
 
     #[test]
     fn test_yearday() {
-        let delta = RelativeDelta::builder().year(2024).yearday(60).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .year(2024)
+            .yearday(60)
+            .build()
+            .unwrap();
         let result = delta.add_to_naive_datetime(dt(2024, 1, 1, 0, 0, 0));
         assert_eq!(result.month(), 2);
     }
@@ -1109,14 +1419,22 @@ mod tests {
     #[test]
     fn test_yearday_leapday_adjustment() {
         // yearday 60 in leap year: leapdays=-1 is auto-applied for yearday > 59
-        let delta = RelativeDelta::builder().year(2024).yearday(60).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .year(2024)
+            .yearday(60)
+            .build()
+            .unwrap();
         let result = delta.add_to_naive_datetime(dt(2024, 1, 1, 0, 0, 0));
         assert_eq!(result.month(), 2);
     }
 
     #[test]
     fn test_nlyearday() {
-        let delta = RelativeDelta::builder().year(2024).nlyearday(60).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .year(2024)
+            .nlyearday(60)
+            .build()
+            .unwrap();
         let result = delta.add_to_naive_datetime(dt(2024, 1, 1, 0, 0, 0));
         // nlyearday 60 = Mar 1 (non-leap calendar)
         assert_eq!(result.month(), 3);
@@ -1257,8 +1575,16 @@ mod tests {
     #[test]
     fn test_has_time() {
         assert!(!rd(1, 0, 0).has_time());
-        assert!(RelativeDelta::builder().hours(1).build().unwrap().has_time());
-        assert!(RelativeDelta::builder().hour(12).build().unwrap().has_time());
+        assert!(RelativeDelta::builder()
+            .hours(1)
+            .build()
+            .unwrap()
+            .has_time());
+        assert!(RelativeDelta::builder()
+            .hour(12)
+            .build()
+            .unwrap()
+            .has_time());
     }
 
     #[test]
@@ -1284,7 +1610,10 @@ mod tests {
 
     #[test]
     fn test_display_nonzero_only() {
-        assert_eq!(rd(1, 2, 3).to_string(), "relativedelta(years=+1, months=+2, days=+3)");
+        assert_eq!(
+            rd(1, 2, 3).to_string(),
+            "relativedelta(years=+1, months=+2, days=+3)"
+        );
     }
 
     #[test]
@@ -1294,7 +1623,11 @@ mod tests {
 
     #[test]
     fn test_display_time() {
-        let delta = RelativeDelta::builder().hours(1).minutes(30).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .hours(1)
+            .minutes(30)
+            .build()
+            .unwrap();
         assert_eq!(delta.to_string(), "relativedelta(hours=+1, minutes=+30)");
     }
 
@@ -1327,19 +1660,31 @@ mod tests {
     #[test]
     fn test_century_non_leap_1900() {
         // 1900 is NOT a leap year (divisible by 100 but not 400)
-        assert_add_dt(rd(0, 1, 0), dt(1900, 1, 31, 0, 0, 0), dt(1900, 2, 28, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(1900, 1, 31, 0, 0, 0),
+            dt(1900, 2, 28, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_century_leap_2000() {
         // 2000 IS a leap year (divisible by 400)
-        assert_add_dt(rd(0, 1, 0), dt(2000, 1, 31, 0, 0, 0), dt(2000, 2, 29, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(2000, 1, 31, 0, 0, 0),
+            dt(2000, 2, 29, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_century_non_leap_2100() {
         // 2100 is NOT a leap year
-        assert_add_dt(rd(0, 1, 0), dt(2100, 1, 31, 0, 0, 0), dt(2100, 2, 28, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1, 0),
+            dt(2100, 1, 31, 0, 0, 0),
+            dt(2100, 2, 28, 0, 0, 0),
+        );
     }
 
     // ---- Time boundary overflow ----
@@ -1371,35 +1716,59 @@ mod tests {
     #[test]
     fn test_add_100_months() {
         // 100 months = 8 years 4 months
-        assert_add_dt(rd(0, 100, 0), dt(2024, 1, 15, 0, 0, 0), dt(2032, 5, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 100, 0),
+            dt(2024, 1, 15, 0, 0, 0),
+            dt(2032, 5, 15, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_subtract_100_months() {
-        assert_add_dt(rd(0, -100, 0), dt(2024, 1, 15, 0, 0, 0), dt(2015, 9, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, -100, 0),
+            dt(2024, 1, 15, 0, 0, 0),
+            dt(2015, 9, 15, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_add_1200_months() {
         // 1200 months = exactly 100 years
-        assert_add_dt(rd(0, 1200, 0), dt(2024, 1, 15, 0, 0, 0), dt(2124, 1, 15, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 1200, 0),
+            dt(2024, 1, 15, 0, 0, 0),
+            dt(2124, 1, 15, 0, 0, 0),
+        );
     }
 
     // ---- Negative days ----
 
     #[test]
     fn test_negative_days() {
-        assert_add_dt(rd(0, 0, -10), dt(2024, 1, 15, 12, 0, 0), dt(2024, 1, 5, 12, 0, 0));
+        assert_add_dt(
+            rd(0, 0, -10),
+            dt(2024, 1, 15, 12, 0, 0),
+            dt(2024, 1, 5, 12, 0, 0),
+        );
     }
 
     #[test]
     fn test_negative_days_cross_month() {
-        assert_add_dt(rd(0, 0, -5), dt(2024, 3, 3, 0, 0, 0), dt(2024, 2, 27, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 0, -5),
+            dt(2024, 3, 3, 0, 0, 0),
+            dt(2024, 2, 27, 0, 0, 0),
+        );
     }
 
     #[test]
     fn test_negative_days_cross_year() {
-        assert_add_dt(rd(0, 0, -1), dt(2024, 1, 1, 0, 0, 0), dt(2023, 12, 31, 0, 0, 0));
+        assert_add_dt(
+            rd(0, 0, -1),
+            dt(2024, 1, 1, 0, 0, 0),
+            dt(2023, 12, 31, 0, 0, 0),
+        );
     }
 
     // ---- Weekday edge cases ----
@@ -1468,7 +1837,11 @@ mod tests {
 
     #[test]
     fn test_absolute_hour_preserves_relative_minutes() {
-        let delta = RelativeDelta::builder().hour(0).minutes(90).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .hour(0)
+            .minutes(90)
+            .build()
+            .unwrap();
         let result = delta.add_to_naive_datetime(dt(2024, 1, 1, 15, 0, 0));
         // hour set to 0, then +90min = 1h30m
         assert_eq!(result, dt(2024, 1, 1, 1, 30, 0));
@@ -1478,7 +1851,10 @@ mod tests {
 
     #[test]
     fn test_negative_microseconds_normalization() {
-        let delta = RelativeDelta::builder().microseconds(-1_500_000).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .microseconds(-1_500_000)
+            .build()
+            .unwrap();
         assert_eq!(delta.seconds(), -1);
         assert_eq!(delta.microseconds(), -500_000);
     }
@@ -1486,7 +1862,11 @@ mod tests {
     #[test]
     fn test_mixed_positive_negative_normalization() {
         // 2 hours and -90 minutes = 30 minutes
-        let delta = RelativeDelta::builder().hours(2).minutes(-90).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .hours(2)
+            .minutes(-90)
+            .build()
+            .unwrap();
         assert_eq!(delta.hours(), 0);
         assert_eq!(delta.minutes(), 30);
     }
@@ -1517,7 +1897,11 @@ mod tests {
 
     #[test]
     fn test_yearday_1_is_jan1() {
-        let delta = RelativeDelta::builder().year(2024).yearday(1).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .year(2024)
+            .yearday(1)
+            .build()
+            .unwrap();
         let result = delta.add_to_naive_datetime(dt(2024, 6, 15, 0, 0, 0));
         assert_eq!(result.month(), 1);
         assert_eq!(result.day(), 1);
@@ -1528,7 +1912,11 @@ mod tests {
         // yearday > 59 sets leapdays=-1, so in a leap year the leapday
         // adjustment shifts by -1 day. yearday 366 → Dec 31 in table,
         // then -1 day → Dec 30.
-        let delta = RelativeDelta::builder().year(2024).yearday(366).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .year(2024)
+            .yearday(366)
+            .build()
+            .unwrap();
         let result = delta.add_to_naive_datetime(dt(2024, 1, 1, 0, 0, 0));
         assert_eq!(result.month(), 12);
         assert_eq!(result.day(), 30);
@@ -1536,7 +1924,11 @@ mod tests {
 
     #[test]
     fn test_yearday_365_is_dec31_non_leap() {
-        let delta = RelativeDelta::builder().year(2023).nlyearday(365).build().unwrap();
+        let delta = RelativeDelta::builder()
+            .year(2023)
+            .nlyearday(365)
+            .build()
+            .unwrap();
         let result = delta.add_to_naive_datetime(dt(2023, 1, 1, 0, 0, 0));
         assert_eq!(result.month(), 12);
         assert_eq!(result.day(), 31);
@@ -1619,10 +2011,7 @@ mod tests {
 
     #[test]
     fn test_mul_fractional() {
-        let delta = RelativeDelta::builder()
-            .hours(3)
-            .build()
-            .unwrap();
+        let delta = RelativeDelta::builder().hours(3).build().unwrap();
         let halved = delta.mul(0.5);
         assert_eq!(halved.hours(), 1);
         assert_eq!(halved.minutes(), 30);
@@ -1656,10 +2045,7 @@ mod tests {
 
     #[test]
     fn test_leapdays_getter() {
-        let delta = RelativeDelta::builder()
-            .leapdays(1)
-            .build()
-            .unwrap();
+        let delta = RelativeDelta::builder().leapdays(1).build().unwrap();
         assert_eq!(delta.leapdays(), 1);
     }
 
@@ -1709,11 +2095,7 @@ mod tests {
 
     #[test]
     fn test_abs_preserves_absolute_fields() {
-        let delta = RelativeDelta::builder()
-            .years(-1)
-            .month(6)
-            .build()
-            .unwrap();
+        let delta = RelativeDelta::builder().years(-1).month(6).build().unwrap();
         let a = delta.abs();
         assert_eq!(a.years(), 1);
         assert_eq!(a.month(), Some(6));
@@ -1797,10 +2179,7 @@ mod tests {
     #[test]
     fn test_display_with_weekday() {
         use crate::common::MO;
-        let delta = RelativeDelta::builder()
-            .weekday(MO)
-            .build()
-            .unwrap();
+        let delta = RelativeDelta::builder().weekday(MO).build().unwrap();
         let s = delta.to_string();
         assert!(s.contains("weekday=MO"));
     }
@@ -1820,10 +2199,7 @@ mod tests {
 
     #[test]
     fn test_set_weeks() {
-        let mut delta = RelativeDelta::builder()
-            .days(10)
-            .build()
-            .unwrap();
+        let mut delta = RelativeDelta::builder().days(10).build().unwrap();
         assert_eq!(delta.weeks(), 1);
         delta.set_weeks(3);
         assert_eq!(delta.days(), 24); // 3*7 + 3 = 24
@@ -1834,10 +2210,7 @@ mod tests {
 
     #[test]
     fn test_leapdays_in_leap_year() {
-        let delta = RelativeDelta::builder()
-            .leapdays(1)
-            .build()
-            .unwrap();
+        let delta = RelativeDelta::builder().leapdays(1).build().unwrap();
         let base = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap(); // Leap year, March
         let result = delta.add_to_naive_date(base);
         // March in a leap year: leapdays should be added
@@ -1849,20 +2222,11 @@ mod tests {
     #[test]
     fn test_weekday_equality_in_relativedelta() {
         use crate::common::{MO, TU};
-        let a = RelativeDelta::builder()
-            .weekday(MO)
-            .build()
-            .unwrap();
-        let b = RelativeDelta::builder()
-            .weekday(MO)
-            .build()
-            .unwrap();
+        let a = RelativeDelta::builder().weekday(MO).build().unwrap();
+        let b = RelativeDelta::builder().weekday(MO).build().unwrap();
         assert_eq!(a, b);
 
-        let c = RelativeDelta::builder()
-            .weekday(TU)
-            .build()
-            .unwrap();
+        let c = RelativeDelta::builder().weekday(TU).build().unwrap();
         assert_ne!(a, c);
 
         let d = RelativeDelta::builder().build().unwrap();
@@ -1874,14 +2238,8 @@ mod tests {
         use crate::common::MO;
         use std::collections::hash_map::DefaultHasher;
 
-        let a = RelativeDelta::builder()
-            .weekday(MO)
-            .build()
-            .unwrap();
-        let b = RelativeDelta::builder()
-            .weekday(MO)
-            .build()
-            .unwrap();
+        let a = RelativeDelta::builder().weekday(MO).build().unwrap();
+        let b = RelativeDelta::builder().weekday(MO).build().unwrap();
 
         let hash_a = {
             let mut h = DefaultHasher::new();
@@ -1900,14 +2258,8 @@ mod tests {
     fn test_hash_with_microsecond() {
         use std::collections::hash_map::DefaultHasher;
 
-        let a = RelativeDelta::builder()
-            .microsecond(500)
-            .build()
-            .unwrap();
-        let b = RelativeDelta::builder()
-            .microsecond(500)
-            .build()
-            .unwrap();
+        let a = RelativeDelta::builder().microsecond(500).build().unwrap();
+        let b = RelativeDelta::builder().microsecond(500).build().unwrap();
 
         let hash_a = {
             let mut h = DefaultHasher::new();

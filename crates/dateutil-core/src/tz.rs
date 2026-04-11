@@ -3,15 +3,15 @@
 //! Provides timezone types compatible with python-dateutil's tz module,
 //! optimized for Rust performance.
 
-mod utc;
-mod offset;
 mod file;
 mod local;
+mod offset;
+mod utc;
 
-pub use utc::TzUtc;
-pub use offset::TzOffset;
 pub use file::{TzFile, TzFileData};
 pub use local::TzLocal;
+pub use offset::TzOffset;
+pub use utc::TzUtc;
 
 use std::sync::{LazyLock, RwLock};
 
@@ -46,35 +46,95 @@ pub trait TzOps {
 }
 
 impl TzOps for TzUtc {
-    #[inline] fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.utcoffset(dt, fold) }
-    #[inline] fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.dst(dt, fold) }
-    #[inline] fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str { self.tzname(dt, fold) }
-    #[inline] fn is_ambiguous(&self, dt: NaiveDateTime) -> bool { self.is_ambiguous(dt) }
-    #[inline] fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime { self.fromutc(dt) }
+    #[inline]
+    fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        self.utcoffset(dt, fold)
+    }
+    #[inline]
+    fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        self.dst(dt, fold)
+    }
+    #[inline]
+    fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str {
+        self.tzname(dt, fold)
+    }
+    #[inline]
+    fn is_ambiguous(&self, dt: NaiveDateTime) -> bool {
+        self.is_ambiguous(dt)
+    }
+    #[inline]
+    fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime {
+        self.fromutc(dt)
+    }
 }
 
 impl TzOps for TzOffset {
-    #[inline] fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.utcoffset(dt, fold) }
-    #[inline] fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.dst(dt, fold) }
-    #[inline] fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str { self.tzname(dt, fold) }
-    #[inline] fn is_ambiguous(&self, dt: NaiveDateTime) -> bool { self.is_ambiguous(dt) }
-    #[inline] fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime { self.fromutc(dt) }
+    #[inline]
+    fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        self.utcoffset(dt, fold)
+    }
+    #[inline]
+    fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        self.dst(dt, fold)
+    }
+    #[inline]
+    fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str {
+        self.tzname(dt, fold)
+    }
+    #[inline]
+    fn is_ambiguous(&self, dt: NaiveDateTime) -> bool {
+        self.is_ambiguous(dt)
+    }
+    #[inline]
+    fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime {
+        self.fromutc(dt)
+    }
 }
 
 impl TzOps for TzFile {
-    #[inline] fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.utcoffset(dt, fold) }
-    #[inline] fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.dst(dt, fold) }
-    #[inline] fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str { self.tzname(dt, fold) }
-    #[inline] fn is_ambiguous(&self, dt: NaiveDateTime) -> bool { self.is_ambiguous(dt) }
-    #[inline] fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime { self.fromutc(dt) }
+    #[inline]
+    fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        self.utcoffset(dt, fold)
+    }
+    #[inline]
+    fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        self.dst(dt, fold)
+    }
+    #[inline]
+    fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str {
+        self.tzname(dt, fold)
+    }
+    #[inline]
+    fn is_ambiguous(&self, dt: NaiveDateTime) -> bool {
+        self.is_ambiguous(dt)
+    }
+    #[inline]
+    fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime {
+        self.fromutc(dt)
+    }
 }
 
 impl TzOps for TzLocal {
-    #[inline] fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.utcoffset(dt, fold) }
-    #[inline] fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.dst(dt, fold) }
-    #[inline] fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str { self.tzname(dt, fold) }
-    #[inline] fn is_ambiguous(&self, dt: NaiveDateTime) -> bool { self.is_ambiguous(dt) }
-    #[inline] fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime { self.fromutc(dt) }
+    #[inline]
+    fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        self.utcoffset(dt, fold)
+    }
+    #[inline]
+    fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        self.dst(dt, fold)
+    }
+    #[inline]
+    fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str {
+        self.tzname(dt, fold)
+    }
+    #[inline]
+    fn is_ambiguous(&self, dt: NaiveDateTime) -> bool {
+        self.is_ambiguous(dt)
+    }
+    #[inline]
+    fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime {
+        self.fromutc(dt)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -315,11 +375,14 @@ pub fn resolve_imaginary(dt: NaiveDateTime, tz: &impl TzOps) -> NaiveDateTime {
 
 #[cfg(test)]
 mod tests {
-    use chrono::NaiveDate;
     use super::*;
+    use chrono::NaiveDate;
 
     fn dt(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, mi, s).unwrap()
+        NaiveDate::from_ymd_opt(y, m, d)
+            .unwrap()
+            .and_hms_opt(h, mi, s)
+            .unwrap()
     }
 
     // -----------------------------------------------------------------------
@@ -525,8 +588,11 @@ mod tests {
     fn test_gettz_all_utc_aliases() {
         for name in &["UTC", "utc", "GMT", "gmt", "Z", "z"] {
             let tz = gettz(Some(name)).unwrap();
-            assert_eq!(tz.utcoffset(dt(2024, 1, 1, 0, 0, 0), false), 0,
-                "failed for alias: {name}");
+            assert_eq!(
+                tz.utcoffset(dt(2024, 1, 1, 0, 0, 0), false),
+                0,
+                "failed for alias: {name}"
+            );
         }
     }
 

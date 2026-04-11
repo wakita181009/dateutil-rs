@@ -4,13 +4,12 @@ use super::common::PyWeekday;
 use super::conv::{extract_i32_list, extract_u8_list, py_any_to_naive_datetime};
 use dateutil::common::Weekday;
 use dateutil::rrule::iter::RRuleIter as CoreRRuleIter;
-use dateutil::rrule::{
-    search_after, search_before, search_between, search_xafter,
-    signed_index, slice_sorted,
-    Frequency, Recurrence, RRule, RRuleBuilder,
-};
 use dateutil::rrule::parse::{rrulestr as core_rrulestr, RRuleStrResult};
 use dateutil::rrule::set::{RRuleSet, RRuleSetIter as CoreRRuleSetIter};
+use dateutil::rrule::{
+    search_after, search_before, search_between, search_xafter, signed_index, slice_sorted,
+    Frequency, RRule, RRuleBuilder, Recurrence,
+};
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PyList, PySlice};
 
@@ -353,7 +352,10 @@ impl PyRRule {
     fn __iter__(slf: PyRef<'_, Self>) -> PyRRuleIter {
         if let Some(cached) = slf.get_cache() {
             return PyRRuleIter {
-                inner: PyRRuleIterInner::Cached { data: Arc::clone(cached), idx: 0 },
+                inner: PyRRuleIterInner::Cached {
+                    data: Arc::clone(cached),
+                    idx: 0,
+                },
             };
         }
         PyRRuleIter {
@@ -487,16 +489,36 @@ impl PyRRule {
         if let Some(obj) = until {
             builder = builder.until(py_any_to_naive_datetime(obj)?);
         }
-        if let Some(ref v) = bysetpos { builder = builder.bysetpos(extract_i32_list(v)?); }
-        if let Some(ref v) = bymonth { builder = builder.bymonth(extract_u8_list(v)?); }
-        if let Some(ref v) = bymonthday { builder = builder.bymonthday(extract_i32_list(v)?); }
-        if let Some(ref v) = byyearday { builder = builder.byyearday(extract_i32_list(v)?); }
-        if let Some(ref v) = byeaster { builder = builder.byeaster(extract_i32_list(v)?); }
-        if let Some(ref v) = byweekno { builder = builder.byweekno(extract_i32_list(v)?); }
-        if let Some(ref v) = byweekday { builder = builder.byweekday(extract_byweekday_any(v)?); }
-        if let Some(ref v) = byhour { builder = builder.byhour(extract_u8_list(v)?); }
-        if let Some(ref v) = byminute { builder = builder.byminute(extract_u8_list(v)?); }
-        if let Some(ref v) = bysecond { builder = builder.bysecond(extract_u8_list(v)?); }
+        if let Some(ref v) = bysetpos {
+            builder = builder.bysetpos(extract_i32_list(v)?);
+        }
+        if let Some(ref v) = bymonth {
+            builder = builder.bymonth(extract_u8_list(v)?);
+        }
+        if let Some(ref v) = bymonthday {
+            builder = builder.bymonthday(extract_i32_list(v)?);
+        }
+        if let Some(ref v) = byyearday {
+            builder = builder.byyearday(extract_i32_list(v)?);
+        }
+        if let Some(ref v) = byeaster {
+            builder = builder.byeaster(extract_i32_list(v)?);
+        }
+        if let Some(ref v) = byweekno {
+            builder = builder.byweekno(extract_i32_list(v)?);
+        }
+        if let Some(ref v) = byweekday {
+            builder = builder.byweekday(extract_byweekday_any(v)?);
+        }
+        if let Some(ref v) = byhour {
+            builder = builder.byhour(extract_u8_list(v)?);
+        }
+        if let Some(ref v) = byminute {
+            builder = builder.byminute(extract_u8_list(v)?);
+        }
+        if let Some(ref v) = bysecond {
+            builder = builder.bysecond(extract_u8_list(v)?);
+        }
 
         let inner = builder
             .build()
@@ -571,7 +593,10 @@ impl PyRRule {
 
 enum PyRRuleIterInner {
     Lazy(Box<CoreRRuleIter>),
-    Cached { data: Arc<Vec<chrono::NaiveDateTime>>, idx: usize },
+    Cached {
+        data: Arc<Vec<chrono::NaiveDateTime>>,
+        idx: usize,
+    },
 }
 
 #[pyclass]
@@ -599,7 +624,9 @@ impl PyRRuleIter {
             }
             PyRRuleIterInner::Cached { data, idx } => {
                 let val = data.get(*idx).copied();
-                if val.is_some() { *idx += 1; }
+                if val.is_some() {
+                    *idx += 1;
+                }
                 Ok(val)
             }
         }
@@ -725,7 +752,10 @@ impl PyRRuleSet {
     fn __iter__(slf: PyRef<'_, Self>) -> PyRRuleSetIter {
         if let Some(cached) = slf.get_or_populate_cache() {
             return PyRRuleSetIter {
-                inner: PyRRuleSetIterInner::Cached { data: cached, idx: 0 },
+                inner: PyRRuleSetIterInner::Cached {
+                    data: cached,
+                    idx: 0,
+                },
             };
         }
         PyRRuleSetIter {
@@ -828,7 +858,10 @@ impl PyRRuleSet {
 
 enum PyRRuleSetIterInner {
     Lazy(Box<CoreRRuleSetIter>),
-    Cached { data: Arc<Vec<chrono::NaiveDateTime>>, idx: usize },
+    Cached {
+        data: Arc<Vec<chrono::NaiveDateTime>>,
+        idx: usize,
+    },
 }
 
 #[pyclass]
@@ -847,7 +880,9 @@ impl PyRRuleSetIter {
             PyRRuleSetIterInner::Lazy(iter) => iter.next(),
             PyRRuleSetIterInner::Cached { data, idx } => {
                 let val = data.get(*idx).copied();
-                if val.is_some() { *idx += 1; }
+                if val.is_some() {
+                    *idx += 1;
+                }
                 val
             }
         }
@@ -885,16 +920,14 @@ fn rrulestr_py(
             .into_any()
             .unbind())
         }
-        RRuleStrResult::Set(set) => {
-            Ok(PyRRuleSet {
-                inner: set,
-                cache_enabled: cache,
-                cache: Mutex::new(None),
-            }
-            .into_pyobject(py)?
-            .into_any()
-            .unbind())
+        RRuleStrResult::Set(set) => Ok(PyRRuleSet {
+            inner: set,
+            cache_enabled: cache,
+            cache: Mutex::new(None),
         }
+        .into_pyobject(py)?
+        .into_any()
+        .unbind()),
     }
 }
 

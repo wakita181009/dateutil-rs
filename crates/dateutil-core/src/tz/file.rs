@@ -43,9 +43,9 @@ pub(crate) struct PosixTzRule {
 /// `Mm.w.d/time` transition rule.
 #[derive(Debug, Clone)]
 pub(crate) struct TransitionRule {
-    month: u8,     // 1-12
-    week: u8,      // 1-5 (5 = last)
-    day: u8,       // 0-6 (Sunday = 0)
+    month: u8,      // 1-12
+    week: u8,       // 1-5 (5 = last)
+    day: u8,        // 0-6 (Sunday = 0)
     time_secs: i32, // seconds from midnight (default 7200 = 02:00)
 }
 
@@ -95,8 +95,8 @@ impl TzFile {
 
     /// Read and parse a TZif file from a filesystem path.
     pub fn from_path(path: &str) -> Result<Self, TzError> {
-        let data = std::fs::read(path)
-            .map_err(|e| TzError::Io(format!("{}: {}", path, e).into()))?;
+        let data =
+            std::fs::read(path).map_err(|e| TzError::Io(format!("{}: {}", path, e).into()))?;
         Self::from_bytes(&data, Some(path))
     }
 
@@ -162,7 +162,7 @@ impl TzFileData {
             + charcnt                     // abbreviation strings
             + leapcnt * 8                 // leap second records
             + isstdcnt                    // standard/wall indicators
-            + isutcnt;                    // UT/local indicators
+            + isutcnt; // UT/local indicators
 
         // For v2/v3, skip v1 block and re-parse.
         if version == b'2' || version == b'3' {
@@ -180,16 +180,18 @@ impl TzFileData {
         Self::parse_v1(data, filename)
     }
 
-    fn parse_header_counts(hdr: &[u8]) -> Result<(usize, usize, usize, usize, usize, usize), TzError> {
+    fn parse_header_counts(
+        hdr: &[u8],
+    ) -> Result<(usize, usize, usize, usize, usize, usize), TzError> {
         if hdr.len() < 24 {
             return Err(TzError::InvalidData("header counts truncated".into()));
         }
-        let isutcnt  = u32::from_be_bytes([hdr[0],  hdr[1],  hdr[2],  hdr[3]])  as usize;
-        let isstdcnt = u32::from_be_bytes([hdr[4],  hdr[5],  hdr[6],  hdr[7]])  as usize;
-        let leapcnt  = u32::from_be_bytes([hdr[8],  hdr[9],  hdr[10], hdr[11]]) as usize;
-        let timecnt  = u32::from_be_bytes([hdr[12], hdr[13], hdr[14], hdr[15]]) as usize;
-        let typecnt  = u32::from_be_bytes([hdr[16], hdr[17], hdr[18], hdr[19]]) as usize;
-        let charcnt  = u32::from_be_bytes([hdr[20], hdr[21], hdr[22], hdr[23]]) as usize;
+        let isutcnt = u32::from_be_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]) as usize;
+        let isstdcnt = u32::from_be_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]) as usize;
+        let leapcnt = u32::from_be_bytes([hdr[8], hdr[9], hdr[10], hdr[11]]) as usize;
+        let timecnt = u32::from_be_bytes([hdr[12], hdr[13], hdr[14], hdr[15]]) as usize;
+        let typecnt = u32::from_be_bytes([hdr[16], hdr[17], hdr[18], hdr[19]]) as usize;
+        let charcnt = u32::from_be_bytes([hdr[20], hdr[21], hdr[22], hdr[23]]) as usize;
         Ok((timecnt, typecnt, charcnt, leapcnt, isstdcnt, isutcnt))
     }
 
@@ -198,7 +200,8 @@ impl TzFileData {
             Self::parse_header_counts(&data[20..44])?;
 
         let mut pos = HEADER_LEN;
-        let needed = timecnt * 4 + timecnt + typecnt * 6 + charcnt + leapcnt * 8 + isstdcnt + isutcnt;
+        let needed =
+            timecnt * 4 + timecnt + typecnt * 6 + charcnt + leapcnt * 8 + isstdcnt + isutcnt;
         if data.len() < HEADER_LEN + needed {
             return Err(TzError::InvalidData("v1 data truncated".into()));
         }
@@ -206,7 +209,8 @@ impl TzFileData {
         // Transition times (i32)
         let mut trans_utc = Vec::with_capacity(timecnt);
         for _ in 0..timecnt {
-            let ts = i32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as i64;
+            let ts =
+                i32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as i64;
             trans_utc.push(ts);
             pos += 4;
         }
@@ -226,7 +230,8 @@ impl TzFileData {
             Self::parse_header_counts(&data[20..44])?;
 
         let mut pos = HEADER_LEN;
-        let needed = timecnt * 8 + timecnt + typecnt * 6 + charcnt + leapcnt * 12 + isstdcnt + isutcnt;
+        let needed =
+            timecnt * 8 + timecnt + typecnt * 6 + charcnt + leapcnt * 12 + isstdcnt + isutcnt;
         if data.len() < HEADER_LEN + needed {
             return Err(TzError::InvalidData("v2/v3 data truncated".into()));
         }
@@ -234,7 +239,7 @@ impl TzFileData {
         // Transition times (i64)
         let mut trans_utc = Vec::with_capacity(timecnt);
         for _ in 0..timecnt {
-            let bytes: [u8; 8] = data[pos..pos+8].try_into().unwrap();
+            let bytes: [u8; 8] = data[pos..pos + 8].try_into().unwrap();
             trans_utc.push(i64::from_be_bytes(bytes));
             pos += 8;
         }
@@ -281,7 +286,7 @@ impl TzFileData {
         let mut ttinfo = SmallVec::with_capacity(typecnt);
         let mut p = pos;
         for _ in 0..typecnt {
-            let utoff = i32::from_be_bytes([data[p], data[p+1], data[p+2], data[p+3]]);
+            let utoff = i32::from_be_bytes([data[p], data[p + 1], data[p + 2], data[p + 3]]);
             let is_dst = data[p + 4] != 0;
             let abbr_start = data[p + 5] as u16;
             ttinfo.push(TtInfo {
@@ -328,9 +333,7 @@ impl TzFileData {
         }
 
         // Determine ttinfo_before: the first non-DST ttinfo, or index 0.
-        let ttinfo_before = ttinfo.iter()
-            .position(|t| !t.is_dst)
-            .unwrap_or(0) as u8;
+        let ttinfo_before = ttinfo.iter().position(|t| !t.is_dst).unwrap_or(0) as u8;
 
         // Cache STD/DST ttinfo indices for O(1) POSIX resolve.
         // Use the LAST transition's entries (modern offsets), not the first
@@ -502,9 +505,7 @@ impl TzFileData {
         let ts = datetime_to_timestamp(dt);
 
         // For timestamps beyond stored transitions, use POSIX rule.
-        if self.trans_wall.is_empty()
-            || ts > *self.trans_wall.last().unwrap()
-        {
+        if self.trans_wall.is_empty() || ts > *self.trans_wall.last().unwrap() {
             if let Some(ref posix) = self.posix_tz {
                 return posix.is_ambiguous(dt);
             }
@@ -579,7 +580,8 @@ impl PosixTzRule {
     fn is_in_dst(&self, dt: NaiveDateTime) -> bool {
         let year = dt.year();
         let ts = datetime_to_timestamp(dt);
-        let dst_start_wall = self.start.to_timestamp(year, self.std_offset) + self.std_offset as i64;
+        let dst_start_wall =
+            self.start.to_timestamp(year, self.std_offset) + self.std_offset as i64;
         let dst_end_wall = self.end.to_timestamp(year, self.dst_offset) + self.dst_offset as i64;
 
         if dst_start_wall < dst_end_wall {
@@ -604,7 +606,11 @@ impl PosixTzRule {
 
         // Parse DST timezone (optional offset)
         let (dst_abbr, rest) = parse_posix_name(rest)?;
-        let (dst_offset, _) = if !rest.is_empty() && (rest.starts_with('+') || rest.starts_with('-') || rest.as_bytes()[0].is_ascii_digit()) {
+        let (dst_offset, _) = if !rest.is_empty()
+            && (rest.starts_with('+')
+                || rest.starts_with('-')
+                || rest.as_bytes()[0].is_ascii_digit())
+        {
             let (off, r) = parse_posix_offset(rest).ok_or_else(err)?;
             (-off, r)
         } else {
@@ -660,13 +666,18 @@ impl TransitionRule {
             None => 2 * 3600, // default 02:00
         };
 
-        Some(TransitionRule { month, week, day, time_secs })
+        Some(TransitionRule {
+            month,
+            week,
+            day,
+            time_secs,
+        })
     }
 
     /// Compute the UTC timestamp for this rule in a given year.
     /// `base_offset` is the UTC offset (in seconds) active before this transition.
     fn to_timestamp(&self, year: i32, base_offset: i32) -> i64 {
-        use chrono::{NaiveDate, Datelike, Weekday};
+        use chrono::{Datelike, NaiveDate, Weekday};
 
         let target_weekday = match self.day {
             0 => Weekday::Sun,
@@ -681,7 +692,9 @@ impl TransitionRule {
         let first_of_month = NaiveDate::from_ymd_opt(year, self.month as u32, 1).unwrap();
         let first_weekday = first_of_month.weekday();
         let days_ahead = (target_weekday.num_days_from_sunday() as i32
-            - first_weekday.num_days_from_sunday() as i32 + 7) % 7;
+            - first_weekday.num_days_from_sunday() as i32
+            + 7)
+            % 7;
 
         let mut day = 1 + days_ahead + (self.week as i32 - 1) * 7;
 
@@ -704,14 +717,19 @@ fn parse_posix_name(s: &str) -> Result<(&str, &str), TzError> {
     }
     if s.starts_with('<') {
         // Quoted name: <ABC>
-        let end = s.find('>').ok_or_else(|| TzError::InvalidPosixTz(s.into()))?;
+        let end = s
+            .find('>')
+            .ok_or_else(|| TzError::InvalidPosixTz(s.into()))?;
         Ok((&s[1..end], &s[end + 1..]))
     } else {
-        let end = s.bytes()
+        let end = s
+            .bytes()
             .position(|b| !b.is_ascii_alphabetic())
             .unwrap_or(s.len());
         if end < 3 {
-            return Err(TzError::InvalidPosixTz(format!("name too short: {}", &s[..end]).into()));
+            return Err(TzError::InvalidPosixTz(
+                format!("name too short: {}", &s[..end]).into(),
+            ));
         }
         Ok((&s[..end], &s[end..]))
     }
@@ -732,7 +750,8 @@ fn parse_posix_offset(s: &str) -> Option<(i32, &str)> {
     };
 
     // Find end of offset (digits and colons)
-    let end = rest.bytes()
+    let end = rest
+        .bytes()
         .position(|b| !b.is_ascii_digit() && b != b':')
         .unwrap_or(rest.len());
 
@@ -774,7 +793,13 @@ fn days_in_month_of(year: i32, month: u32) -> u32 {
     match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
-        2 => if is_leap(year) { 29 } else { 28 },
+        2 => {
+            if is_leap(year) {
+                29
+            } else {
+                28
+            }
+        }
         _ => 30,
     }
 }
@@ -789,11 +814,14 @@ fn is_leap(year: i32) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use chrono::NaiveDate;
     use super::*;
+    use chrono::NaiveDate;
 
     fn dt(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, mi, s).unwrap()
+        NaiveDate::from_ymd_opt(y, m, d)
+            .unwrap()
+            .and_hms_opt(h, mi, s)
+            .unwrap()
     }
 
     // -----------------------------------------------------------------------
@@ -1189,7 +1217,7 @@ mod tests {
         assert!(is_leap(2024));
         assert!(!is_leap(2023));
         assert!(!is_leap(1900)); // century non-leap
-        assert!(is_leap(2000));  // 400-year leap
+        assert!(is_leap(2000)); // 400-year leap
         assert!(!is_leap(2100)); // century non-leap
     }
 

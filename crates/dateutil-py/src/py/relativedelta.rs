@@ -78,9 +78,15 @@ impl PyRelativeDelta {
             .microseconds(microseconds)
             .leapdays(leapdays);
 
-        if let Some(v) = year { builder = builder.year(v); }
-        if let Some(v) = month { builder = builder.month(v); }
-        if let Some(v) = day { builder = builder.day(v); }
+        if let Some(v) = year {
+            builder = builder.year(v);
+        }
+        if let Some(v) = month {
+            builder = builder.month(v);
+        }
+        if let Some(v) = day {
+            builder = builder.day(v);
+        }
         if let Some(ref wd) = weekday {
             let core_wd = if let Ok(py_wd) = wd.extract::<PyWeekday>() {
                 py_wd.into()
@@ -91,12 +97,24 @@ impl PyRelativeDelta {
             };
             builder = builder.weekday(core_wd);
         }
-        if let Some(v) = yearday { builder = builder.yearday(v); }
-        if let Some(v) = nlyearday { builder = builder.nlyearday(v); }
-        if let Some(v) = hour { builder = builder.hour(v); }
-        if let Some(v) = minute { builder = builder.minute(v); }
-        if let Some(v) = second { builder = builder.second(v); }
-        if let Some(v) = microsecond { builder = builder.microsecond(v); }
+        if let Some(v) = yearday {
+            builder = builder.yearday(v);
+        }
+        if let Some(v) = nlyearday {
+            builder = builder.nlyearday(v);
+        }
+        if let Some(v) = hour {
+            builder = builder.hour(v);
+        }
+        if let Some(v) = minute {
+            builder = builder.minute(v);
+        }
+        if let Some(v) = second {
+            builder = builder.second(v);
+        }
+        if let Some(v) = microsecond {
+            builder = builder.microsecond(v);
+        }
 
         let inner = builder
             .build()
@@ -137,67 +155,106 @@ impl PyRelativeDelta {
 
     // Relative field getters
     #[getter]
-    fn years(&self) -> i32 { self.inner.years() }
+    fn years(&self) -> i32 {
+        self.inner.years()
+    }
     #[getter]
-    fn months(&self) -> i32 { self.inner.months() }
+    fn months(&self) -> i32 {
+        self.inner.months()
+    }
     #[getter]
-    fn days(&self) -> i32 { self.inner.days() }
+    fn days(&self) -> i32 {
+        self.inner.days()
+    }
     #[getter]
-    fn hours(&self) -> i32 { self.inner.hours() }
+    fn hours(&self) -> i32 {
+        self.inner.hours()
+    }
     #[getter]
-    fn minutes(&self) -> i32 { self.inner.minutes() }
+    fn minutes(&self) -> i32 {
+        self.inner.minutes()
+    }
     #[getter]
-    fn seconds(&self) -> i32 { self.inner.seconds() }
+    fn seconds(&self) -> i32 {
+        self.inner.seconds()
+    }
     #[getter]
-    fn microseconds(&self) -> i64 { self.inner.microseconds() }
+    fn microseconds(&self) -> i64 {
+        self.inner.microseconds()
+    }
     #[getter]
-    fn weeks(&self) -> i32 { self.inner.weeks() }
+    fn weeks(&self) -> i32 {
+        self.inner.weeks()
+    }
     #[setter]
-    fn set_weeks(&mut self, val: i32) { self.inner.set_weeks(val); }
+    fn set_weeks(&mut self, val: i32) {
+        self.inner.set_weeks(val);
+    }
     #[getter]
-    fn leapdays(&self) -> i32 { self.inner.leapdays() }
+    fn leapdays(&self) -> i32 {
+        self.inner.leapdays()
+    }
 
     // Absolute field getters (None if not set)
     #[getter]
-    fn year(&self) -> Option<i32> { self.inner.year() }
+    fn year(&self) -> Option<i32> {
+        self.inner.year()
+    }
     #[getter]
-    fn month(&self) -> Option<i32> { self.inner.month() }
+    fn month(&self) -> Option<i32> {
+        self.inner.month()
+    }
     #[getter]
-    fn day(&self) -> Option<i32> { self.inner.day() }
+    fn day(&self) -> Option<i32> {
+        self.inner.day()
+    }
     #[getter]
-    fn hour(&self) -> Option<i32> { self.inner.hour() }
+    fn hour(&self) -> Option<i32> {
+        self.inner.hour()
+    }
     #[getter]
-    fn minute(&self) -> Option<i32> { self.inner.minute() }
+    fn minute(&self) -> Option<i32> {
+        self.inner.minute()
+    }
     #[getter]
-    fn second(&self) -> Option<i32> { self.inner.second() }
+    fn second(&self) -> Option<i32> {
+        self.inner.second()
+    }
     #[getter]
-    fn microsecond(&self) -> Option<i32> { self.inner.microsecond() }
+    fn microsecond(&self) -> Option<i32> {
+        self.inner.microsecond()
+    }
     #[getter]
     fn weekday(&self) -> Option<PyWeekday> {
         self.inner.weekday().map(|w| PyWeekday::from(*w))
     }
 
-    fn has_time(&self) -> bool { self.inner.has_time() }
-    fn is_zero(&self) -> bool { self.inner.is_zero() }
+    fn has_time(&self) -> bool {
+        self.inner.has_time()
+    }
+    fn is_zero(&self) -> bool {
+        self.inner.is_zero()
+    }
 
     // Arithmetic operations
 
-    fn __add__<'py>(
-        &self,
-        other: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn __add__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = other.py();
 
         // relativedelta + relativedelta
         if let Ok(rd) = other.extract::<PyRef<'_, PyRelativeDelta>>() {
-            let result = Self { inner: self.inner.add_rd(&rd.inner) };
+            let result = Self {
+                inner: self.inner.add_rd(&rd.inner),
+            };
             return Ok(Bound::new(py, result)?.into_any());
         }
 
         // relativedelta + timedelta
         if let Ok(td) = other.cast::<PyDelta>() {
             let td_rd = timedelta_to_rd(td)?;
-            let result = Self { inner: self.inner.add_rd(&td_rd) };
+            let result = Self {
+                inner: self.inner.add_rd(&td_rd),
+            };
             return Ok(Bound::new(py, result)?.into_any());
         }
 
@@ -225,30 +282,25 @@ impl PyRelativeDelta {
         Ok(py.NotImplemented().into_bound(py).into_any())
     }
 
-    fn __radd__<'py>(
-        &self,
-        other: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn __radd__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         self.__add__(other)
     }
 
-    fn __sub__<'py>(
-        &self,
-        other: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn __sub__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = other.py();
         if let Ok(rd) = other.extract::<PyRef<'_, PyRelativeDelta>>() {
-            let result = Self { inner: self.inner.sub_rd(&rd.inner) };
+            let result = Self {
+                inner: self.inner.sub_rd(&rd.inner),
+            };
             return Ok(Bound::new(py, result)?.into_any());
         }
         Ok(py.NotImplemented().into_bound(py).into_any())
     }
 
-    fn __rsub__<'py>(
-        &self,
-        other: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let neg = Self { inner: self.inner.neg() };
+    fn __rsub__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        let neg = Self {
+            inner: self.inner.neg(),
+        };
         neg.__add__(other)
     }
 
@@ -258,31 +310,34 @@ impl PyRelativeDelta {
         }
     }
 
-    fn __mul__<'py>(
-        &self,
-        other: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn __mul__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = other.py();
         match other.extract::<f64>() {
-            Ok(f) => Ok(Bound::new(py, Self { inner: self.inner.mul(f) })?.into_any()),
+            Ok(f) => Ok(Bound::new(
+                py,
+                Self {
+                    inner: self.inner.mul(f),
+                },
+            )?
+            .into_any()),
             Err(_) => Ok(py.NotImplemented().into_bound(py).into_any()),
         }
     }
 
-    fn __rmul__<'py>(
-        &self,
-        other: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn __rmul__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         self.__mul__(other)
     }
 
-    fn __truediv__<'py>(
-        &self,
-        other: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn __truediv__<'py>(&self, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = other.py();
         match other.extract::<f64>() {
-            Ok(f) => Ok(Bound::new(py, Self { inner: self.inner.div(f) })?.into_any()),
+            Ok(f) => Ok(Bound::new(
+                py,
+                Self {
+                    inner: self.inner.div(f),
+                },
+            )?
+            .into_any()),
             Err(_) => Ok(py.NotImplemented().into_bound(py).into_any()),
         }
     }

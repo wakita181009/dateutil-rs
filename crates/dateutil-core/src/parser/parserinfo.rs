@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
-use super::{lowercase_buf, lower_str};
-use super::{lookup_jump, lookup_weekday, lookup_month, lookup_hms, lookup_ampm, lookup_pertain, lookup_utczone};
+use super::{
+    lookup_ampm, lookup_hms, lookup_jump, lookup_month, lookup_pertain, lookup_utczone,
+    lookup_weekday,
+};
+use super::{lower_str, lowercase_buf};
 
 // ---------------------------------------------------------------------------
 // ParserInfo — custom lookup tables for non-default locale support
@@ -33,17 +36,26 @@ pub struct ParserInfo {
 impl Default for ParserInfo {
     fn default() -> Self {
         let jump: HashSet<String> = [
-            " ", ".", ",", ";", "-", "/", "'",
-            "at", "on", "and", "ad", "m", "t", "of",
-            "st", "nd", "rd", "th",
-        ].into_iter().map(String::from).collect();
+            " ", ".", ",", ";", "-", "/", "'", "at", "on", "and", "ad", "m", "t", "of", "st", "nd",
+            "rd", "th",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
 
         let mut weekdays = HashMap::new();
         for (i, names) in [
-            &["mon", "monday"][..], &["tue", "tuesday"], &["wed", "wednesday"],
-            &["thu", "thursday"], &["fri", "friday"], &["sat", "saturday"],
+            &["mon", "monday"][..],
+            &["tue", "tuesday"],
+            &["wed", "wednesday"],
+            &["thu", "thursday"],
+            &["fri", "friday"],
+            &["sat", "saturday"],
             &["sun", "sunday"],
-        ].iter().enumerate() {
+        ]
+        .iter()
+        .enumerate()
+        {
             for name in *names {
                 weekdays.insert(String::from(*name), i);
             }
@@ -51,12 +63,22 @@ impl Default for ParserInfo {
 
         let mut months = HashMap::new();
         for (i, names) in [
-            &["jan", "january"][..], &["feb", "february"], &["mar", "march"],
-            &["apr", "april"], &["may"][..], &["jun", "june"],
-            &["jul", "july"], &["aug", "august"],
-            &["sep", "sept", "september"], &["oct", "october"],
-            &["nov", "november"], &["dec", "december"],
-        ].iter().enumerate() {
+            &["jan", "january"][..],
+            &["feb", "february"],
+            &["mar", "march"],
+            &["apr", "april"],
+            &["may"][..],
+            &["jun", "june"],
+            &["jul", "july"],
+            &["aug", "august"],
+            &["sep", "sept", "september"],
+            &["oct", "october"],
+            &["nov", "november"],
+            &["dec", "december"],
+        ]
+        .iter()
+        .enumerate()
+        {
             for name in *names {
                 months.insert(String::from(*name), i + 1);
             }
@@ -67,7 +89,10 @@ impl Default for ParserInfo {
             &["h", "hour", "hours"][..],
             &["m", "minute", "minutes"],
             &["s", "second", "seconds"],
-        ].iter().enumerate() {
+        ]
+        .iter()
+        .enumerate()
+        {
             for name in *names {
                 hms.insert(String::from(*name), i);
             }
@@ -80,13 +105,17 @@ impl Default for ParserInfo {
             }
         }
 
-        let utczone: HashSet<String> =
-            ["utc", "gmt", "z"].into_iter().map(String::from).collect();
-        let pertain: HashSet<String> =
-            ["of"].into_iter().map(String::from).collect();
+        let utczone: HashSet<String> = ["utc", "gmt", "z"].into_iter().map(String::from).collect();
+        let pertain: HashSet<String> = ["of"].into_iter().map(String::from).collect();
 
         Self {
-            jump, weekdays, months, hms, ampm, utczone, pertain,
+            jump,
+            weekdays,
+            months,
+            hms,
+            ampm,
+            utczone,
+            pertain,
             tzoffset: HashMap::new(),
         }
     }

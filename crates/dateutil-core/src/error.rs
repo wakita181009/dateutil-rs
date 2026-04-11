@@ -89,30 +89,56 @@ mod tests {
 
     #[test]
     fn test_easter_error_display_all_variants() {
-        assert_eq!(EasterError::InvalidMethod(0).to_string(), "invalid method: 0");
+        assert_eq!(
+            EasterError::InvalidMethod(0).to_string(),
+            "invalid method: 0"
+        );
         assert_eq!(EasterError::InvalidYear(0).to_string(), "invalid year: 0");
         assert_eq!(
-            EasterError::DateOutOfRange { year: 2024, month: 2, day: 30 }.to_string(),
+            EasterError::DateOutOfRange {
+                year: 2024,
+                month: 2,
+                day: 30
+            }
+            .to_string(),
             "date out of range: 2024-2-30"
         );
     }
 
     #[test]
     fn test_weekday_error_display() {
-        assert_eq!(WeekdayError::InvalidWeekday(7).to_string(), "invalid weekday: 7 (must be 0..=6)");
-        assert_eq!(WeekdayError::InvalidWeekday(255).to_string(), "invalid weekday: 255 (must be 0..=6)");
+        assert_eq!(
+            WeekdayError::InvalidWeekday(7).to_string(),
+            "invalid weekday: 7 (must be 0..=6)"
+        );
+        assert_eq!(
+            WeekdayError::InvalidWeekday(255).to_string(),
+            "invalid weekday: 255 (must be 0..=6)"
+        );
     }
 
     #[test]
     fn test_relativedelta_error_display() {
-        assert_eq!(RelativeDeltaError::InvalidYearDay(367).to_string(), "invalid year day: 367");
+        assert_eq!(
+            RelativeDeltaError::InvalidYearDay(367).to_string(),
+            "invalid year day: 367"
+        );
     }
 
     #[test]
     fn test_parse_error_display() {
-        assert_eq!(ParseError::UnknownFormat("xyz".into()).to_string(), "unknown string format: xyz");
-        assert_eq!(ParseError::NoDate("".into()).to_string(), "string does not contain a date: ");
-        assert_eq!(ParseError::ValueError("bad value".into()).to_string(), "bad value");
+        assert_eq!(
+            ParseError::UnknownFormat("xyz".into()).to_string(),
+            "unknown string format: xyz"
+        );
+        assert_eq!(
+            ParseError::NoDate("".into()).to_string(),
+            "string does not contain a date: "
+        );
+        assert_eq!(
+            ParseError::ValueError("bad value".into()).to_string(),
+            "bad value"
+        );
     }
 
     #[test]

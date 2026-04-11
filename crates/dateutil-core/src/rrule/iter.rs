@@ -168,7 +168,11 @@ impl IterInfo {
                     .weekday()
                     .num_days_from_monday() as u8;
                 let lno1wkst = (7 - lyearweekday + rr.wkst) % 7;
-                let lyearlen = if is_leap_year(year - 1) { 366usize } else { 365 };
+                let lyearlen = if is_leap_year(year - 1) {
+                    366usize
+                } else {
+                    365
+                };
                 let lnumweeks = if lno1wkst >= 4 {
                     52 + (lyearlen + (lyearweekday as usize + 7 - rr.wkst as usize) % 7) % 7 / 4
                 } else {
@@ -314,8 +318,7 @@ impl IterInfo {
         if rr.bymonth_mask != 0 && (rr.bymonth_mask & (1u16 << self.mmask[i])) == 0 {
             return false;
         }
-        if present.contains(ByPresent::WEEKNO)
-            && (!self.wnomask_active || self.wnomask_buf[i] == 0)
+        if present.contains(ByPresent::WEEKNO) && (!self.wnomask_active || self.wnomask_buf[i] == 0)
         {
             return false;
         }
@@ -345,9 +348,7 @@ impl IterInfo {
             let byd = rr.byyearday.as_ref().unwrap();
             let ylen = self.yearlen as usize;
             if i < ylen {
-                if !byd.has_pos((i + 1) as u32)
-                    && !byd.has_neg((ylen - i) as u32)
-                {
+                if !byd.has_pos((i + 1) as u32) && !byd.has_neg((ylen - i) as u32) {
                     return false;
                 }
             } else {
@@ -448,7 +449,8 @@ impl RRuleIter {
             self.ii.rebuild(self.year, self.month);
 
             // Collect filtered day indices
-            self.ii.collect_days(self.year, self.month, self.day, &mut self.day_buf);
+            self.ii
+                .collect_days(self.year, self.month, self.day, &mut self.day_buf);
 
             // Compute sub-daily timeset into buffer (no-op for non-sub-daily)
             let is_sub_daily = self.ii.rule.freq.is_sub_daily();
@@ -561,8 +563,7 @@ impl RRuleIter {
             Frequency::Minutely => {
                 let bs = bysecond.unwrap_or(&[]);
                 for &second in bs {
-                    if let Some(t) =
-                        NaiveTime::from_hms_opt(self.hour, self.minute, second as u32)
+                    if let Some(t) = NaiveTime::from_hms_opt(self.hour, self.minute, second as u32)
                     {
                         self.timeset_buf.push(t);
                     }
@@ -575,7 +576,8 @@ impl RRuleIter {
             }
             _ => {}
         }
-        if self.timeset_buf.len() > 1 && !self.timeset_buf.array_windows::<2>().all(|[a, b]| a <= b) {
+        if self.timeset_buf.len() > 1 && !self.timeset_buf.array_windows::<2>().all(|[a, b]| a <= b)
+        {
             self.timeset_buf.sort();
         }
     }
@@ -609,8 +611,8 @@ impl RRuleIter {
                         + interval as i32 * 7;
                     self.day = (self.day as i32 + adj) as u32;
                 } else {
-                    let adj = -(self.weekday as i32 - self.ii.rule.wkst as i32)
-                        + interval as i32 * 7;
+                    let adj =
+                        -(self.weekday as i32 - self.ii.rule.wkst as i32) + interval as i32 * 7;
                     self.day = (self.day as i32 + adj) as u32;
                 }
                 self.weekday = self.ii.rule.wkst;

@@ -49,7 +49,10 @@ pub fn tokenize(s: &str) -> SmallVec<[Cow<'_, str>; 16]> {
                 }
             }
             // Trim trailing dot/comma (sentence-ending punctuation, not decimal)
-            if (has_dot || has_comma) && pos > start && (bytes[pos - 1] == b'.' || bytes[pos - 1] == b',') {
+            if (has_dot || has_comma)
+                && pos > start
+                && (bytes[pos - 1] == b'.' || bytes[pos - 1] == b',')
+            {
                 pos -= 1;
             }
             let slice = &s[start..pos];
@@ -150,7 +153,9 @@ mod tests {
         let tokens = tokenize("2024-01-15T10:30:45+05:30");
         assert_eq!(
             strs(&tokens),
-            vec!["2024", "-", "01", "-", "15", "T", "10", ":", "30", ":", "45", "+", "05", ":", "30"]
+            vec![
+                "2024", "-", "01", "-", "15", "T", "10", ":", "30", ":", "45", "+", "05", ":", "30"
+            ]
         );
     }
 

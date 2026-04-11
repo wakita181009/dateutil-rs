@@ -24,9 +24,7 @@ impl PyWeekday {
     #[pyo3(signature = (n=None))]
     fn __call__(slf: Py<Self>, py: Python<'_>, n: Option<i32>) -> PyResult<Py<Self>> {
         if n == Some(0) {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "N must not be 0",
-            ));
+            return Err(pyo3::exceptions::PyValueError::new_err("N must not be 0"));
         }
         // Weekday is Copy — borrow once
         let inner = slf.borrow(py).inner;
@@ -34,7 +32,12 @@ impl PyWeekday {
         if inner.n() == n {
             return Ok(slf);
         }
-        Py::new(py, Self { inner: inner.with_n(n) })
+        Py::new(
+            py,
+            Self {
+                inner: inner.with_n(n),
+            },
+        )
     }
 
     #[getter]

@@ -6,9 +6,7 @@
 
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use pyo3::prelude::*;
-use pyo3::types::{
-    PyDate, PyDateAccess, PyDateTime, PyDelta, PyTimeAccess, PyTzInfo,
-};
+use pyo3::types::{PyDate, PyDateAccess, PyDateTime, PyDelta, PyTimeAccess, PyTzInfo};
 
 // ---------------------------------------------------------------------------
 // Python → chrono
@@ -48,12 +46,8 @@ pub fn extract_ndt(dt: &Bound<'_, PyAny>) -> PyResult<NaiveDateTime> {
 /// Python datetime components are always valid, so this never fails.
 #[inline]
 pub fn pydt_to_naive(dt: &Bound<'_, PyDateTime>) -> NaiveDateTime {
-    let date = NaiveDate::from_ymd_opt(
-        dt.get_year(),
-        dt.get_month() as u32,
-        dt.get_day() as u32,
-    )
-    .unwrap();
+    let date =
+        NaiveDate::from_ymd_opt(dt.get_year(), dt.get_month() as u32, dt.get_day() as u32).unwrap();
     let time = NaiveTime::from_hms_micro_opt(
         dt.get_hour() as u32,
         dt.get_minute() as u32,
@@ -72,12 +66,8 @@ pub fn py_any_to_naive_datetime(obj: &Bound<'_, PyAny>) -> PyResult<NaiveDateTim
         return Ok(pydt_to_naive(dt));
     }
     if let Ok(d) = obj.cast::<PyDate>() {
-        let date = NaiveDate::from_ymd_opt(
-            d.get_year(),
-            d.get_month() as u32,
-            d.get_day() as u32,
-        )
-        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("invalid date"))?;
+        let date = NaiveDate::from_ymd_opt(d.get_year(), d.get_month() as u32, d.get_day() as u32)
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("invalid date"))?;
         return Ok(date.and_hms_opt(0, 0, 0).unwrap());
     }
     Err(pyo3::exceptions::PyTypeError::new_err(
@@ -88,12 +78,8 @@ pub fn py_any_to_naive_datetime(obj: &Bound<'_, PyAny>) -> PyResult<NaiveDateTim
 /// Extract `NaiveDate` from a Python `datetime.date` object.
 pub fn py_any_to_naive_date(obj: &Bound<'_, PyAny>) -> PyResult<NaiveDate> {
     if let Ok(d) = obj.cast::<PyDate>() {
-        return NaiveDate::from_ymd_opt(
-            d.get_year(),
-            d.get_month() as u32,
-            d.get_day() as u32,
-        )
-        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("invalid date"));
+        return NaiveDate::from_ymd_opt(d.get_year(), d.get_month() as u32, d.get_day() as u32)
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("invalid date"));
     }
     Err(pyo3::exceptions::PyTypeError::new_err(
         "expected datetime.date",

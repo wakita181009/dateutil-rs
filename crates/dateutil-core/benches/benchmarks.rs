@@ -1,14 +1,14 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
 use chrono::NaiveDate;
+use criterion::{criterion_group, criterion_main, Criterion};
 use dateutil::common::Weekday;
 use dateutil::easter::{easter, EasterMethod};
 use dateutil::parser;
 use dateutil::parser::tokenizer;
 use dateutil::relativedelta::RelativeDelta;
-use dateutil::rrule::{Frequency, Recurrence, RRuleBuilder};
 use dateutil::rrule::parse::rrulestr;
 use dateutil::rrule::set::RRuleSet;
+use dateutil::rrule::{Frequency, RRuleBuilder, Recurrence};
+use std::hint::black_box;
 
 fn bench_tokenizer(c: &mut Criterion) {
     c.bench_function("tokenize_simple_date", |b| {
@@ -47,21 +47,31 @@ fn bench_parser(c: &mut Criterion) {
 
     c.bench_function("parse_datetime", |b| {
         b.iter(|| {
-            black_box(parser::parse(black_box("2024-01-15 10:30:45"), false, false, None, None).unwrap());
+            black_box(
+                parser::parse(black_box("2024-01-15 10:30:45"), false, false, None, None).unwrap(),
+            );
         })
     });
 
     c.bench_function("parse_month_name", |b| {
         b.iter(|| {
-            black_box(parser::parse(black_box("January 15, 2024"), false, false, None, None).unwrap());
+            black_box(
+                parser::parse(black_box("January 15, 2024"), false, false, None, None).unwrap(),
+            );
         })
     });
 
     c.bench_function("parse_complex", |b| {
         b.iter(|| {
             black_box(
-                parser::parse(black_box("Monday, January 15, 2024 3:30:45.123456 PM UTC"), false, false, None, None)
-                    .unwrap(),
+                parser::parse(
+                    black_box("Monday, January 15, 2024 3:30:45.123456 PM UTC"),
+                    false,
+                    false,
+                    None,
+                    None,
+                )
+                .unwrap(),
             );
         })
     });
@@ -71,8 +81,11 @@ fn bench_parser(c: &mut Criterion) {
             black_box(
                 parser::parse_to_result(
                     black_box("Monday, January 15, 2024 3:30:45.123456 PM EST -05:00"),
-                    false, false, None,
-                ).unwrap(),
+                    false,
+                    false,
+                    None,
+                )
+                .unwrap(),
             );
         })
     });
@@ -97,7 +110,16 @@ fn bench_parser(c: &mut Criterion) {
 
     c.bench_function("parse_ampm", |b| {
         b.iter(|| {
-            black_box(parser::parse(black_box("January 15, 2024 3:30 PM"), false, false, None, None).unwrap());
+            black_box(
+                parser::parse(
+                    black_box("January 15, 2024 3:30 PM"),
+                    false,
+                    false,
+                    None,
+                    None,
+                )
+                .unwrap(),
+            );
         })
     });
 
@@ -203,8 +225,13 @@ fn bench_relativedelta(c: &mut Criterion) {
     c.bench_function("relativedelta_add_complex", |b| {
         let wd = Weekday::new(4, Some(2)).unwrap();
         let delta = RelativeDelta::builder()
-            .years(1).months(2).days(3)
-            .hours(4).minutes(30).seconds(15).microseconds(500_000)
+            .years(1)
+            .months(2)
+            .days(3)
+            .hours(4)
+            .minutes(30)
+            .seconds(15)
+            .microseconds(500_000)
             .weekday(wd)
             .build()
             .unwrap();
@@ -438,8 +465,12 @@ fn bench_rrulestr(c: &mut Criterion) {
             black_box(
                 rrulestr(
                     black_box("DTSTART:20200101T090000\nRRULE:FREQ=DAILY;COUNT=30"),
-                    None, false, false, false,
-                ).unwrap(),
+                    None,
+                    false,
+                    false,
+                    false,
+                )
+                .unwrap(),
             );
         })
     });
@@ -449,8 +480,12 @@ fn bench_rrulestr(c: &mut Criterion) {
             black_box(
                 rrulestr(
                     black_box("DTSTART:20200101T090000\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=52"),
-                    None, false, false, false,
-                ).unwrap(),
+                    None,
+                    false,
+                    false,
+                    false,
+                )
+                .unwrap(),
             );
         })
     });
@@ -481,8 +516,12 @@ fn bench_rrulestr(c: &mut Criterion) {
         b.iter(|| {
             let result = rrulestr(
                 black_box("DTSTART:20200101T090000\nRRULE:FREQ=DAILY;COUNT=100"),
-                None, false, false, false,
-            ).unwrap();
+                None,
+                false,
+                false,
+                false,
+            )
+            .unwrap();
             black_box(result.all());
         })
     });

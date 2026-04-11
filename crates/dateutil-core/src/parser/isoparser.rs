@@ -12,7 +12,8 @@ pub fn isoparse(s: &str) -> Result<NaiveDateTime, ParseError> {
     }
 
     // Split on T or space separator
-    let (date_part, time_part) = if let Some(t_pos) = s.bytes().position(|b| b == b'T' || b == b' ') {
+    let (date_part, time_part) = if let Some(t_pos) = s.bytes().position(|b| b == b'T' || b == b' ')
+    {
         (&s[..t_pos], Some(&s[t_pos + 1..]))
     } else {
         (s, None)
@@ -41,33 +42,37 @@ fn parse_iso_date(s: &str) -> Result<NaiveDate, ParseError> {
             let year = parse_int(&s[0..4])?;
             let month = parse_int(&s[5..7])? as u32;
             let day = parse_int(&s[8..10])? as u32;
-            NaiveDate::from_ymd_opt(year, month, day)
-                .ok_or_else(|| ParseError::ValueError(format!("invalid date: {s}").into_boxed_str()))
+            NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| {
+                ParseError::ValueError(format!("invalid date: {s}").into_boxed_str())
+            })
         }
         // YYYYMMDD
         8 if bytes.iter().all(|b| b.is_ascii_digit()) => {
             let year = parse_int(&s[0..4])?;
             let month = parse_int(&s[4..6])? as u32;
             let day = parse_int(&s[6..8])? as u32;
-            NaiveDate::from_ymd_opt(year, month, day)
-                .ok_or_else(|| ParseError::ValueError(format!("invalid date: {s}").into_boxed_str()))
+            NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| {
+                ParseError::ValueError(format!("invalid date: {s}").into_boxed_str())
+            })
         }
         // YYYY-MM
         7 if bytes[4] == b'-' => {
             let year = parse_int(&s[0..4])?;
             let month = parse_int(&s[5..7])? as u32;
-            NaiveDate::from_ymd_opt(year, month, 1)
-                .ok_or_else(|| ParseError::ValueError(format!("invalid date: {s}").into_boxed_str()))
+            NaiveDate::from_ymd_opt(year, month, 1).ok_or_else(|| {
+                ParseError::ValueError(format!("invalid date: {s}").into_boxed_str())
+            })
         }
         // YYYY
         4 if bytes.iter().all(|b| b.is_ascii_digit()) => {
             let year = parse_int(&s[0..4])?;
-            NaiveDate::from_ymd_opt(year, 1, 1)
-                .ok_or_else(|| ParseError::ValueError(format!("invalid date: {s}").into_boxed_str()))
+            NaiveDate::from_ymd_opt(year, 1, 1).ok_or_else(|| {
+                ParseError::ValueError(format!("invalid date: {s}").into_boxed_str())
+            })
         }
-        _ => Err(ParseError::ValueError(format!(
-            "unrecognized ISO date format: {s}"
-        ).into_boxed_str())),
+        _ => Err(ParseError::ValueError(
+            format!("unrecognized ISO date format: {s}").into_boxed_str(),
+        )),
     }
 }
 
@@ -108,9 +113,9 @@ fn parse_iso_time(s: &str) -> Result<NaiveTime, ParseError> {
         let h = parse_int(&s[0..2])?;
         (h, 0u32, 0u32, 0u32)
     } else {
-        return Err(ParseError::ValueError(format!(
-            "unrecognized ISO time format: {s}"
-        ).into_boxed_str()));
+        return Err(ParseError::ValueError(
+            format!("unrecognized ISO time format: {s}").into_boxed_str(),
+        ));
     };
 
     NaiveTime::from_hms_micro_opt(h as u32, m, s_sec, us)
@@ -169,7 +174,9 @@ fn parse_int(s: &str) -> Result<i32, ParseError> {
         let mut n: i32 = 0;
         for &b in bytes {
             if !b.is_ascii_digit() {
-                return Err(ParseError::ValueError(format!("expected integer: {s}").into_boxed_str()));
+                return Err(ParseError::ValueError(
+                    format!("expected integer: {s}").into_boxed_str(),
+                ));
             }
             n = n * 10 + (b - b'0') as i32;
         }

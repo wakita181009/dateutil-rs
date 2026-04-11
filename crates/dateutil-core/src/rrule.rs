@@ -7,9 +7,9 @@ pub mod set;
 use std::fmt;
 use std::sync::Arc;
 
-use chrono::{Datelike, NaiveDateTime, NaiveTime, Timelike};
 #[cfg(test)]
 use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDateTime, NaiveTime, Timelike};
 use smallvec::SmallVec;
 
 use crate::common::Weekday;
@@ -20,17 +20,29 @@ use crate::error::RRuleError;
 // ---------------------------------------------------------------------------
 
 /// Find the last datetime before `dt` in a sorted slice.
-pub fn search_before(sorted: &[NaiveDateTime], dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
+pub fn search_before(
+    sorted: &[NaiveDateTime],
+    dt: NaiveDateTime,
+    inc: bool,
+) -> Option<NaiveDateTime> {
     let idx = if inc {
         sorted.partition_point(|&x| x <= dt)
     } else {
         sorted.partition_point(|&x| x < dt)
     };
-    if idx > 0 { Some(sorted[idx - 1]) } else { None }
+    if idx > 0 {
+        Some(sorted[idx - 1])
+    } else {
+        None
+    }
 }
 
 /// Find the first datetime after `dt` in a sorted slice.
-pub fn search_after(sorted: &[NaiveDateTime], dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
+pub fn search_after(
+    sorted: &[NaiveDateTime],
+    dt: NaiveDateTime,
+    inc: bool,
+) -> Option<NaiveDateTime> {
     let idx = if inc {
         sorted.partition_point(|&x| x < dt)
     } else {
@@ -81,7 +93,11 @@ pub fn signed_index(data: &[NaiveDateTime], idx: isize) -> Option<NaiveDateTime>
         data.get(idx as usize).copied()
     } else {
         let real = idx + data.len() as isize;
-        if real >= 0 { data.get(real as usize).copied() } else { None }
+        if real >= 0 {
+            data.get(real as usize).copied()
+        } else {
+            None
+        }
     }
 }
 
@@ -674,7 +690,10 @@ impl RRule {
     /// builder can be modified and then `.build()` to create a new rule.
     pub fn to_builder(&self) -> RRuleBuilder {
         let mut b = RRuleBuilder::new(self.freq);
-        b = b.dtstart(self.dtstart).interval(self.interval).wkst(self.wkst);
+        b = b
+            .dtstart(self.dtstart)
+            .interval(self.interval)
+            .wkst(self.wkst);
         if let Some(c) = self.count {
             b = b.count(c);
         }
@@ -920,10 +939,11 @@ impl RRuleBuilder {
                     bymonthday = Some(vec![dtstart.day() as i32]);
                 }
                 Frequency::Weekly => {
-                    byweekday = Some(vec![
-                        Weekday::new(dtstart.weekday().num_days_from_monday() as u8, None)
-                            .expect("weekday from chrono is always valid"),
-                    ]);
+                    byweekday = Some(vec![Weekday::new(
+                        dtstart.weekday().num_days_from_monday() as u8,
+                        None,
+                    )
+                    .expect("weekday from chrono is always valid")]);
                 }
                 _ => {}
             }
@@ -1013,8 +1033,16 @@ impl RRuleBuilder {
             nth.sort();
             nth.dedup();
 
-            let bwd_opt = if plain.is_empty() { None } else { Some(ByList::from_vec(plain)) };
-            let bnwd_opt = if nth.is_empty() { None } else { Some(ByList::from_vec(nth)) };
+            let bwd_opt = if plain.is_empty() {
+                None
+            } else {
+                Some(ByList::from_vec(plain))
+            };
+            let bnwd_opt = if nth.is_empty() {
+                None
+            } else {
+                Some(ByList::from_vec(nth))
+            };
             (bwd_opt, bnwd_opt, Some(ByList::from_vec(bwd)))
         } else {
             (None, None, None)
@@ -1099,23 +1127,39 @@ impl RRuleBuilder {
 
         // Pre-compute presence mask for optional byxxx fields
         let mut by_present = ByPresent::empty();
-        if byweekno.is_some() { by_present |= ByPresent::WEEKNO; }
-        if bynweekday.is_some() { by_present |= ByPresent::NWEEKDAY; }
-        if byeaster.is_some() { by_present |= ByPresent::EASTER; }
-        if byyearday.is_some() { by_present |= ByPresent::YEARDAY; }
+        if byweekno.is_some() {
+            by_present |= ByPresent::WEEKNO;
+        }
+        if bynweekday.is_some() {
+            by_present |= ByPresent::NWEEKDAY;
+        }
+        if byeaster.is_some() {
+            by_present |= ByPresent::EASTER;
+        }
+        if byyearday.is_some() {
+            by_present |= ByPresent::YEARDAY;
+        }
 
         // Pre-compute bitmasks for O(1) filter checks
-        let bymonth_mask = bymonth.as_deref().map_or(0u16, |v| {
-            v.iter().fold(0u16, |acc, &m| acc | (1u16 << m))
-        });
-        let byweekday_mask = byweekday_flat.as_deref().map_or(0u8, |v| {
-            v.iter().fold(0u8, |acc, &w| acc | (1u8 << w))
-        });
+        let bymonth_mask = bymonth
+            .as_deref()
+            .map_or(0u16, |v| v.iter().fold(0u16, |acc, &m| acc | (1u16 << m)));
+        let byweekday_mask = byweekday_flat
+            .as_deref()
+            .map_or(0u8, |v| v.iter().fold(0u8, |acc, &w| acc | (1u8 << w)));
         let bymonthday_mask = bymonthday_pos.iter().fold(0u32, |acc, &d| {
-            if (1..=31).contains(&d) { acc | (1u32 << d as u32) } else { acc }
+            if (1..=31).contains(&d) {
+                acc | (1u32 << d as u32)
+            } else {
+                acc
+            }
         });
         let bynmonthday_mask = bynmonthday.iter().fold(0u32, |acc, &d| {
-            if (-31..=-1).contains(&d) { acc | (1u32 << (-d - 1) as u32) } else { acc }
+            if (-31..=-1).contains(&d) {
+                acc | (1u32 << (-d - 1) as u32)
+            } else {
+                acc
+            }
         });
 
         Ok(RRule {
@@ -1291,7 +1335,12 @@ pub(crate) fn construct_byset(
     Ok(set)
 }
 
-pub(crate) fn mod_distance(value: i64, byxxx: &[u8], base: i64, interval: i64) -> Option<(i64, i64)> {
+pub(crate) fn mod_distance(
+    value: i64,
+    byxxx: &[u8],
+    base: i64,
+    interval: i64,
+) -> Option<(i64, i64)> {
     let mut acc = 0i64;
     let mut val = value;
     for _ in 1..=base {
@@ -1317,7 +1366,13 @@ pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
     match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
-        2 => if is_leap_year(year) { 29 } else { 28 },
+        2 => {
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        }
         _ => 0,
     }
 }
@@ -1336,7 +1391,10 @@ mod tests {
     #[test]
     fn test_frequency_from_name() {
         assert_eq!(Frequency::from_name("YEARLY").unwrap(), Frequency::Yearly);
-        assert_eq!(Frequency::from_name("SECONDLY").unwrap(), Frequency::Secondly);
+        assert_eq!(
+            Frequency::from_name("SECONDLY").unwrap(),
+            Frequency::Secondly
+        );
         assert!(Frequency::from_name("INVALID").is_err());
     }
 
@@ -1521,10 +1579,22 @@ mod tests {
             .count(10)
             .build()
             .unwrap();
-        assert_eq!(rule.after(dt(2020, 1, 3, 0, 0, 0), false), Some(dt(2020, 1, 4, 0, 0, 0)));
-        assert_eq!(rule.after(dt(2020, 1, 3, 0, 0, 0), true), Some(dt(2020, 1, 3, 0, 0, 0)));
-        assert_eq!(rule.before(dt(2020, 1, 3, 0, 0, 0), false), Some(dt(2020, 1, 2, 0, 0, 0)));
-        assert_eq!(rule.before(dt(2020, 1, 3, 0, 0, 0), true), Some(dt(2020, 1, 3, 0, 0, 0)));
+        assert_eq!(
+            rule.after(dt(2020, 1, 3, 0, 0, 0), false),
+            Some(dt(2020, 1, 4, 0, 0, 0))
+        );
+        assert_eq!(
+            rule.after(dt(2020, 1, 3, 0, 0, 0), true),
+            Some(dt(2020, 1, 3, 0, 0, 0))
+        );
+        assert_eq!(
+            rule.before(dt(2020, 1, 3, 0, 0, 0), false),
+            Some(dt(2020, 1, 2, 0, 0, 0))
+        );
+        assert_eq!(
+            rule.before(dt(2020, 1, 3, 0, 0, 0), true),
+            Some(dt(2020, 1, 3, 0, 0, 0))
+        );
     }
 
     #[test]
@@ -1804,12 +1874,12 @@ mod tests {
         assert_eq!(
             results,
             vec![
-                dt(1997, 3, 28, 0, 0, 0),  // Good Friday 1997
-                dt(1997, 3, 31, 0, 0, 0),  // Easter Monday 1997
-                dt(1998, 4, 10, 0, 0, 0),  // Good Friday 1998
-                dt(1998, 4, 13, 0, 0, 0),  // Easter Monday 1998
-                dt(1999, 4, 2, 0, 0, 0),   // Good Friday 1999
-                dt(1999, 4, 5, 0, 0, 0),   // Easter Monday 1999
+                dt(1997, 3, 28, 0, 0, 0), // Good Friday 1997
+                dt(1997, 3, 31, 0, 0, 0), // Easter Monday 1997
+                dt(1998, 4, 10, 0, 0, 0), // Good Friday 1998
+                dt(1998, 4, 13, 0, 0, 0), // Easter Monday 1998
+                dt(1999, 4, 2, 0, 0, 0),  // Good Friday 1999
+                dt(1999, 4, 5, 0, 0, 0),  // Easter Monday 1999
             ]
         );
     }
@@ -1820,7 +1890,7 @@ mod tests {
 
     #[test]
     fn test_weekly_byweekday() {
-        use crate::common::{TU, TH};
+        use crate::common::{TH, TU};
         let rule = RRuleBuilder::new(Frequency::Weekly)
             .dtstart(dt(1997, 9, 2, 9, 0, 0))
             .count(4)
@@ -2194,8 +2264,8 @@ mod tests {
             let wd = r.weekday().num_days_from_monday();
             assert!(wd == 1 || wd == 3, "Expected Tue/Thu");
         }
-        assert_eq!(results[0], dt(1997, 9, 2, 9, 0, 0));  // Tue
-        assert_eq!(results[1], dt(1997, 9, 4, 9, 0, 0));  // Thu
+        assert_eq!(results[0], dt(1997, 9, 2, 9, 0, 0)); // Tue
+        assert_eq!(results[1], dt(1997, 9, 4, 9, 0, 0)); // Thu
     }
 
     #[test]
@@ -2646,10 +2716,7 @@ mod tests {
         let results = rule.between(dt(2020, 1, 3, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0), false);
         assert_eq!(
             results,
-            vec![
-                dt(2020, 1, 4, 0, 0, 0),
-                dt(2020, 1, 5, 0, 0, 0),
-            ]
+            vec![dt(2020, 1, 4, 0, 0, 0), dt(2020, 1, 5, 0, 0, 0),]
         );
     }
 
@@ -2719,7 +2786,7 @@ mod tests {
 
     #[test]
     fn test_display_with_byday_nth() {
-        use crate::common::{MO, FR};
+        use crate::common::{FR, MO};
         let rule = RRuleBuilder::new(Frequency::Monthly)
             .dtstart(dt(2020, 1, 1, 0, 0, 0))
             .count(3)
@@ -3209,9 +3276,8 @@ mod tests {
         let original_results = original.all();
         let display_str = original.to_string();
 
-        let reparsed = crate::rrule::parse::rrulestr(
-            &display_str, None, false, false, true,
-        ).unwrap();
+        let reparsed =
+            crate::rrule::parse::rrulestr(&display_str, None, false, false, true).unwrap();
         let reparsed_results = reparsed.all();
         assert_eq!(original_results, reparsed_results);
     }
@@ -3228,16 +3294,15 @@ mod tests {
         let original_results = original.all();
         let display_str = original.to_string();
 
-        let reparsed = crate::rrule::parse::rrulestr(
-            &display_str, None, false, false, true,
-        ).unwrap();
+        let reparsed =
+            crate::rrule::parse::rrulestr(&display_str, None, false, false, true).unwrap();
         let reparsed_results = reparsed.all();
         assert_eq!(original_results, reparsed_results);
     }
 
     #[test]
     fn test_display_roundtrip_monthly_nth_weekday() {
-        use crate::common::{MO, FR};
+        use crate::common::{FR, MO};
         let original = RRuleBuilder::new(Frequency::Monthly)
             .dtstart(dt(1997, 9, 2, 9, 0, 0))
             .count(3)
@@ -3247,9 +3312,8 @@ mod tests {
         let original_results = original.all();
         let display_str = original.to_string();
 
-        let reparsed = crate::rrule::parse::rrulestr(
-            &display_str, None, false, false, true,
-        ).unwrap();
+        let reparsed =
+            crate::rrule::parse::rrulestr(&display_str, None, false, false, true).unwrap();
         let reparsed_results = reparsed.all();
         assert_eq!(original_results, reparsed_results);
     }
@@ -3267,9 +3331,8 @@ mod tests {
         let original_results = original.all();
         let display_str = original.to_string();
 
-        let reparsed = crate::rrule::parse::rrulestr(
-            &display_str, None, false, false, true,
-        ).unwrap();
+        let reparsed =
+            crate::rrule::parse::rrulestr(&display_str, None, false, false, true).unwrap();
         let reparsed_results = reparsed.all();
         assert_eq!(original_results, reparsed_results);
     }
@@ -3353,10 +3416,7 @@ mod tests {
             dt(2020, 4, 1, 0, 0, 0),
             false,
         );
-        assert_eq!(
-            result,
-            &[dt(2020, 2, 1, 0, 0, 0), dt(2020, 3, 1, 0, 0, 0)]
-        );
+        assert_eq!(result, &[dt(2020, 2, 1, 0, 0, 0), dt(2020, 3, 1, 0, 0, 0)]);
         // Inclusive
         let result = search_between(
             &dates,
@@ -3518,7 +3578,7 @@ mod tests {
 
     #[test]
     fn test_rrule_byweekday_getter() {
-        use crate::common::{MO, FR};
+        use crate::common::{FR, MO};
         let rule = RRuleBuilder::new(Frequency::Weekly)
             .dtstart(dt(2020, 1, 1, 0, 0, 0))
             .count(5)

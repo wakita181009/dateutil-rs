@@ -4,7 +4,7 @@ use super::conv::{make_py_tz, make_py_utc, ndt_to_py_datetime};
 use dateutil::parser;
 use dateutil::parser::ParserInfo;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTzInfo, PyType};
+use pyo3::types::{PyDict, PyType, PyTzInfo};
 
 // ---------------------------------------------------------------------------
 // parserinfo — Rust pyclass (internal base)
@@ -20,7 +20,9 @@ fn convert(attr_name: &str, list: &Bound<'_, pyo3::PyAny>) -> PyResult<HashMap<S
             map.insert(s.to_lowercase(), i);
         } else {
             let parts: Vec<String> = item.extract().map_err(|_| {
-                let type_name = item.get_type().qualname()
+                let type_name = item
+                    .get_type()
+                    .qualname()
                     .map(|n| n.to_string())
                     .unwrap_or_else(|_| "unknown".into());
                 pyo3::exceptions::PyTypeError::new_err(format!(
@@ -57,10 +59,7 @@ fn build_parser_info(cls: &Bound<'_, PyType>) -> PyResult<ParserInfo> {
     let jump_map = convert("JUMP", &cls.getattr("JUMP")?)?;
     let weekdays = convert("WEEKDAYS", &cls.getattr("WEEKDAYS")?)?;
     let months_raw = convert("MONTHS", &cls.getattr("MONTHS")?)?;
-    let months = months_raw
-        .into_iter()
-        .map(|(k, v)| (k, v + 1))
-        .collect();
+    let months = months_raw.into_iter().map(|(k, v)| (k, v + 1)).collect();
     let hms = convert("HMS", &cls.getattr("HMS")?)?;
     let ampm = convert("AMPM", &cls.getattr("AMPM")?)?;
     let utczone_map = convert("UTCZONE", &cls.getattr("UTCZONE")?)?;
@@ -105,8 +104,8 @@ impl PyParserInfo {
     #[allow(non_snake_case)]
     fn JUMP() -> Vec<&'static str> {
         vec![
-            " ", ".", ",", ";", "-", "/", "'", "at", "on", "and", "ad",
-            "m", "t", "of", "st", "nd", "rd", "th",
+            " ", ".", ",", ";", "-", "/", "'", "at", "on", "and", "ad", "m", "t", "of", "st", "nd",
+            "rd", "th",
         ]
     }
 
@@ -240,8 +239,7 @@ fn parse_py<'py>(
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     let now = chrono::Local::now().naive_local();
-    let default_dt =
-        default.unwrap_or_else(|| now.date().and_hms_opt(0, 0, 0).unwrap());
+    let default_dt = default.unwrap_or_else(|| now.date().and_hms_opt(0, 0, 0).unwrap());
     let ndt = parser::build_naive(&res, default_dt)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
@@ -324,8 +322,7 @@ fn parse_to_dict_py<'py>(
 #[pyfunction]
 #[pyo3(name = "isoparse")]
 fn isoparse_py(dt_str: &str) -> PyResult<chrono::NaiveDateTime> {
-    parser::isoparse(dt_str)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    parser::isoparse(dt_str).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -3,9 +3,7 @@ use dateutil::tz::{self, TimeZone, TzFile, TzLocal, TzOffset, TzOps};
 use pyo3::prelude::*;
 use pyo3::types::{PyDateTime, PyDelta, PyTzInfo};
 
-use super::conv::{
-    extract_ndt, extract_ndt_fold, ndt_to_py_datetime_with_fold, secs_to_pydelta,
-};
+use super::conv::{extract_ndt, extract_ndt_fold, ndt_to_py_datetime_with_fold, secs_to_pydelta};
 
 // ---------------------------------------------------------------------------
 // PyTzUtc — extends datetime.tzinfo
