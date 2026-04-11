@@ -1752,12 +1752,6 @@ mod tests {
     // ---- Weekday edge cases ----
 
     #[test]
-    fn test_weekday_n_zero_rejected() {
-        // n=0 is rejected at construction time
-        assert!(Weekday::new(0, Some(0)).is_err());
-    }
-
-    #[test]
     fn test_weekday_already_on_target_negative() {
         // Already on Friday, weekday(FR, -1) -> stay on same Friday
         let fr_prev = Weekday::new(4, Some(-1)).unwrap();

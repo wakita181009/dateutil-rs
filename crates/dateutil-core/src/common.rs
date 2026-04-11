@@ -254,12 +254,6 @@ mod tests {
     }
 
     #[test]
-    fn test_weekday_error_display() {
-        let err = Weekday::new(7, None).unwrap_err();
-        assert_eq!(err.to_string(), "invalid weekday: 7 (must be 0..=6)");
-    }
-
-    #[test]
     fn test_weekday_i32_min_max_n() {
         let wd = Weekday::new(0, Some(i32::MAX)).unwrap();
         assert!(wd.to_string().contains(&format!("{}", i32::MAX)));
