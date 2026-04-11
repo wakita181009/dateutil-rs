@@ -7,7 +7,7 @@ description = "Fast date utility library — parser, relativedelta, rrule, timez
 repository = "https://github.com/wakita181009/dateutil-rs"
 keywords = ["date", "datetime", "parser", "rrule", "timezone"]
 categories = ["date-and-time", "parser-implementations"]
-readme = "../../README.md"
+readme = "README.md"
 
 [lib]
 name = "dateutil"
