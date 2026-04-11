@@ -5,7 +5,8 @@ use super::conv::{extract_i32_list, extract_u8_list, py_any_to_naive_datetime};
 use dateutil::common::Weekday;
 use dateutil::rrule::iter::RRuleIter as CoreRRuleIter;
 use dateutil::rrule::{
-    search_after, search_before, search_between,
+    search_after, search_before, search_between, search_xafter,
+    signed_index, slice_sorted,
     Frequency, Recurrence, RRule, RRuleBuilder,
 };
 use dateutil::rrule::parse::{rrulestr as core_rrulestr, RRuleStrResult};
@@ -412,18 +413,9 @@ impl PyRRule {
         inc: bool,
     ) -> Vec<chrono::NaiveDateTime> {
         if let Some(cached) = self.get_cache() {
-            let start = if inc {
-                cached.partition_point(|&x| x < dt)
-            } else {
-                cached.partition_point(|&x| x <= dt)
-            };
-            return cached[start..].iter().copied().take(count).collect();
+            return search_xafter(cached, dt, count, inc);
         }
-        self.inner
-            .iter()
-            .filter(move |&i| if inc { i >= dt } else { i > dt })
-            .take(count)
-            .collect()
+        self.inner.xafter(dt, count, inc)
     }
 
     /// Return a new rrule with specified parameters replaced.
@@ -467,93 +459,44 @@ impl PyRRule {
         bysecond: Option<Bound<'_, PyAny>>,
         cache: Option<bool>,
     ) -> PyResult<Self> {
-        let f = if let Some(fv) = freq {
-            Frequency::try_from(fv)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
-        } else {
-            self.inner.freq()
-        };
-        let mut builder = RRuleBuilder::new(f);
+        let mut builder = self.inner.to_builder();
 
-        builder = builder.dtstart(if let Some(obj) = dtstart {
-            py_any_to_naive_datetime(obj)?
-        } else {
-            self.inner.dtstart()
-        });
-
-        builder = builder.interval(interval.unwrap_or_else(|| self.inner.interval()));
-
-        let wkst_val = if let Some(ref w) = wkst {
-            if let Ok(wd) = w.extract::<PyWeekday>() {
+        if let Some(fv) = freq {
+            builder = builder.freq(
+                Frequency::try_from(fv)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            );
+        }
+        if let Some(obj) = dtstart {
+            builder = builder.dtstart(py_any_to_naive_datetime(obj)?);
+        }
+        if let Some(v) = interval {
+            builder = builder.interval(v);
+        }
+        if let Some(ref w) = wkst {
+            let val = if let Ok(wd) = w.extract::<PyWeekday>() {
                 wd.weekday()
             } else {
                 w.extract::<u8>()?
-            }
-        } else {
-            self.inner.wkst()
-        };
-        builder = builder.wkst(wkst_val);
-
-        if let Some(c) = count.or(self.inner.count()) {
+            };
+            builder = builder.wkst(val);
+        }
+        if let Some(c) = count {
             builder = builder.count(c);
         }
         if let Some(obj) = until {
             builder = builder.until(py_any_to_naive_datetime(obj)?);
-        } else if let Some(u) = self.inner.until() {
-            builder = builder.until(u);
         }
-
-        // by* fields: use provided override, else copy from existing rule
-        if let Some(ref v) = bysetpos {
-            builder = builder.bysetpos(extract_i32_list(v)?);
-        } else if let Some(v) = self.inner.bysetpos() {
-            builder = builder.bysetpos(v.to_vec());
-        }
-        if let Some(ref v) = bymonth {
-            builder = builder.bymonth(extract_u8_list(v)?);
-        } else if let Some(v) = self.inner.bymonth() {
-            builder = builder.bymonth(v.to_vec());
-        }
-        if let Some(ref v) = bymonthday {
-            builder = builder.bymonthday(extract_i32_list(v)?);
-        } else if !self.inner.bymonthday().is_empty() {
-            builder = builder.bymonthday(self.inner.bymonthday().to_vec());
-        }
-        if let Some(ref v) = byyearday {
-            builder = builder.byyearday(extract_i32_list(v)?);
-        } else if let Some(v) = self.inner.byyearday() {
-            builder = builder.byyearday(v.to_vec());
-        }
-        if let Some(ref v) = byeaster {
-            builder = builder.byeaster(extract_i32_list(v)?);
-        } else if let Some(v) = self.inner.byeaster() {
-            builder = builder.byeaster(v.to_vec());
-        }
-        if let Some(ref v) = byweekno {
-            builder = builder.byweekno(extract_i32_list(v)?);
-        } else if let Some(v) = self.inner.byweekno() {
-            builder = builder.byweekno(v.to_vec());
-        }
-        if let Some(ref v) = byweekday {
-            builder = builder.byweekday(extract_byweekday_any(v)?);
-        } else if let Some(v) = self.inner.byweekday() {
-            builder = builder.byweekday(v.to_vec());
-        }
-        if let Some(ref v) = byhour {
-            builder = builder.byhour(extract_u8_list(v)?);
-        } else if let Some(v) = self.inner.byhour() {
-            builder = builder.byhour(v.to_vec());
-        }
-        if let Some(ref v) = byminute {
-            builder = builder.byminute(extract_u8_list(v)?);
-        } else if let Some(v) = self.inner.byminute() {
-            builder = builder.byminute(v.to_vec());
-        }
-        if let Some(ref v) = bysecond {
-            builder = builder.bysecond(extract_u8_list(v)?);
-        } else if let Some(v) = self.inner.bysecond() {
-            builder = builder.bysecond(v.to_vec());
-        }
+        if let Some(ref v) = bysetpos { builder = builder.bysetpos(extract_i32_list(v)?); }
+        if let Some(ref v) = bymonth { builder = builder.bymonth(extract_u8_list(v)?); }
+        if let Some(ref v) = bymonthday { builder = builder.bymonthday(extract_i32_list(v)?); }
+        if let Some(ref v) = byyearday { builder = builder.byyearday(extract_i32_list(v)?); }
+        if let Some(ref v) = byeaster { builder = builder.byeaster(extract_i32_list(v)?); }
+        if let Some(ref v) = byweekno { builder = builder.byweekno(extract_i32_list(v)?); }
+        if let Some(ref v) = byweekday { builder = builder.byweekday(extract_byweekday_any(v)?); }
+        if let Some(ref v) = byhour { builder = builder.byhour(extract_u8_list(v)?); }
+        if let Some(ref v) = byminute { builder = builder.byminute(extract_u8_list(v)?); }
+        if let Some(ref v) = bysecond { builder = builder.bysecond(extract_u8_list(v)?); }
 
         let inner = builder
             .build()
@@ -570,74 +513,30 @@ impl PyRRule {
 
 impl PyRRule {
     fn getitem_int(&self, py: Python<'_>, idx: isize) -> PyResult<Py<PyAny>> {
-        if idx >= 0 {
-            if let Some(cached) = self.get_cache() {
-                return cached
-                    .get(idx as usize)
-                    .copied()
-                    .ok_or_else(|| {
-                        pyo3::exceptions::PyIndexError::new_err("rrule index out of range")
-                    })
-                    .and_then(|dt| Ok(dt.into_pyobject(py)?.into_any().unbind()));
-            }
-            self.inner
-                .nth(idx as usize)
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyIndexError::new_err("rrule index out of range")
-                })
-                .and_then(|dt| Ok(dt.into_pyobject(py)?.into_any().unbind()))
+        let dt = if let Some(cached) = self.get_cache() {
+            signed_index(cached, idx)
         } else {
-            if let Some(cached) = self.get_cache() {
-                let len = cached.len() as isize;
-                let real = idx + len;
-                if real < 0 {
-                    return Err(pyo3::exceptions::PyIndexError::new_err(
-                        "rrule index out of range",
-                    ));
-                }
-                return Ok(cached[real as usize].into_pyobject(py)?.into_any().unbind());
-            }
-            let neg = (-idx) as usize - 1; // idx=-1 → neg=0 (last element)
-            if !self.inner.is_finite() {
+            if idx < 0 && !self.inner.is_finite() {
                 return Err(pyo3::exceptions::PyValueError::new_err(
                     "negative index on infinite recurrence",
                 ));
             }
-            self.inner
-                .nth_back(neg)
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyIndexError::new_err("rrule index out of range")
-                })
-                .and_then(|dt| Ok(dt.into_pyobject(py)?.into_any().unbind()))
-        }
+            self.inner.signed_nth(idx)
+        };
+        dt.ok_or_else(|| pyo3::exceptions::PyIndexError::new_err("rrule index out of range"))
+            .and_then(|dt| Ok(dt.into_pyobject(py)?.into_any().unbind()))
     }
 
     fn getitem_slice(&self, py: Python<'_>, slice: &Bound<'_, PySlice>) -> PyResult<Py<PyAny>> {
         if let Some(cached) = self.get_cache() {
             let indices = slice.indices(cached.len() as isize)?;
-            let mut result = Vec::new();
-            let mut i = indices.start;
-            if indices.step > 0 {
-                while i < indices.stop {
-                    result.push(cached[i as usize]);
-                    i += indices.step;
-                }
-            } else {
-                while i > indices.stop {
-                    result.push(cached[i as usize]);
-                    i += indices.step;
-                }
-            }
+            let result = slice_sorted(cached, indices.start, indices.stop, indices.step);
             return Ok(result.into_pyobject(py)?.into_any().unbind());
         }
 
-        let start_obj = slice.getattr("start")?;
-        let stop_obj = slice.getattr("stop")?;
-        let step_obj = slice.getattr("step")?;
-
-        let start: Option<isize> = start_obj.extract().ok();
-        let stop: Option<isize> = stop_obj.extract().ok();
-        let step: Option<isize> = step_obj.extract().ok();
+        let start: Option<isize> = slice.getattr("start")?.extract().ok();
+        let stop: Option<isize> = slice.getattr("stop")?.extract().ok();
+        let step: Option<isize> = slice.getattr("step")?.extract().ok();
         let step_val = step.unwrap_or(1);
 
         if step_val == 0 {
@@ -654,23 +553,10 @@ impl PyRRule {
             }
             let all = self.inner.all();
             let indices = slice.indices(all.len() as isize)?;
-            let mut result = Vec::new();
-            let mut i = indices.start;
-            if indices.step > 0 {
-                while i < indices.stop {
-                    result.push(all[i as usize]);
-                    i += indices.step;
-                }
-            } else {
-                while i > indices.stop {
-                    result.push(all[i as usize]);
-                    i += indices.step;
-                }
-            }
+            let result = slice_sorted(&all, indices.start, indices.stop, indices.step);
             return Ok(result.into_pyobject(py)?.into_any().unbind());
         }
 
-        // Positive step with non-negative start/stop: delegate to core take_slice
         let s = start.unwrap_or(0) as usize;
         let e = stop.map(|v| v as usize).unwrap_or(usize::MAX);
         let step_u = step_val as usize;
@@ -884,74 +770,30 @@ impl PyRRuleSet {
 
 impl PyRRuleSet {
     fn getitem_int(&self, py: Python<'_>, idx: isize) -> PyResult<Py<PyAny>> {
-        if idx >= 0 {
-            if let Some(cached) = self.get_or_populate_cache() {
-                return cached
-                    .get(idx as usize)
-                    .copied()
-                    .ok_or_else(|| {
-                        pyo3::exceptions::PyIndexError::new_err("rruleset index out of range")
-                    })
-                    .and_then(|dt| Ok(dt.into_pyobject(py)?.into_any().unbind()));
-            }
-            self.inner
-                .nth(idx as usize)
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyIndexError::new_err("rruleset index out of range")
-                })
-                .and_then(|dt| Ok(dt.into_pyobject(py)?.into_any().unbind()))
+        let dt = if let Some(cached) = self.get_or_populate_cache() {
+            signed_index(&cached, idx)
         } else {
-            if let Some(cached) = self.get_or_populate_cache() {
-                let len = cached.len() as isize;
-                let real = idx + len;
-                if real < 0 {
-                    return Err(pyo3::exceptions::PyIndexError::new_err(
-                        "rruleset index out of range",
-                    ));
-                }
-                return Ok(cached[real as usize].into_pyobject(py)?.into_any().unbind());
-            }
-            let neg = (-idx) as usize - 1;
-            if !self.inner.is_finite() {
+            if idx < 0 && !self.inner.is_finite() {
                 return Err(pyo3::exceptions::PyValueError::new_err(
                     "negative index on infinite recurrence",
                 ));
             }
-            self.inner
-                .nth_back(neg)
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyIndexError::new_err("rruleset index out of range")
-                })
-                .and_then(|dt| Ok(dt.into_pyobject(py)?.into_any().unbind()))
-        }
+            self.inner.signed_nth(idx)
+        };
+        dt.ok_or_else(|| pyo3::exceptions::PyIndexError::new_err("rruleset index out of range"))
+            .and_then(|dt| Ok(dt.into_pyobject(py)?.into_any().unbind()))
     }
 
     fn getitem_slice(&self, py: Python<'_>, slice: &Bound<'_, PySlice>) -> PyResult<Py<PyAny>> {
         if let Some(cached) = self.get_or_populate_cache() {
             let indices = slice.indices(cached.len() as isize)?;
-            let mut result = Vec::new();
-            let mut i = indices.start;
-            if indices.step > 0 {
-                while i < indices.stop {
-                    result.push(cached[i as usize]);
-                    i += indices.step;
-                }
-            } else {
-                while i > indices.stop {
-                    result.push(cached[i as usize]);
-                    i += indices.step;
-                }
-            }
+            let result = slice_sorted(&cached, indices.start, indices.stop, indices.step);
             return Ok(result.into_pyobject(py)?.into_any().unbind());
         }
 
-        let start_obj = slice.getattr("start")?;
-        let stop_obj = slice.getattr("stop")?;
-        let step_obj = slice.getattr("step")?;
-
-        let start: Option<isize> = start_obj.extract().ok();
-        let stop: Option<isize> = stop_obj.extract().ok();
-        let step: Option<isize> = step_obj.extract().ok();
+        let start: Option<isize> = slice.getattr("start")?.extract().ok();
+        let stop: Option<isize> = slice.getattr("stop")?.extract().ok();
+        let step: Option<isize> = slice.getattr("step")?.extract().ok();
         let step_val = step.unwrap_or(1);
 
         if step_val == 0 {
@@ -968,23 +810,10 @@ impl PyRRuleSet {
             }
             let all = self.inner.all();
             let indices = slice.indices(all.len() as isize)?;
-            let mut result = Vec::new();
-            let mut i = indices.start;
-            if indices.step > 0 {
-                while i < indices.stop {
-                    result.push(all[i as usize]);
-                    i += indices.step;
-                }
-            } else {
-                while i > indices.stop {
-                    result.push(all[i as usize]);
-                    i += indices.step;
-                }
-            }
+            let result = slice_sorted(&all, indices.start, indices.stop, indices.step);
             return Ok(result.into_pyobject(py)?.into_any().unbind());
         }
 
-        // Positive step with non-negative start/stop: delegate to core take_slice
         let s = start.unwrap_or(0) as usize;
         let e = stop.map(|v| v as usize).unwrap_or(usize::MAX);
         let step_u = step_val as usize;

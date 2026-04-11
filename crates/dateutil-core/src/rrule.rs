@@ -59,6 +59,59 @@ pub fn search_between(
     &sorted[start..end]
 }
 
+/// Find the first `count` datetimes after `dt` in a sorted slice.
+pub fn search_xafter(
+    sorted: &[NaiveDateTime],
+    dt: NaiveDateTime,
+    count: usize,
+    inc: bool,
+) -> Vec<NaiveDateTime> {
+    let start = if inc {
+        sorted.partition_point(|&x| x < dt)
+    } else {
+        sorted.partition_point(|&x| x <= dt)
+    };
+    sorted[start..].iter().copied().take(count).collect()
+}
+
+/// Access a sorted datetime slice with a signed index (negative counts from the end).
+#[inline]
+pub fn signed_index(data: &[NaiveDateTime], idx: isize) -> Option<NaiveDateTime> {
+    if idx >= 0 {
+        data.get(idx as usize).copied()
+    } else {
+        let real = idx + data.len() as isize;
+        if real >= 0 { data.get(real as usize).copied() } else { None }
+    }
+}
+
+/// Apply pre-normalized slice indices to a sorted datetime slice.
+///
+/// `start`, `stop`, and `step` should already be normalized (as returned by
+/// Python's `slice.indices(len)` or equivalent). `step` must not be zero.
+pub fn slice_sorted(
+    data: &[NaiveDateTime],
+    start: isize,
+    stop: isize,
+    step: isize,
+) -> Vec<NaiveDateTime> {
+    debug_assert!(step != 0);
+    let mut result = Vec::new();
+    let mut i = start;
+    if step > 0 {
+        while i < stop {
+            result.push(data[i as usize]);
+            i += step;
+        }
+    } else {
+        while i > stop {
+            result.push(data[i as usize]);
+            i += step;
+        }
+    }
+    result
+}
+
 // ---------------------------------------------------------------------------
 // Recurrence trait — shared before/after/between logic
 // ---------------------------------------------------------------------------
@@ -118,6 +171,14 @@ pub trait Recurrence {
         result
     }
 
+    /// Return the first `count` occurrences after `dt`.
+    fn xafter(&self, dt: NaiveDateTime, count: usize, inc: bool) -> Vec<NaiveDateTime> {
+        self.iter()
+            .filter(move |&i| if inc { i >= dt } else { i > dt })
+            .take(count)
+            .collect()
+    }
+
     /// Check if a datetime is produced by this recurrence.
     fn contains(&self, dt: NaiveDateTime) -> bool {
         self.after(dt, true).is_some_and(|found| found == dt)
@@ -152,6 +213,19 @@ pub trait Recurrence {
         }
         let all = self.all();
         all.len().checked_sub(n + 1).map(|i| all[i])
+    }
+
+    /// Return the occurrence at a signed index (negative counts from the end).
+    ///
+    /// Returns `None` if the index is out of range or if a negative index is
+    /// used on an infinite recurrence.
+    fn signed_nth(&self, idx: isize) -> Option<NaiveDateTime> {
+        if idx >= 0 {
+            self.nth(idx as usize)
+        } else {
+            let neg = (-idx) as usize - 1;
+            self.nth_back(neg)
+        }
     }
 
     /// Collect occurrences at indices `start..stop` with the given `step`.
@@ -593,6 +667,52 @@ impl RRule {
     pub fn bysecond(&self) -> Option<&[u8]> {
         self.bysecond.as_deref()
     }
+
+    /// Convert this rule back into a builder for modification.
+    ///
+    /// All fields (including derived defaults) are preserved. The returned
+    /// builder can be modified and then `.build()` to create a new rule.
+    pub fn to_builder(&self) -> RRuleBuilder {
+        let mut b = RRuleBuilder::new(self.freq);
+        b = b.dtstart(self.dtstart).interval(self.interval).wkst(self.wkst);
+        if let Some(c) = self.count {
+            b = b.count(c);
+        }
+        if let Some(u) = self.until {
+            b = b.until(u);
+        }
+        if let Some(ref v) = self.bysetpos {
+            b = b.bysetpos(v.to_vec());
+        }
+        if let Some(ref v) = self.bymonth {
+            b = b.bymonth(v.to_vec());
+        }
+        if !self.bymonthday.is_empty() {
+            b = b.bymonthday(self.bymonthday.to_vec());
+        }
+        if let Some(ref v) = self.byyearday {
+            b = b.byyearday(v.values.to_vec());
+        }
+        if let Some(ref v) = self.byeaster {
+            b = b.byeaster(v.to_vec());
+        }
+        if let Some(ref v) = self.byweekno {
+            b = b.byweekno(v.to_vec());
+        }
+        if let Some(ref v) = self.orig_byweekday {
+            b = b.byweekday(v.to_vec());
+        }
+        if let Some(ref v) = self.byhour {
+            b = b.byhour(v.to_vec());
+        }
+        if let Some(ref v) = self.byminute {
+            b = b.byminute(v.to_vec());
+        }
+        if let Some(ref v) = self.bysecond {
+            b = b.bysecond(v.to_vec());
+        }
+        b
+    }
 }
 
 impl Recurrence for RRule {
@@ -679,6 +799,10 @@ impl RRuleBuilder {
         }
     }
 
+    pub fn freq(mut self, val: Frequency) -> Self {
+        self.freq = val;
+        self
+    }
     pub fn dtstart(mut self, dt: NaiveDateTime) -> Self {
         self.dtstart = Some(dt);
         self
