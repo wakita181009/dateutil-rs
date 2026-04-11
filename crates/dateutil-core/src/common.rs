@@ -126,6 +126,17 @@ pub(crate) fn days_in_month(year: i32, month: u32) -> u32 {
     }
 }
 
+/// Create a `NaiveDateTime` from year, month, day, hour, minute, second.
+///
+/// Panics on invalid inputs — intended for test code only.
+#[cfg(test)]
+pub(crate) fn dt(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) -> chrono::NaiveDateTime {
+    chrono::NaiveDate::from_ymd_opt(y, m, d)
+        .unwrap()
+        .and_hms_opt(h, mi, s)
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

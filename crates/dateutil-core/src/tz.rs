@@ -376,14 +376,7 @@ pub fn resolve_imaginary(dt: NaiveDateTime, tz: &impl TzOps) -> NaiveDateTime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
-
-    fn dt(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(y, m, d)
-            .unwrap()
-            .and_hms_opt(h, mi, s)
-            .unwrap()
-    }
+    use crate::common::dt;
 
     // -----------------------------------------------------------------------
     // TimeZone enum dispatch

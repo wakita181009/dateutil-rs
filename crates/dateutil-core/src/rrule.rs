@@ -7,8 +7,6 @@ pub mod set;
 use std::fmt;
 use std::sync::Arc;
 
-#[cfg(test)]
-use chrono::NaiveDate;
 use chrono::{Datelike, NaiveDateTime, NaiveTime, Timelike};
 use smallvec::SmallVec;
 
@@ -1359,13 +1357,7 @@ pub(crate) fn mod_distance(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn dt(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(y, m, d)
-            .unwrap()
-            .and_hms_opt(h, mi, s)
-            .unwrap()
-    }
+    use crate::common::dt;
 
     #[test]
     fn test_frequency_from_name() {
