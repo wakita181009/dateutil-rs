@@ -1,7 +1,7 @@
-use dateutil_core::common;
+use dateutil::common;
 use pyo3::prelude::*;
 
-/// Python wrapper for dateutil_core::common::Weekday.
+/// Python wrapper for dateutil::common::Weekday.
 #[pyclass(name = "weekday", frozen, from_py_object)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PyWeekday {

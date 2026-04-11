@@ -1,4 +1,4 @@
-use dateutil_core::easter::{self, EasterMethod};
+use dateutil::easter::{self, EasterMethod};
 use pyo3::prelude::*;
 
 /// Python constant values matching python-dateutil convention.

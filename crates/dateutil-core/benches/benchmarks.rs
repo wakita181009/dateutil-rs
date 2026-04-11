@@ -1,14 +1,14 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 use chrono::NaiveDate;
-use dateutil_core::common::Weekday;
-use dateutil_core::easter::{easter, EasterMethod};
-use dateutil_core::parser;
-use dateutil_core::parser::tokenizer;
-use dateutil_core::relativedelta::RelativeDelta;
-use dateutil_core::rrule::{Frequency, Recurrence, RRuleBuilder};
-use dateutil_core::rrule::parse::rrulestr;
-use dateutil_core::rrule::set::RRuleSet;
+use dateutil::common::Weekday;
+use dateutil::easter::{easter, EasterMethod};
+use dateutil::parser;
+use dateutil::parser::tokenizer;
+use dateutil::relativedelta::RelativeDelta;
+use dateutil::rrule::{Frequency, Recurrence, RRuleBuilder};
+use dateutil::rrule::parse::rrulestr;
+use dateutil::rrule::set::RRuleSet;
 
 fn bench_tokenizer(c: &mut Criterion) {
     c.bench_function("tokenize_simple_date", |b| {

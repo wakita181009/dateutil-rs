@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use dateutil_core::tz::{self, TimeZone, TzFile, TzLocal, TzOffset, TzOps};
+use dateutil::tz::{self, TimeZone, TzFile, TzLocal, TzOffset, TzOps};
 use pyo3::prelude::*;
 use pyo3::types::{PyDateTime, PyDelta, PyTzInfo};
 

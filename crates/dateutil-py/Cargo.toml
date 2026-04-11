@@ -10,7 +10,7 @@ name = "dateutil_py"
 crate-type = ["rlib"]
 
 [dependencies]
-dateutil-core = { path = "../dateutil-core" }
+dateutil = { path = "../dateutil-core" }
 chrono = "0.4"
 pyo3 = { version = "0.28", features = ["extension-module", "chrono"], optional = true }
 

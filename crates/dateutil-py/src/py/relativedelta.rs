@@ -1,12 +1,12 @@
 use super::common::PyWeekday;
 use super::conv;
 use chrono::{Datelike, NaiveDateTime};
-use dateutil_core::common;
-use dateutil_core::relativedelta::{RelativeDelta, RelativeDeltaBuilder};
+use dateutil::common;
+use dateutil::relativedelta::{RelativeDelta, RelativeDeltaBuilder};
 use pyo3::prelude::*;
 use pyo3::types::{PyDate, PyDateTime, PyDelta, PyDeltaAccess, PyTzInfoAccess};
 
-/// Python wrapper for dateutil_core::relativedelta::RelativeDelta.
+/// Python wrapper for dateutil::relativedelta::RelativeDelta.
 #[pyclass(name = "relativedelta", from_py_object)]
 #[derive(Clone, Debug)]
 pub struct PyRelativeDelta {

@@ -1,12 +1,16 @@
 [package]
-name = "dateutil-core"
+name = "dateutil"
 version = "0.1.1"
 edition = "2021"
 license = "MIT"
-description = "Performance-optimized date utility library for Rust"
+description = "Fast date utility library — parser, relativedelta, rrule, timezone (Rust reimplementation of python-dateutil)"
+repository = "https://github.com/wakita181009/dateutil-rs"
+keywords = ["date", "datetime", "parser", "rrule", "timezone"]
+categories = ["date-and-time", "parser-implementations"]
+readme = "../../README.md"
 
 [lib]
-name = "dateutil_core"
+name = "dateutil"
 crate-type = ["rlib"]
 
 [dependencies]

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use super::conv::{make_py_tz, make_py_utc, ndt_to_py_datetime};
-use dateutil_core::parser;
-use dateutil_core::parser::ParserInfo;
+use dateutil::parser;
+use dateutil::parser::ParserInfo;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTzInfo, PyType};
 

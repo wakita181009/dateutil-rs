@@ -2,14 +2,14 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use super::common::PyWeekday;
 use super::conv::{extract_i32_list, extract_u8_list, py_any_to_naive_datetime};
-use dateutil_core::common::Weekday;
-use dateutil_core::rrule::iter::RRuleIter as CoreRRuleIter;
-use dateutil_core::rrule::{
+use dateutil::common::Weekday;
+use dateutil::rrule::iter::RRuleIter as CoreRRuleIter;
+use dateutil::rrule::{
     search_after, search_before, search_between,
     Frequency, Recurrence, RRule, RRuleBuilder,
 };
-use dateutil_core::rrule::parse::{rrulestr as core_rrulestr, RRuleStrResult};
-use dateutil_core::rrule::set::{RRuleSet, RRuleSetIter as CoreRRuleSetIter};
+use dateutil::rrule::parse::{rrulestr as core_rrulestr, RRuleStrResult};
+use dateutil::rrule::set::{RRuleSet, RRuleSetIter as CoreRRuleSetIter};
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PySlice};
 
