@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use dateutil_core::tz::{self, TimeZone, TzFile, TzLocal, TzOffset, TzUtc};
+use dateutil_core::tz::{self, TimeZone, TzFile, TzLocal, TzOffset, TzOps};
 use pyo3::prelude::*;
 use pyo3::types::{PyDateTime, PyDelta, PyTzInfo};
 
@@ -315,43 +315,83 @@ fn gettz_py(py: Python<'_>, name: Option<&str>) -> PyResult<Py<PyAny>> {
 
 #[derive(FromPyObject)]
 enum PyTimezone<'py> {
+    #[allow(dead_code)]
     Utc(PyRef<'py, PyTzUtc>),
     Offset(PyRef<'py, PyTzOffset>),
     File(PyRef<'py, PyTzFile>),
     Local(PyRef<'py, PyTzLocal>),
 }
 
-impl PyTimezone<'_> {
-    fn to_timezone(&self) -> TimeZone {
+impl TzOps for PyTimezone<'_> {
+    #[inline]
+    fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 {
         match self {
-            PyTimezone::Utc(_utc) => TimeZone::Utc(TzUtc),
-            PyTimezone::Offset(tz) => TimeZone::Offset(tz.inner.clone()),
-            PyTimezone::File(tz) => TimeZone::File(tz.inner.clone()),
-            PyTimezone::Local(tz) => TimeZone::Local(tz.inner.clone()),
+            PyTimezone::Utc(_) => 0,
+            PyTimezone::Offset(tz) => tz.inner.offset_seconds(),
+            PyTimezone::File(tz) => tz.inner.utcoffset(dt, fold),
+            PyTimezone::Local(tz) => tz.inner.utcoffset(dt, fold),
+        }
+    }
+
+    #[inline]
+    fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+        match self {
+            PyTimezone::Utc(_) | PyTimezone::Offset(_) => 0,
+            PyTimezone::File(tz) => tz.inner.dst(dt, fold),
+            PyTimezone::Local(tz) => tz.inner.dst(dt, fold),
+        }
+    }
+
+    #[inline]
+    fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str {
+        match self {
+            PyTimezone::Utc(_) => "UTC",
+            PyTimezone::Offset(tz) => tz.inner.display_name(),
+            PyTimezone::File(tz) => tz.inner.tzname(dt, fold),
+            PyTimezone::Local(tz) => tz.inner.tzname(dt, fold),
+        }
+    }
+
+    #[inline]
+    fn is_ambiguous(&self, dt: NaiveDateTime) -> bool {
+        match self {
+            PyTimezone::Utc(_) | PyTimezone::Offset(_) => false,
+            PyTimezone::File(tz) => tz.inner.is_ambiguous(dt),
+            PyTimezone::Local(tz) => tz.inner.is_ambiguous(dt),
+        }
+    }
+
+    #[inline]
+    fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime {
+        match self {
+            PyTimezone::Utc(_) => dt,
+            PyTimezone::Offset(tz) => tz.inner.fromutc(dt),
+            PyTimezone::File(tz) => tz.inner.fromutc(dt),
+            PyTimezone::Local(tz) => tz.inner.fromutc(dt),
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Helper functions
+// Helper functions — zero-clone via TzOps trait
 // ---------------------------------------------------------------------------
 
 #[pyfunction]
 #[pyo3(name = "datetime_exists")]
 fn datetime_exists_py(dt: NaiveDateTime, tz: PyTimezone<'_>) -> bool {
-    tz::datetime_exists(dt, &tz.to_timezone())
+    tz::datetime_exists(dt, &tz)
 }
 
 #[pyfunction]
 #[pyo3(name = "datetime_ambiguous")]
 fn datetime_ambiguous_py(dt: NaiveDateTime, tz: PyTimezone<'_>) -> bool {
-    tz::datetime_ambiguous(dt, &tz.to_timezone())
+    tz::datetime_ambiguous(dt, &tz)
 }
 
 #[pyfunction]
 #[pyo3(name = "resolve_imaginary")]
 fn resolve_imaginary_py(dt: NaiveDateTime, tz: PyTimezone<'_>) -> NaiveDateTime {
-    tz::resolve_imaginary(dt, &tz.to_timezone())
+    tz::resolve_imaginary(dt, &tz)
 }
 
 // ---------------------------------------------------------------------------

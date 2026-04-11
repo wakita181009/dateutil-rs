@@ -13,6 +13,7 @@ crate-type = ["rlib"]
 bitflags = "2"
 chrono = "0.4"
 phf = { version = "0.13", features = ["macros"] }
+rustc-hash = "2"
 smallvec = "1.15"
 thiserror = "2"
 iana-time-zone = "0.1"

@@ -13,12 +13,69 @@ pub use offset::TzOffset;
 pub use file::{TzFile, TzFileData};
 pub use local::TzLocal;
 
-use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};
+
+use rustc_hash::FxHashMap;
 
 use chrono::{NaiveDateTime, TimeDelta};
 
 use crate::error::TzError;
+
+// ---------------------------------------------------------------------------
+// TzOps — shared trait for all timezone types
+// ---------------------------------------------------------------------------
+
+/// Core timezone operations shared by all timezone types.
+///
+/// Implemented by `TzUtc`, `TzOffset`, `TzFile`, `TzLocal`, and `TimeZone`.
+/// Helper functions like `datetime_exists` and `resolve_imaginary` are generic
+/// over this trait, so callers can use any timezone type without constructing
+/// the `TimeZone` enum (avoiding clones in the PyO3 binding layer).
+pub trait TzOps {
+    /// UTC offset in seconds for a wall-clock datetime.
+    /// `fold` disambiguates repeated wall times (PEP 495).
+    fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32;
+    /// DST offset component in seconds.
+    fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32;
+    /// Timezone abbreviation string.
+    fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str;
+    /// Whether the given wall time is ambiguous (falls in a DST overlap).
+    fn is_ambiguous(&self, dt: NaiveDateTime) -> bool;
+    /// Convert a UTC datetime to wall time.
+    fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime;
+}
+
+impl TzOps for TzUtc {
+    #[inline] fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.utcoffset(dt, fold) }
+    #[inline] fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.dst(dt, fold) }
+    #[inline] fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str { self.tzname(dt, fold) }
+    #[inline] fn is_ambiguous(&self, dt: NaiveDateTime) -> bool { self.is_ambiguous(dt) }
+    #[inline] fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime { self.fromutc(dt) }
+}
+
+impl TzOps for TzOffset {
+    #[inline] fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.utcoffset(dt, fold) }
+    #[inline] fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.dst(dt, fold) }
+    #[inline] fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str { self.tzname(dt, fold) }
+    #[inline] fn is_ambiguous(&self, dt: NaiveDateTime) -> bool { self.is_ambiguous(dt) }
+    #[inline] fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime { self.fromutc(dt) }
+}
+
+impl TzOps for TzFile {
+    #[inline] fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.utcoffset(dt, fold) }
+    #[inline] fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.dst(dt, fold) }
+    #[inline] fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str { self.tzname(dt, fold) }
+    #[inline] fn is_ambiguous(&self, dt: NaiveDateTime) -> bool { self.is_ambiguous(dt) }
+    #[inline] fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime { self.fromutc(dt) }
+}
+
+impl TzOps for TzLocal {
+    #[inline] fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.utcoffset(dt, fold) }
+    #[inline] fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 { self.dst(dt, fold) }
+    #[inline] fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str { self.tzname(dt, fold) }
+    #[inline] fn is_ambiguous(&self, dt: NaiveDateTime) -> bool { self.is_ambiguous(dt) }
+    #[inline] fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime { self.fromutc(dt) }
+}
 
 // ---------------------------------------------------------------------------
 // TimeZone — enum dispatch for all timezone types
@@ -37,11 +94,9 @@ pub enum TimeZone {
     Local(TzLocal),
 }
 
-impl TimeZone {
-    /// UTC offset in seconds for a wall-clock datetime.
-    /// `fold` disambiguates repeated wall times (PEP 495).
+impl TzOps for TimeZone {
     #[inline]
-    pub fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+    fn utcoffset(&self, dt: NaiveDateTime, fold: bool) -> i32 {
         match self {
             TimeZone::Utc(tz) => tz.utcoffset(dt, fold),
             TimeZone::Offset(tz) => tz.utcoffset(dt, fold),
@@ -50,9 +105,8 @@ impl TimeZone {
         }
     }
 
-    /// DST offset component in seconds.
     #[inline]
-    pub fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 {
+    fn dst(&self, dt: NaiveDateTime, fold: bool) -> i32 {
         match self {
             TimeZone::Utc(tz) => tz.dst(dt, fold),
             TimeZone::Offset(tz) => tz.dst(dt, fold),
@@ -61,9 +115,8 @@ impl TimeZone {
         }
     }
 
-    /// Timezone abbreviation string.
     #[inline]
-    pub fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str {
+    fn tzname(&self, dt: NaiveDateTime, fold: bool) -> &str {
         match self {
             TimeZone::Utc(tz) => tz.tzname(dt, fold),
             TimeZone::Offset(tz) => tz.tzname(dt, fold),
@@ -72,9 +125,8 @@ impl TimeZone {
         }
     }
 
-    /// Whether the given wall time is ambiguous (falls in a DST overlap).
     #[inline]
-    pub fn is_ambiguous(&self, dt: NaiveDateTime) -> bool {
+    fn is_ambiguous(&self, dt: NaiveDateTime) -> bool {
         match self {
             TimeZone::Utc(tz) => tz.is_ambiguous(dt),
             TimeZone::Offset(tz) => tz.is_ambiguous(dt),
@@ -83,9 +135,8 @@ impl TimeZone {
         }
     }
 
-    /// Convert a UTC datetime to wall time.
     #[inline]
-    pub fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime {
+    fn fromutc(&self, dt: NaiveDateTime) -> NaiveDateTime {
         match self {
             TimeZone::Utc(tz) => tz.fromutc(dt),
             TimeZone::Offset(tz) => tz.fromutc(dt),
@@ -93,7 +144,9 @@ impl TimeZone {
             TimeZone::Local(tz) => tz.fromutc(dt),
         }
     }
+}
 
+impl TimeZone {
     /// UTC offset as a `chrono::TimeDelta`.
     #[inline]
     pub fn utcoffset_delta(&self, dt: NaiveDateTime, fold: bool) -> TimeDelta {
@@ -147,8 +200,8 @@ pub(super) const TZPATHS: &[&str] = &[
 const UTC_NAMES: &[&str] = &["UTC", "utc", "GMT", "gmt", "Z", "z"];
 
 /// Thread-safe timezone cache.
-static TZ_CACHE: LazyLock<RwLock<HashMap<Box<str>, TimeZone>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+static TZ_CACHE: LazyLock<RwLock<FxHashMap<Box<str>, TimeZone>>> =
+    LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
 /// Look up a timezone by name.
 ///
@@ -228,7 +281,7 @@ fn resolve_tz(name: &str) -> Result<TimeZone, TzError> {
 
 /// Check if a wall-clock datetime exists in the given timezone.
 /// Returns `false` for times in DST gaps (spring forward).
-pub fn datetime_exists(dt: NaiveDateTime, tz: &TimeZone) -> bool {
+pub fn datetime_exists(dt: NaiveDateTime, tz: &impl TzOps) -> bool {
     let offset_secs = tz.utcoffset(dt, false) as i64;
     let utc = dt - TimeDelta::seconds(offset_secs);
     let wall = tz.fromutc(utc);
@@ -237,13 +290,13 @@ pub fn datetime_exists(dt: NaiveDateTime, tz: &TimeZone) -> bool {
 
 /// Check if a wall-clock datetime is ambiguous in the given timezone.
 /// Returns `true` for times in DST overlaps (fall back).
-pub fn datetime_ambiguous(dt: NaiveDateTime, tz: &TimeZone) -> bool {
+pub fn datetime_ambiguous(dt: NaiveDateTime, tz: &impl TzOps) -> bool {
     tz.is_ambiguous(dt)
 }
 
 /// Resolve an imaginary datetime (in a DST gap) by shifting forward.
 /// If the datetime already exists, returns it unchanged.
-pub fn resolve_imaginary(dt: NaiveDateTime, tz: &TimeZone) -> NaiveDateTime {
+pub fn resolve_imaginary(dt: NaiveDateTime, tz: &impl TzOps) -> NaiveDateTime {
     if datetime_exists(dt, tz) {
         return dt;
     }
