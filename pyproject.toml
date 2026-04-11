@@ -1,6 +1,6 @@
 [project]
 name = "python-dateutil-rs"
-version = "0.0.15"
+version = "0.1.0"
 description = "A Rust-backed port of python-dateutil"
 readme = "README.md"
 license = "MIT"
@@ -22,16 +22,16 @@ dev = [
     "pytest-benchmark>=5.2",
     "freezegun>=1.5",
     "hypothesis>=6.151",
-    "maturin>=1.0",
+    "maturin>=1.13",
 ]
 
 [build-system]
-requires = ["maturin>=1.0"]
+requires = ["maturin>=1.13"]
 build-backend = "maturin"
 
 [tool.maturin]
-manifest-path = "crates/dateutil-rs/Cargo.toml"
-features = ["python", "v1"]
+manifest-path = "crates/dateutil-py/Cargo.toml"
+features = ["python"]
 python-source = "python"
 module-name = "dateutil_rs._native"
 include = [

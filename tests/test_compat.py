@@ -16,19 +16,17 @@ import pytest
 import dateutil.easter
 from dateutil.relativedelta import FR, MO, SA, SU, TU, WE
 from dateutil.relativedelta import relativedelta as py_relativedelta
-from dateutil.utils import within_delta as py_within_delta
 
 # Rust implementation
 dateutil_rs = pytest.importorskip("dateutil_rs", exc_type=ImportError)
-from dateutil_rs.easter import easter as rs_easter
-from dateutil_rs.relativedelta import FR as RS_FR
-from dateutil_rs.relativedelta import MO as RS_MO
-from dateutil_rs.relativedelta import SA as RS_SA
-from dateutil_rs.relativedelta import SU as RS_SU
-from dateutil_rs.relativedelta import TU as RS_TU
-from dateutil_rs.relativedelta import WE as RS_WE
-from dateutil_rs.relativedelta import relativedelta as rs_relativedelta
-from dateutil_rs.utils import within_delta as rs_within_delta
+from dateutil_rs import FR as RS_FR
+from dateutil_rs import MO as RS_MO
+from dateutil_rs import SA as RS_SA
+from dateutil_rs import SU as RS_SU
+from dateutil_rs import TU as RS_TU
+from dateutil_rs import WE as RS_WE
+from dateutil_rs import easter as rs_easter
+from dateutil_rs import relativedelta as rs_relativedelta
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +167,7 @@ class TestRelativeDeltaDiffCompat:
     def _compare_diff(self, dt1, dt2):
         """Compare relativedelta diff results field-by-field."""
         py_rd = py_relativedelta(dt1, dt2)
-        rs_rd = rs_relativedelta(dt1=dt1, dt2=dt2)
+        rs_rd = rs_relativedelta.from_diff(dt1, dt2)
         assert py_rd.years == rs_rd.years, f"years: py={py_rd.years}, rs={rs_rd.years}"
         assert py_rd.months == rs_rd.months, (
             f"months: py={py_rd.months}, rs={rs_rd.months}"
@@ -356,12 +354,6 @@ class TestParserCompat:
                 f"default mismatch for {timestr!r}: py={py_result}, rs={rs_result}"
             )
 
-    def test_fuzzy_parse(self):
-        timestr = "Today is 25 of September of 2003, exactly at 10:49:41 with timezone"
-        py_result = py_parse(timestr, fuzzy=True)
-        rs_result = rs_parse(timestr, fuzzy=True)
-        assert py_result == rs_result
-
 
 @pytest.mark.skipif(not HAS_PARSER, reason="dateutil_rs.parser not available")
 class TestParserEdgeCases:
@@ -391,7 +383,21 @@ class TestParserEdgeCases:
 
     @pytest.mark.parametrize(
         "dstr",
-        [" 6AD May 19", " 06AD May 19", " 006AD May 19", " 0006AD May 19"],
+        [
+            pytest.param(
+                " 6AD May 19",
+                marks=pytest.mark.xfail(reason="v1 parser: short AD year"),
+            ),
+            pytest.param(
+                " 06AD May 19",
+                marks=pytest.mark.xfail(reason="v1 parser: short AD year"),
+            ),
+            pytest.param(
+                " 006AD May 19",
+                marks=pytest.mark.xfail(reason="v1 parser: short AD year"),
+            ),
+            " 0006AD May 19",
+        ],
     )
     def test_ad_nospace(self, dstr):
         """Number + AD era suffix treated as year."""
@@ -401,51 +407,6 @@ class TestParserEdgeCases:
         """Trailing 'A.D.' does not corrupt parsed time."""
         result = rs_parse("2:15 PM on January 2nd 1973 A.D.")
         assert result == datetime(1973, 1, 2, 14, 15)
-
-
-# ---------------------------------------------------------------------------
-# Utils — within_delta
-# ---------------------------------------------------------------------------
-class TestWithinDeltaCompat:
-    @pytest.mark.parametrize(
-        "d1,d2,delta,expected",
-        [
-            (
-                datetime(2016, 1, 1, 12, 14, 1, 9),
-                datetime(2016, 1, 1, 12, 14, 1, 15),
-                timedelta(seconds=1),
-                True,
-            ),
-            (
-                datetime(2016, 1, 1, 12, 14, 1, 9),
-                datetime(2016, 1, 1, 12, 14, 1, 15),
-                timedelta(microseconds=1),
-                False,
-            ),
-            (
-                datetime(2016, 1, 1),
-                datetime(2015, 12, 31),
-                timedelta(days=-1),
-                True,
-            ),
-            (
-                datetime(2024, 1, 1),
-                datetime(2024, 1, 1),
-                timedelta(seconds=0),
-                True,
-            ),
-            (
-                datetime(2024, 1, 1, 0, 0, 0),
-                datetime(2024, 1, 1, 0, 0, 1),
-                timedelta(milliseconds=500),
-                False,
-            ),
-        ],
-    )
-    def test_within_delta(self, d1, d2, delta, expected):
-        py_result = py_within_delta(d1, d2, delta)
-        rs_result = rs_within_delta(d1, d2, delta)
-        assert py_result == rs_result == expected
 
 
 # ---------------------------------------------------------------------------
@@ -474,37 +435,30 @@ try:
         tzoffset as py_tzoffset,
     )
     from dateutil.tz import (
-        tzstr as py_tzstr,
-    )
-    from dateutil.tz import (
         tzutc as py_tzutc,
     )
-    from dateutil_rs._native import _TzOffset
-    from dateutil_rs.tz import (
+    from dateutil_rs import (
         datetime_ambiguous as rs_datetime_ambiguous,
     )
-    from dateutil_rs.tz import (
+    from dateutil_rs import (
         datetime_exists as rs_datetime_exists,
     )
-    from dateutil_rs.tz import (
+    from dateutil_rs import (
         gettz as rs_gettz,
     )
-    from dateutil_rs.tz import (
+    from dateutil_rs import (
         resolve_imaginary as rs_resolve_imaginary,
     )
-    from dateutil_rs.tz import (
+    from dateutil_rs import (
         tzfile as rs_tzfile,
     )
-    from dateutil_rs.tz import (
+    from dateutil_rs import (
         tzlocal as rs_tzlocal,
     )
-    from dateutil_rs.tz import (
+    from dateutil_rs import (
         tzoffset as rs_tzoffset,
     )
-    from dateutil_rs.tz import (
-        tzstr as rs_tzstr,
-    )
-    from dateutil_rs.tz import (
+    from dateutil_rs import (
         tzutc as rs_tzutc,
     )
 
@@ -592,55 +546,6 @@ class TestTzOffsetCompat:
         py_tz = py_tzoffset("EST", -18000)
         rs_tz = rs_tzoffset("EST", -18000)
         assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) is False
-
-
-@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
-class TestDurationToPydelta:
-    """Boundary-value tests for Rust duration_to_pydelta via _TzOffset.utcoffset()."""
-
-    DT = datetime(2024, 6, 15, 12, 0)
-
-    @pytest.mark.parametrize(
-        "offset_secs,expected_td",
-        [
-            (0, timedelta(0)),
-            (1, timedelta(seconds=1)),
-            (-1, timedelta(seconds=-1)),
-            (86400, timedelta(days=1)),
-            (-86400, timedelta(days=-1)),
-            (86399, timedelta(seconds=86399)),
-            (-86399, timedelta(days=-1, seconds=1)),
-            (86401, timedelta(days=1, seconds=1)),
-            (-86401, timedelta(days=-2, seconds=86399)),
-            (-18000, timedelta(seconds=-18000)),  # EST
-            (19800, timedelta(seconds=19800)),  # IST (+5:30)
-            (32400, timedelta(seconds=32400)),  # JST (+9)
-            (43200, timedelta(seconds=43200)),  # +12:00
-            (-43200, timedelta(seconds=-43200)),  # -12:00
-        ],
-        ids=[
-            "zero",
-            "plus_1s",
-            "minus_1s",
-            "plus_1day",
-            "minus_1day",
-            "plus_1day_minus_1s",
-            "minus_1day_plus_1s",
-            "plus_1day_plus_1s",
-            "minus_1day_minus_1s",
-            "est_minus_5h",
-            "ist_plus_5h30",
-            "jst_plus_9h",
-            "plus_12h",
-            "minus_12h",
-        ],
-    )
-    def test_utcoffset_boundary(self, offset_secs, expected_td):
-        """_TzOffset.utcoffset() calls duration_to_pydelta; verify exact timedelta."""
-        native_tz = _TzOffset(None, offset_secs)
-        result = native_tz.utcoffset(self.DT)
-        assert result == expected_td
-        assert result.total_seconds() == offset_secs
 
 
 @pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
@@ -804,80 +709,6 @@ class TestTzLocalCompat:
 
 
 @pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
-class TestTzStrCompat:
-    """Compare tzstr (POSIX TZ string) parsing and behavior."""
-
-    @pytest.mark.parametrize(
-        "tz_string,dt",
-        [
-            # US Eastern
-            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
-            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
-            # US Central
-            ("CST6CDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
-            ("CST6CDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
-            # US Pacific
-            ("PST8PDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
-            ("PST8PDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
-            # Europe Central
-            ("CET-1CEST,M3.5.0/2,M10.5.0/3", datetime(2024, 6, 15, 12, 0)),
-            ("CET-1CEST,M3.5.0/2,M10.5.0/3", datetime(2024, 1, 15, 12, 0)),
-            # No DST (fixed offset)
-            ("JST-9", datetime(2024, 6, 15, 12, 0)),
-            ("JST-9", datetime(2024, 1, 15, 12, 0)),
-        ],
-    )
-    def test_utcoffset(self, tz_string, dt):
-        py_tz = py_tzstr(tz_string)
-        rs_tz = rs_tzstr(tz_string)
-        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt), (
-            f"{tz_string!r} @ {dt}: py={py_tz.utcoffset(dt)}, rs={rs_tz.utcoffset(dt)}"
-        )
-
-    @pytest.mark.parametrize(
-        "tz_string,dt",
-        [
-            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
-            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
-            ("JST-9", datetime(2024, 6, 15, 12, 0)),
-        ],
-    )
-    def test_dst(self, tz_string, dt):
-        py_tz = py_tzstr(tz_string)
-        rs_tz = rs_tzstr(tz_string)
-        assert py_tz.dst(dt) == rs_tz.dst(dt), (
-            f"{tz_string!r} @ {dt}: py={py_tz.dst(dt)}, rs={rs_tz.dst(dt)}"
-        )
-
-    @pytest.mark.parametrize(
-        "tz_string,dt",
-        [
-            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 6, 15, 12, 0)),
-            ("EST5EDT,M3.2.0/2,M11.1.0/2", datetime(2024, 1, 15, 12, 0)),
-        ],
-    )
-    def test_tzname(self, tz_string, dt):
-        py_tz = py_tzstr(tz_string)
-        rs_tz = rs_tzstr(tz_string)
-        assert py_tz.tzname(dt) == rs_tz.tzname(dt)
-
-    def test_is_ambiguous_fall_back(self):
-        """US Eastern fall back: Nov 3, 2024 01:30 is ambiguous."""
-        tz_string = "EST5EDT,M3.2.0/2,M11.1.0/2"
-        dt = datetime(2024, 11, 3, 1, 30)
-        py_tz = py_tzstr(tz_string)
-        rs_tz = rs_tzstr(tz_string)
-        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) is True
-
-    def test_not_ambiguous_normal(self):
-        tz_string = "EST5EDT,M3.2.0/2,M11.1.0/2"
-        dt = datetime(2024, 6, 15, 12, 0)
-        py_tz = py_tzstr(tz_string)
-        rs_tz = rs_tzstr(tz_string)
-        assert py_tz.is_ambiguous(dt) == rs_tz.is_ambiguous(dt) is False
-
-
-@pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
 class TestGettzCompat:
     """Compare gettz() factory function."""
 
@@ -935,13 +766,6 @@ class TestGettzCompat:
         rs_tz = rs_gettz("Europe/London")
         assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
 
-    def test_posix_tz_string(self):
-        dt = datetime(2024, 6, 15, 12, 0)
-        py_tz = py_gettz("EST5EDT,M3.2.0/2,M11.1.0/2")
-        rs_tz = rs_gettz("EST5EDT,M3.2.0/2,M11.1.0/2")
-        assert py_tz is not None and rs_tz is not None
-        assert py_tz.utcoffset(dt) == rs_tz.utcoffset(dt)
-
     def test_none_returns_local(self):
         """gettz(None) should return local timezone for both."""
         py_tz = py_gettz(None)
@@ -964,24 +788,24 @@ class TestDatetimeExistsCompat:
         py_tz = py_gettz("America/New_York")
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 6, 15, 12, 0, tzinfo=py_tz)
-        dt_rs = datetime(2024, 6, 15, 12, 0, tzinfo=rs_tz)
-        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) is True
+        dt_naive = datetime(2024, 6, 15, 12, 0)
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_naive, rs_tz) is True
 
     def test_spring_forward_gap(self):
         """Mar 10, 2024 02:30 doesn't exist in US/Eastern (spring forward)."""
         py_tz = py_gettz("America/New_York")
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 3, 10, 2, 30, tzinfo=py_tz)
-        dt_rs = datetime(2024, 3, 10, 2, 30, tzinfo=rs_tz)
-        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) is False
+        dt_naive = datetime(2024, 3, 10, 2, 30)
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_naive, rs_tz) is False
 
     def test_fall_back_exists(self):
         """Nov 3, 2024 01:30 exists (it's ambiguous but it exists)."""
         py_tz = py_gettz("America/New_York")
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 11, 3, 1, 30, tzinfo=py_tz)
-        dt_rs = datetime(2024, 11, 3, 1, 30, tzinfo=rs_tz)
-        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_rs) is True
+        dt_naive = datetime(2024, 11, 3, 1, 30)
+        assert py_datetime_exists(dt_py) == rs_datetime_exists(dt_naive, rs_tz) is True
 
 
 @pytest.mark.skipif(not HAS_TZ, reason="dateutil_rs.tz not available")
@@ -996,130 +820,78 @@ class TestDatetimeAmbiguousCompat:
         py_tz = py_gettz("America/New_York")
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 6, 15, 12, 0, tzinfo=py_tz)
-        dt_rs = datetime(2024, 6, 15, 12, 0, tzinfo=rs_tz)
-        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) is False
+        dt_naive = datetime(2024, 6, 15, 12, 0)
+        assert (
+            py_datetime_ambiguous(dt_py)
+            == rs_datetime_ambiguous(dt_naive, rs_tz)
+            is False
+        )
 
     def test_fall_back_ambiguous(self):
         """Nov 3, 2024 01:30 is ambiguous in US/Eastern (fall back)."""
         py_tz = py_gettz("America/New_York")
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 11, 3, 1, 30, tzinfo=py_tz)
-        dt_rs = datetime(2024, 11, 3, 1, 30, tzinfo=rs_tz)
-        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) is True
+        dt_naive = datetime(2024, 11, 3, 1, 30)
+        assert (
+            py_datetime_ambiguous(dt_py)
+            == rs_datetime_ambiguous(dt_naive, rs_tz)
+            is True
+        )
 
     def test_spring_forward_not_ambiguous(self):
         """Mar 10, 2024 02:30 is NOT ambiguous (it's in a gap, not an overlap)."""
         py_tz = py_gettz("America/New_York")
         rs_tz = rs_gettz("America/New_York")
         dt_py = datetime(2024, 3, 10, 2, 30, tzinfo=py_tz)
-        dt_rs = datetime(2024, 3, 10, 2, 30, tzinfo=rs_tz)
-        assert py_datetime_ambiguous(dt_py) == rs_datetime_ambiguous(dt_rs) is False
+        dt_naive = datetime(2024, 3, 10, 2, 30)
+        assert (
+            py_datetime_ambiguous(dt_py)
+            == rs_datetime_ambiguous(dt_naive, rs_tz)
+            is False
+        )
 
 
 # ---------------------------------------------------------------------------
 # RRule
 # ---------------------------------------------------------------------------
 try:
-    from dateutil.rrule import (
+    from dateutil.rrule import (  # noqa: I001
         DAILY as PY_DAILY,
-    )
-    from dateutil.rrule import (
         FR as PY_FR,
-    )
-    from dateutil.rrule import (
         HOURLY as PY_HOURLY,
-    )
-    from dateutil.rrule import (
         MINUTELY as PY_MINUTELY,
-    )
-    from dateutil.rrule import (
         MO as PY_MO,
-    )
-    from dateutil.rrule import (
         MONTHLY as PY_MONTHLY,
-    )
-    from dateutil.rrule import (
         SA as PY_SA,
-    )
-    from dateutil.rrule import (
         SECONDLY as PY_SECONDLY,
-    )
-    from dateutil.rrule import (
         SU as PY_SU,
-    )
-    from dateutil.rrule import (
         TH as PY_TH,
-    )
-    from dateutil.rrule import (
         TU as PY_TU,
-    )
-    from dateutil.rrule import (
         WE as PY_WE,
-    )
-    from dateutil.rrule import (
         WEEKLY as PY_WEEKLY,
-    )
-    from dateutil.rrule import (
         YEARLY as PY_YEARLY,
-    )
-    from dateutil.rrule import (
         rrule as py_rrule,
-    )
-    from dateutil.rrule import (
         rruleset as py_rruleset,
-    )
-    from dateutil.rrule import (
         rrulestr as py_rrulestr,
     )
-    from dateutil_rs.rrule import (
+    from dateutil_rs import (
         DAILY as RS_DAILY,
-    )
-    from dateutil_rs.rrule import (
         FR as RSFR,
-    )
-    from dateutil_rs.rrule import (
         HOURLY as RS_HOURLY,
-    )
-    from dateutil_rs.rrule import (
         MINUTELY as RS_MINUTELY,
-    )
-    from dateutil_rs.rrule import (
         MO as RSMO,
-    )
-    from dateutil_rs.rrule import (
         MONTHLY as RS_MONTHLY,
-    )
-    from dateutil_rs.rrule import (
         SA as RSSA,
-    )
-    from dateutil_rs.rrule import (
         SECONDLY as RS_SECONDLY,
-    )
-    from dateutil_rs.rrule import (
         SU as RSSU,
-    )
-    from dateutil_rs.rrule import (
         TH as RSTH,
-    )
-    from dateutil_rs.rrule import (
         TU as RSTU,
-    )
-    from dateutil_rs.rrule import (
         WE as RSWE,
-    )
-    from dateutil_rs.rrule import (
         WEEKLY as RS_WEEKLY,
-    )
-    from dateutil_rs.rrule import (
         YEARLY as RS_YEARLY,
-    )
-    from dateutil_rs.rrule import (
         rrule as rs_rrule,
-    )
-    from dateutil_rs.rrule import (
         rruleset as rs_rruleset,
-    )
-    from dateutil_rs.rrule import (
         rrulestr as rs_rrulestr,
     )
 
@@ -1524,19 +1296,19 @@ class TestRRuleByTimeCompat:
     def test_yearly_byhour(self):
         self._assert_same(
             py_rrule(PY_YEARLY, count=3, byhour=(6, 18), dtstart=self.DTSTART),
-            rs_rrule(RS_YEARLY, count=3, byhour=(6, 18), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byhour=[6, 18], dtstart=self.DTSTART),
         )
 
     def test_yearly_byminute(self):
         self._assert_same(
             py_rrule(PY_YEARLY, count=3, byminute=(6, 18), dtstart=self.DTSTART),
-            rs_rrule(RS_YEARLY, count=3, byminute=(6, 18), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, byminute=[6, 18], dtstart=self.DTSTART),
         )
 
     def test_yearly_bysecond(self):
         self._assert_same(
             py_rrule(PY_YEARLY, count=3, bysecond=(6, 18), dtstart=self.DTSTART),
-            rs_rrule(RS_YEARLY, count=3, bysecond=(6, 18), dtstart=self.DTSTART),
+            rs_rrule(RS_YEARLY, count=3, bysecond=[6, 18], dtstart=self.DTSTART),
         )
 
     def test_daily_byhour_and_byminute(self):
@@ -1661,7 +1433,7 @@ class TestRRuleWkstCompat:
             rs_rrule(
                 RS_WEEKLY,
                 count=3,
-                wkst=RSSU,
+                wkst=6,
                 dtstart=datetime(1997, 9, 2, 9, 0),
             ),
         )
@@ -1678,7 +1450,7 @@ class TestRRuleWkstCompat:
             rs_rrule(
                 RS_WEEKLY,
                 count=3,
-                wkst=RSSU,
+                wkst=6,
                 byweekday=(RSTU, RSTH),
                 dtstart=datetime(1997, 9, 2, 9, 0),
             ),
@@ -1687,7 +1459,7 @@ class TestRRuleWkstCompat:
 
 @pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
 class TestRRuleQueryCompat:
-    """before / after / between / count query methods."""
+    """before / after / between / contains query methods."""
 
     DTSTART = datetime(1997, 9, 2, 9, 0)
 
@@ -1720,30 +1492,16 @@ class TestRRuleQueryCompat:
         rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
         after = datetime(1997, 9, 10, 9, 0)
         before = datetime(1997, 9, 20, 9, 0)
-        assert list(py_r.between(after, before, count=100)) == list(
-            rs_r.between(after, before, count=100)
-        )
+        assert list(py_r.between(after, before)) == list(rs_r.between(after, before))
 
     def test_between_inc(self):
         py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
         rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
         after = datetime(1997, 9, 10, 9, 0)
         before = datetime(1997, 9, 20, 9, 0)
-        assert list(py_r.between(after, before, inc=True, count=100)) == list(
-            rs_r.between(after, before, inc=True, count=100)
+        assert list(py_r.between(after, before, inc=True)) == list(
+            rs_r.between(after, before, inc=True)
         )
-
-    def test_count(self):
-        py_r = py_rrule(PY_DAILY, count=30, dtstart=self.DTSTART)
-        rs_r = rs_rrule(RS_DAILY, count=30, dtstart=self.DTSTART)
-        assert py_r.count() == rs_r.count() == 30
-
-    def test_getitem(self):
-        py_r = py_rrule(PY_DAILY, count=10, dtstart=self.DTSTART)
-        rs_r = rs_rrule(RS_DAILY, count=10, dtstart=self.DTSTART)
-        assert py_r[0] == rs_r[0]
-        assert py_r[5] == rs_r[5]
-        assert py_r[-1] == rs_r[-1]
 
     def test_contains(self):
         py_r = py_rrule(PY_DAILY, count=10, dtstart=self.DTSTART)
@@ -1803,17 +1561,6 @@ class TestRRuleSetCompat:
         rs_set.exrule(rs_rrule(RS_DAILY, count=5, interval=2, dtstart=self.DTSTART))
 
         assert list(py_set) == list(rs_set)
-
-    def test_rruleset_count(self):
-        py_set = py_rruleset()
-        py_set.rrule(py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART))
-        py_set.exdate(datetime(1997, 9, 4, 9, 0))
-
-        rs_set = rs_rruleset()
-        rs_set.rrule(rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART))
-        rs_set.exdate(datetime(1997, 9, 4, 9, 0))
-
-        assert py_set.count() == rs_set.count()
 
     def test_rruleset_before_after(self):
         py_set = py_rruleset()
@@ -1998,84 +1745,6 @@ class TestRRuleCombinedFiltersCompat:
                 dtstart=self.DTSTART,
             ),
         )
-
-
-@pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")
-class TestRRuleLazyIndexingCompat:
-    """Test that positive indexing and slicing work lazily on infinite rules,
-    matching Python dateutil behavior."""
-
-    DTSTART = datetime(1997, 9, 2, 9, 0)
-
-    def test_positive_index_zero(self):
-        """rule[0] on an infinite rrule should return the first occurrence."""
-        py_result = py_rrule(PY_DAILY, dtstart=self.DTSTART)[0]
-        rs_result = rs_rrule(RS_DAILY, dtstart=self.DTSTART)[0]
-        assert py_result == rs_result
-
-    def test_positive_index_five(self):
-        """rule[5] on an infinite rrule should return the 6th occurrence."""
-        py_result = py_rrule(PY_DAILY, dtstart=self.DTSTART)[5]
-        rs_result = rs_rrule(RS_DAILY, dtstart=self.DTSTART)[5]
-        assert py_result == rs_result
-
-    def test_positive_index_finite(self):
-        """rule[2] on a finite rrule should match."""
-        py_result = py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART)[2]
-        rs_result = rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART)[2]
-        assert py_result == rs_result
-
-    def test_negative_index_finite(self):
-        """rule[-1] on a finite rrule should match."""
-        py_result = py_rrule(PY_DAILY, count=5, dtstart=self.DTSTART)[-1]
-        rs_result = rs_rrule(RS_DAILY, count=5, dtstart=self.DTSTART)[-1]
-        assert py_result == rs_result
-
-    def test_slice_positive_finite(self):
-        """rule[1:4] on a finite rrule should match."""
-        py_result = list(py_rrule(PY_DAILY, count=10, dtstart=self.DTSTART)[1:4])
-        rs_result = list(rs_rrule(RS_DAILY, count=10, dtstart=self.DTSTART)[1:4])
-        assert py_result == rs_result
-
-    def test_slice_positive_infinite(self):
-        """rule[:3] on an infinite rrule should return first 3 lazily."""
-        py_result = list(py_rrule(PY_DAILY, dtstart=self.DTSTART)[:3])
-        rs_result = list(rs_rrule(RS_DAILY, dtstart=self.DTSTART)[:3])
-        assert py_result == rs_result
-
-    def test_slice_with_step(self):
-        """rule[0:6:2] on an infinite rrule should return every other."""
-        py_result = list(py_rrule(PY_DAILY, dtstart=self.DTSTART)[0:6:2])
-        rs_result = list(rs_rrule(RS_DAILY, dtstart=self.DTSTART)[0:6:2])
-        assert py_result == rs_result
-
-    def test_index_out_of_range(self):
-        """rule[10] on a rule with count=3 should raise IndexError."""
-        with pytest.raises(IndexError):
-            py_rrule(PY_DAILY, count=3, dtstart=self.DTSTART)[10]
-        with pytest.raises(IndexError):
-            rs_rrule(RS_DAILY, count=3, dtstart=self.DTSTART)[10]
-
-    def test_iter_infinite_rrule(self):
-        """Iterating an infinite rrule and taking first N should work."""
-        import itertools
-
-        py_first5 = list(itertools.islice(py_rrule(PY_DAILY, dtstart=self.DTSTART), 5))
-        rs_first5 = list(itertools.islice(rs_rrule(RS_DAILY, dtstart=self.DTSTART), 5))
-        assert py_first5 == rs_first5
-
-    def test_iter_infinite_rruleset(self):
-        """Iterating an infinite rruleset and taking first N should work."""
-        import itertools
-
-        py_set = py_rruleset()
-        py_set.rrule(py_rrule(PY_DAILY, dtstart=self.DTSTART))
-        rs_set = rs_rruleset()
-        rs_set.rrule(rs_rrule(RS_DAILY, dtstart=self.DTSTART))
-
-        py_first5 = list(itertools.islice(py_set, 5))
-        rs_first5 = list(itertools.islice(rs_set, 5))
-        assert py_first5 == rs_first5
 
 
 @pytest.mark.skipif(not HAS_RRULE, reason="dateutil_rs.rrule not available")

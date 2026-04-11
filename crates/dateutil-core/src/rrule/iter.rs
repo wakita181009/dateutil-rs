@@ -402,6 +402,7 @@ pub struct RRuleIter {
     timeset_buf: SmallVec<[NaiveTime; 4]>,
 
     finished: bool,
+    diverged: bool,
 }
 
 impl RRuleIter {
@@ -427,7 +428,15 @@ impl RRuleIter {
             result_idx: 0,
             timeset_buf: SmallVec::new(),
             finished: false,
+            diverged: false,
         }
+    }
+
+    /// Returns `true` if the iterator stopped because the recurrence
+    /// parameters form an impossible combination (e.g. MINUTELY with an
+    /// interval that can never land on any of the BYHOUR values).
+    pub fn diverged(&self) -> bool {
+        self.diverged
     }
 
     fn generate_next_batch(&mut self) -> bool {
@@ -675,6 +684,7 @@ impl RRuleIter {
                 }
 
                 if !valid {
+                    self.diverged = true;
                     return false;
                 }
             }
@@ -734,6 +744,7 @@ impl RRuleIter {
                 }
 
                 if !valid {
+                    self.diverged = true;
                     return false;
                 }
             }
@@ -814,37 +825,29 @@ impl EmitCtx<'_> {
     }
 
     /// Emit results with bysetpos filtering. Returns true if finished.
+    ///
+    /// BYSETPOS indexes into the flat Cartesian product of (day_buf × timeset)
+    /// for the current period.  Position 1 is the first entry, -1 is the last.
     #[inline]
     fn emit_bysetpos(&mut self, bysetpos: &ByList<i32>) -> bool {
-        let mut poslist: SmallVec<[NaiveDateTime; 8]> = SmallVec::new();
-        let ts_len = self.timeset.len() as i32;
-
-        for &pos in bysetpos.iter() {
-            let (daypos, timepos) = if pos < 0 {
-                (pos / ts_len, ((pos % ts_len) + ts_len) % ts_len)
-            } else {
-                ((pos - 1) / ts_len, (pos - 1) % ts_len)
-            };
-
-            let day_idx = if daypos < 0 {
-                let len = self.day_buf.len() as i32;
-                if daypos + len < 0 {
-                    continue;
-                }
-                (daypos + len) as usize
-            } else {
-                daypos as usize
-            };
-
-            if day_idx >= self.day_buf.len() || timepos as usize >= self.timeset.len() {
-                continue;
-            }
-            let i = self.day_buf[day_idx];
-            let time = self.timeset[timepos as usize];
+        // Build the full flat product for this period
+        let mut all: SmallVec<[NaiveDateTime; 64]> = SmallVec::new();
+        for &day_idx in self.day_buf {
             if let Some(date) =
-                NaiveDate::from_num_days_from_ce_opt(self.yearordinal + i as i32)
+                NaiveDate::from_num_days_from_ce_opt(self.yearordinal + day_idx as i32)
             {
-                poslist.push(NaiveDateTime::new(date, time));
+                for &time in self.timeset {
+                    all.push(NaiveDateTime::new(date, time));
+                }
+            }
+        }
+
+        let total = all.len() as i32;
+        let mut poslist: SmallVec<[NaiveDateTime; 8]> = SmallVec::new();
+        for &pos in bysetpos.iter() {
+            let idx = if pos < 0 { total + pos } else { pos - 1 };
+            if idx >= 0 && idx < total {
+                poslist.push(all[idx as usize]);
             }
         }
         poslist.sort_unstable();

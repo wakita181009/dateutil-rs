@@ -378,12 +378,20 @@ impl RelativeDelta {
         let time = RelativeTime::new(hours, minutes, seconds, microseconds);
         let extra_days = time.extra_days();
 
-        // Normalize months
-        let total_months = years * 12 + months;
+        // Normalize months — only when |months| > 11, matching python-dateutil's
+        // _fix(): relativedelta(years=1, months=-1) stays as-is, but
+        // relativedelta(months=14) becomes years=1, months=2.
+        let (norm_years, norm_months) = if months.abs() > 11 {
+            let s = months.signum();
+            let abs_m = months.abs();
+            (years + (abs_m / 12) * s, (abs_m % 12) * s)
+        } else {
+            (years, months)
+        };
 
         Ok(Self {
-            years: total_months / 12,
-            months: total_months % 12,
+            years: norm_years,
+            months: norm_months,
             days: days + extra_days,
             leapdays,
             time: RelativeTime {
@@ -554,6 +562,12 @@ impl RelativeDelta {
 
     pub fn weeks(&self) -> i32 {
         self.days / 7
+    }
+
+    /// Set weeks while preserving the remainder days (days % 7).
+    pub fn set_weeks(&mut self, weeks: i32) {
+        let remainder = self.days % 7;
+        self.days = weeks * 7 + remainder;
     }
 
     // Getters — decompose packed fields on demand (relative)
@@ -735,9 +749,49 @@ impl fmt::Display for RelativeDelta {
         for &(name, val) in parts {
             if val != 0 {
                 if !first { write!(f, ", ")?; }
-                write!(f, "{name}={val}")?;
+                write!(f, "{name}={val:+}")?;
                 first = false;
             }
+        }
+        // Absolute fields
+        if let Some(y) = self.abs.get_year() {
+            if !first { write!(f, ", ")?; }
+            write!(f, "year={y}")?;
+            first = false;
+        }
+        if let Some(m) = self.abs.get_month() {
+            if !first { write!(f, ", ")?; }
+            write!(f, "month={m}")?;
+            first = false;
+        }
+        if let Some(d) = self.abs.get_day() {
+            if !first { write!(f, ", ")?; }
+            write!(f, "day={d}")?;
+            first = false;
+        }
+        if let Some(ref wd) = self.weekday {
+            if !first { write!(f, ", ")?; }
+            write!(f, "weekday={wd}")?;
+            first = false;
+        }
+        if let Some(h) = self.abs.get_hour() {
+            if !first { write!(f, ", ")?; }
+            write!(f, "hour={h}")?;
+            first = false;
+        }
+        if let Some(mi) = self.abs.get_minute() {
+            if !first { write!(f, ", ")?; }
+            write!(f, "minute={mi}")?;
+            first = false;
+        }
+        if let Some(s) = self.abs.get_second() {
+            if !first { write!(f, ", ")?; }
+            write!(f, "second={s}")?;
+            first = false;
+        }
+        if let Some(us) = self.abs.get_microsecond() {
+            if !first { write!(f, ", ")?; }
+            write!(f, "microsecond={us}")?;
         }
         write!(f, ")")
     }
@@ -1230,7 +1284,7 @@ mod tests {
 
     #[test]
     fn test_display_nonzero_only() {
-        assert_eq!(rd(1, 2, 3).to_string(), "relativedelta(years=1, months=2, days=3)");
+        assert_eq!(rd(1, 2, 3).to_string(), "relativedelta(years=+1, months=+2, days=+3)");
     }
 
     #[test]
@@ -1241,7 +1295,7 @@ mod tests {
     #[test]
     fn test_display_time() {
         let delta = RelativeDelta::builder().hours(1).minutes(30).build().unwrap();
-        assert_eq!(delta.to_string(), "relativedelta(hours=1, minutes=30)");
+        assert_eq!(delta.to_string(), "relativedelta(hours=+1, minutes=+30)");
     }
 
     #[test]
@@ -1257,13 +1311,13 @@ mod tests {
             .build()
             .unwrap();
         let s = delta.to_string();
-        assert!(s.contains("years=1"));
-        assert!(s.contains("months=2"));
-        assert!(s.contains("days=3"));
-        assert!(s.contains("hours=4"));
-        assert!(s.contains("minutes=5"));
-        assert!(s.contains("seconds=6"));
-        assert!(s.contains("microseconds=7"));
+        assert!(s.contains("years=+1"));
+        assert!(s.contains("months=+2"));
+        assert!(s.contains("days=+3"));
+        assert!(s.contains("hours=+4"));
+        assert!(s.contains("minutes=+5"));
+        assert!(s.contains("seconds=+6"));
+        assert!(s.contains("microseconds=+7"));
     }
 
     // ==== Edge case tests ====
@@ -1351,17 +1405,9 @@ mod tests {
     // ---- Weekday edge cases ----
 
     #[test]
-    fn test_weekday_n_zero_treated_as_next() {
-        // n=0 should behave the same as n=None (next occurrence)
-        let mo_none = Weekday::new(0, None).unwrap();
-        let mo_zero = Weekday::new(0, Some(0)).unwrap();
-        let base = dt(2024, 1, 3, 0, 0, 0); // Wednesday
-        let delta_none = RelativeDelta::builder().weekday(mo_none).build().unwrap();
-        let delta_zero = RelativeDelta::builder().weekday(mo_zero).build().unwrap();
-        assert_eq!(
-            delta_none.add_to_naive_datetime(base),
-            delta_zero.add_to_naive_datetime(base),
-        );
+    fn test_weekday_n_zero_rejected() {
+        // n=0 is rejected at construction time
+        assert!(Weekday::new(0, Some(0)).is_err());
     }
 
     #[test]

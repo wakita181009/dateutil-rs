@@ -16,6 +16,50 @@ use crate::common::Weekday;
 use crate::error::RRuleError;
 
 // ---------------------------------------------------------------------------
+// Sorted-slice search helpers (for cached recurrence results)
+// ---------------------------------------------------------------------------
+
+/// Find the last datetime before `dt` in a sorted slice.
+pub fn search_before(sorted: &[NaiveDateTime], dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
+    let idx = if inc {
+        sorted.partition_point(|&x| x <= dt)
+    } else {
+        sorted.partition_point(|&x| x < dt)
+    };
+    if idx > 0 { Some(sorted[idx - 1]) } else { None }
+}
+
+/// Find the first datetime after `dt` in a sorted slice.
+pub fn search_after(sorted: &[NaiveDateTime], dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
+    let idx = if inc {
+        sorted.partition_point(|&x| x < dt)
+    } else {
+        sorted.partition_point(|&x| x <= dt)
+    };
+    sorted.get(idx).copied()
+}
+
+/// Find all datetimes between `after` and `before` in a sorted slice.
+pub fn search_between(
+    sorted: &[NaiveDateTime],
+    after: NaiveDateTime,
+    before: NaiveDateTime,
+    inc: bool,
+) -> &[NaiveDateTime] {
+    let start = if inc {
+        sorted.partition_point(|&x| x < after)
+    } else {
+        sorted.partition_point(|&x| x <= after)
+    };
+    let end = if inc {
+        sorted.partition_point(|&x| x <= before)
+    } else {
+        sorted.partition_point(|&x| x < before)
+    };
+    &sorted[start..end]
+}
+
+// ---------------------------------------------------------------------------
 // Recurrence trait — shared before/after/between logic
 // ---------------------------------------------------------------------------
 
@@ -73,6 +117,54 @@ pub trait Recurrence {
         }
         result
     }
+
+    /// Check if a datetime is produced by this recurrence.
+    fn contains(&self, dt: NaiveDateTime) -> bool {
+        self.after(dt, true).is_some_and(|found| found == dt)
+    }
+
+    /// Return `true` if the recurrence produces zero occurrences.
+    fn is_empty(&self) -> bool {
+        self.iter().next().is_none()
+    }
+
+    /// Return the number of occurrences, or `None` if the recurrence is infinite.
+    fn len(&self) -> Option<usize> {
+        if self.is_finite() {
+            Some(self.iter().count())
+        } else {
+            None
+        }
+    }
+
+    /// Return the `n`-th occurrence (0-indexed), iterating lazily.
+    fn nth(&self, n: usize) -> Option<NaiveDateTime> {
+        self.iter().nth(n)
+    }
+
+    /// Return the `n`-th occurrence from the end (0-indexed).
+    ///
+    /// Requires the recurrence to be finite. Returns `None` if infinite
+    /// or if `n` exceeds the total number of occurrences.
+    fn nth_back(&self, n: usize) -> Option<NaiveDateTime> {
+        if !self.is_finite() {
+            return None;
+        }
+        let all = self.all();
+        all.len().checked_sub(n + 1).map(|i| all[i])
+    }
+
+    /// Collect occurrences at indices `start..stop` with the given `step`.
+    ///
+    /// All parameters are 0-indexed. Iterates lazily via iterator adapters.
+    fn take_slice(&self, start: usize, stop: usize, step: usize) -> Vec<NaiveDateTime> {
+        assert!(step > 0, "step must be >= 1");
+        self.iter()
+            .skip(start)
+            .take(stop.saturating_sub(start))
+            .step_by(step)
+            .collect()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +209,20 @@ impl Frequency {
     #[inline]
     pub fn is_sub_daily(self) -> bool {
         self >= Self::Hourly
+    }
+}
+
+impl TryFrom<u8> for Frequency {
+    type Error = RRuleError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value <= Self::Secondly as u8 {
+            // SAFETY: Frequency is #[repr(u8)] with contiguous values 0..=6,
+            // and the bounds check above guarantees `value` is in range.
+            Ok(unsafe { std::mem::transmute::<u8, Frequency>(value) })
+        } else {
+            Err(RRuleError::InvalidFrequency(value.to_string().into()))
+        }
     }
 }
 
@@ -696,6 +802,9 @@ impl RRuleBuilder {
                     ]);
                 }
                 _ => {}
+            }
+            if freq != Frequency::Yearly && bymonth.is_some() {
+                explicit |= ExplicitFields::BYMONTH;
             }
         } else {
             if bymonth.is_some() {
@@ -3039,5 +3148,200 @@ mod tests {
         ).unwrap();
         let reparsed_results = reparsed.all();
         assert_eq!(original_results, reparsed_results);
+    }
+
+    // -----------------------------------------------------------------------
+    // TryFrom<u8> for Frequency
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_frequency_try_from_u8() {
+        assert_eq!(Frequency::try_from(0u8).unwrap(), Frequency::Yearly);
+        assert_eq!(Frequency::try_from(1u8).unwrap(), Frequency::Monthly);
+        assert_eq!(Frequency::try_from(2u8).unwrap(), Frequency::Weekly);
+        assert_eq!(Frequency::try_from(3u8).unwrap(), Frequency::Daily);
+        assert_eq!(Frequency::try_from(4u8).unwrap(), Frequency::Hourly);
+        assert_eq!(Frequency::try_from(5u8).unwrap(), Frequency::Minutely);
+        assert_eq!(Frequency::try_from(6u8).unwrap(), Frequency::Secondly);
+        assert!(Frequency::try_from(7u8).is_err());
+        assert!(Frequency::try_from(255u8).is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // Sorted-slice search helpers
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_search_before() {
+        let dates = vec![
+            dt(2020, 1, 1, 0, 0, 0),
+            dt(2020, 2, 1, 0, 0, 0),
+            dt(2020, 3, 1, 0, 0, 0),
+        ];
+        // Exclusive: before 2020-02-01 → 2020-01-01
+        assert_eq!(
+            search_before(&dates, dt(2020, 2, 1, 0, 0, 0), false),
+            Some(dt(2020, 1, 1, 0, 0, 0))
+        );
+        // Inclusive: before 2020-02-01 → 2020-02-01 itself
+        assert_eq!(
+            search_before(&dates, dt(2020, 2, 1, 0, 0, 0), true),
+            Some(dt(2020, 2, 1, 0, 0, 0))
+        );
+        // Before earliest → None
+        assert_eq!(search_before(&dates, dt(2019, 1, 1, 0, 0, 0), false), None);
+        assert_eq!(search_before(&dates, dt(2020, 1, 1, 0, 0, 0), false), None);
+    }
+
+    #[test]
+    fn test_search_after() {
+        let dates = vec![
+            dt(2020, 1, 1, 0, 0, 0),
+            dt(2020, 2, 1, 0, 0, 0),
+            dt(2020, 3, 1, 0, 0, 0),
+        ];
+        // Exclusive: after 2020-02-01 → 2020-03-01
+        assert_eq!(
+            search_after(&dates, dt(2020, 2, 1, 0, 0, 0), false),
+            Some(dt(2020, 3, 1, 0, 0, 0))
+        );
+        // Inclusive: after 2020-02-01 → 2020-02-01 itself
+        assert_eq!(
+            search_after(&dates, dt(2020, 2, 1, 0, 0, 0), true),
+            Some(dt(2020, 2, 1, 0, 0, 0))
+        );
+        // After latest → None
+        assert_eq!(search_after(&dates, dt(2020, 3, 1, 0, 0, 0), false), None);
+    }
+
+    #[test]
+    fn test_search_between() {
+        let dates = vec![
+            dt(2020, 1, 1, 0, 0, 0),
+            dt(2020, 2, 1, 0, 0, 0),
+            dt(2020, 3, 1, 0, 0, 0),
+            dt(2020, 4, 1, 0, 0, 0),
+        ];
+        // Exclusive
+        let result = search_between(
+            &dates,
+            dt(2020, 1, 1, 0, 0, 0),
+            dt(2020, 4, 1, 0, 0, 0),
+            false,
+        );
+        assert_eq!(
+            result,
+            &[dt(2020, 2, 1, 0, 0, 0), dt(2020, 3, 1, 0, 0, 0)]
+        );
+        // Inclusive
+        let result = search_between(
+            &dates,
+            dt(2020, 1, 1, 0, 0, 0),
+            dt(2020, 4, 1, 0, 0, 0),
+            true,
+        );
+        assert_eq!(result, &dates[..]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Recurrence trait: contains, count, nth, nth_back, take_slice
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_recurrence_contains() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(5)
+            .build()
+            .unwrap();
+        assert!(rule.contains(dt(2020, 1, 1, 0, 0, 0)));
+        assert!(rule.contains(dt(2020, 1, 3, 0, 0, 0)));
+        assert!(!rule.contains(dt(2020, 1, 6, 0, 0, 0))); // past count
+        assert!(!rule.contains(dt(2020, 1, 1, 12, 0, 0))); // wrong time
+    }
+
+    #[test]
+    fn test_recurrence_len() {
+        let finite = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(5)
+            .build()
+            .unwrap();
+        assert_eq!(finite.len(), Some(5));
+
+        let infinite = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .build()
+            .unwrap();
+        assert_eq!(infinite.len(), None);
+    }
+
+    #[test]
+    fn test_recurrence_nth() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(5)
+            .build()
+            .unwrap();
+        assert_eq!(rule.nth(0), Some(dt(2020, 1, 1, 0, 0, 0)));
+        assert_eq!(rule.nth(2), Some(dt(2020, 1, 3, 0, 0, 0)));
+        assert_eq!(rule.nth(4), Some(dt(2020, 1, 5, 0, 0, 0)));
+        assert_eq!(rule.nth(5), None);
+    }
+
+    #[test]
+    fn test_recurrence_nth_back() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(5)
+            .build()
+            .unwrap();
+        assert_eq!(rule.nth_back(0), Some(dt(2020, 1, 5, 0, 0, 0)));
+        assert_eq!(rule.nth_back(1), Some(dt(2020, 1, 4, 0, 0, 0)));
+        assert_eq!(rule.nth_back(4), Some(dt(2020, 1, 1, 0, 0, 0)));
+        assert_eq!(rule.nth_back(5), None);
+
+        // Infinite → None
+        let infinite = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .build()
+            .unwrap();
+        assert_eq!(infinite.nth_back(0), None);
+    }
+
+    #[test]
+    fn test_recurrence_take_slice() {
+        let rule = RRuleBuilder::new(Frequency::Daily)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .count(10)
+            .build()
+            .unwrap();
+        // [0..5] step 1
+        let result = rule.take_slice(0, 5, 1);
+        assert_eq!(result.len(), 5);
+        assert_eq!(result[0], dt(2020, 1, 1, 0, 0, 0));
+        assert_eq!(result[4], dt(2020, 1, 5, 0, 0, 0));
+
+        // [2..8] step 2 → indices 2, 4, 6
+        let result = rule.take_slice(2, 8, 2);
+        assert_eq!(
+            result,
+            vec![
+                dt(2020, 1, 3, 0, 0, 0),
+                dt(2020, 1, 5, 0, 0, 0),
+                dt(2020, 1, 7, 0, 0, 0),
+            ]
+        );
+
+        // [8..20] — only 2 elements left
+        let result = rule.take_slice(8, 20, 1);
+        assert_eq!(
+            result,
+            vec![dt(2020, 1, 9, 0, 0, 0), dt(2020, 1, 10, 0, 0, 0)]
+        );
+
+        // Empty range
+        let result = rule.take_slice(5, 5, 1);
+        assert!(result.is_empty());
     }
 }

@@ -3,15 +3,27 @@
 //! Detects the system's IANA timezone name via `iana-time-zone`,
 //! then loads the corresponding TZif file for full DST support.
 
+use std::sync::RwLock;
+
 use chrono::{Local, NaiveDateTime, TimeZone as ChronoTz};
 
 use super::file::TzFile;
+
+/// Cached singleton for the system local timezone.
+/// Uses `RwLock` (instead of `OnceLock`) so that the cache can be
+/// invalidated when the `TZ` environment variable changes.
+static CACHED_LOCAL: RwLock<Option<TzLocal>> = RwLock::new(None);
 
 /// System local timezone.
 ///
 /// Uses `iana-time-zone` to detect the system timezone name,
 /// then loads the corresponding TZif file for accurate DST handling.
 /// Falls back to chrono's `Local` if TZif resolution fails.
+///
+/// The result is cached via `RwLock` so that only the first call
+/// performs OS detection and TZif file I/O.  Call
+/// [`TzLocal::invalidate_cache`] to force re-detection (e.g. after
+/// changing `TZ`).
 #[derive(Debug, Clone)]
 pub struct TzLocal {
     inner: Option<TzFile>,
@@ -26,13 +38,39 @@ impl Default for TzLocal {
 
 impl TzLocal {
     /// Create a new TzLocal by detecting the system timezone.
+    ///
+    /// The first call resolves the timezone from the OS and loads the
+    /// TZif file.  Subsequent calls return a cheap `clone()` of the
+    /// cached result (`TzFile` is `Arc`-backed).
     pub fn new() -> Self {
+        // Fast path: cache already populated
+        {
+            let guard = CACHED_LOCAL.read().unwrap();
+            if let Some(cached) = guard.as_ref() {
+                return cached.clone();
+            }
+        }
+        // Slow path: resolve and populate
+        let mut guard = CACHED_LOCAL.write().unwrap();
+        // Double-check after acquiring write lock
+        if let Some(cached) = guard.as_ref() {
+            return cached.clone();
+        }
         let name = iana_time_zone::get_timezone().unwrap_or_else(|_| "UTC".to_string());
         let inner = Self::resolve_tzfile(&name);
-        Self {
+        let tz = Self {
             inner,
             name: name.into(),
-        }
+        };
+        *guard = Some(tz.clone());
+        tz
+    }
+
+    /// Clear the cached timezone so the next [`TzLocal::new`] call
+    /// re-detects the system timezone.  Useful after changing `TZ`.
+    pub fn invalidate_cache() {
+        let mut guard = CACHED_LOCAL.write().unwrap();
+        *guard = None;
     }
 
     /// Try to load a TZif file for the given IANA timezone name.

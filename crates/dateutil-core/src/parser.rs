@@ -490,6 +490,181 @@ fn parse_to_result_with_year<'a>(
     Ok(res)
 }
 
+// ---------------------------------------------------------------------------
+// Compact / dot-separated date helpers
+// ---------------------------------------------------------------------------
+
+/// Try to parse a dot-separated date token (e.g., "2003.09.25", "09.25.2003").
+/// Returns true if the token was consumed as a date (3 values pushed to YMD).
+#[inline]
+fn try_parse_dot_date(token: &str, ymd: &mut Ymd) -> bool {
+    if !token.as_bytes().first().is_some_and(|b| b.is_ascii_digit()) {
+        return false;
+    }
+
+    let mut parts = token.splitn(4, '.');
+    let p0 = match parts.next() {
+        Some(s) if !s.is_empty() => s,
+        _ => return false,
+    };
+    let p1 = match parts.next() {
+        Some(s) if !s.is_empty() => s,
+        _ => return false,
+    };
+    let p2 = match parts.next() {
+        Some(s) if !s.is_empty() => s,
+        _ => return false,
+    };
+    if parts.next().is_some() {
+        return false;
+    }
+
+    let v0 = match fast_parse_int(p0) { Some(v) => v, None => return false };
+    let v1 = match fast_parse_int(p1) { Some(v) => v, None => return false };
+    let v2 = match fast_parse_int(p2) { Some(v) => v, None => return false };
+
+    if p0.len() >= 4 || p2.len() >= 4 {
+        ymd.century_specified = true;
+    }
+
+    ymd.push(v0);
+    ymd.push(v1);
+    ymd.push(v2);
+
+    true
+}
+
+/// Try to parse compact numeric formats (YYYYMMDD, YYMMDD, YYYYMM, HHMMSS,
+/// YYYYMMDDHH, YYYYMMDDHHMM, YYYYMMDDHHMMSS).
+/// Returns number of tokens consumed, or 0 if not matched.
+#[inline]
+fn try_parse_compact<'a>(
+    tokens: &[Cow<'a, str>],
+    i: usize,
+    len: usize,
+    res: &mut ParseResult<'a>,
+    ymd: &mut Ymd,
+    token: &str,
+) -> usize {
+    let slen = token.len();
+    if !token.as_bytes().iter().all(|b| b.is_ascii_digit()) {
+        return 0;
+    }
+
+    match slen {
+        8 | 12 | 14 if ymd.count == 0 => {
+            let year = match fast_parse_int(&token[0..4]) { Some(v) => v, None => return 0 };
+            let month = match fast_parse_int(&token[4..6]) { Some(v) => v, None => return 0 };
+            let day = match fast_parse_int(&token[6..8]) { Some(v) => v, None => return 0 };
+
+            if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+                return 0;
+            }
+
+            ymd.century_specified = true;
+            ymd.ystridx = Some(0);
+            ymd.push(year);
+            ymd.push(month);
+            ymd.push(day);
+
+            if slen >= 12 {
+                res.hour = Some(fast_parse_int(&token[8..10]).unwrap_or(0) as u32);
+                res.minute = Some(fast_parse_int(&token[10..12]).unwrap_or(0) as u32);
+            }
+            if slen == 14 {
+                res.second = Some(fast_parse_int(&token[12..14]).unwrap_or(0) as u32);
+            }
+
+            1
+        }
+        6 if ymd.count == 0 => {
+            // Try YYMMDD first; fallback to YYYYMM if month invalid
+            let p0 = match fast_parse_int(&token[0..2]) { Some(v) => v, None => return 0 };
+            let p1 = match fast_parse_int(&token[2..4]) { Some(v) => v, None => return 0 };
+            let p2 = match fast_parse_int(&token[4..6]) { Some(v) => v, None => return 0 };
+
+            if (1..=12).contains(&p1) && (1..=31).contains(&p2) {
+                // YYMMDD
+                ymd.ystridx = Some(0);
+                ymd.push(p0);
+                ymd.push(p1);
+                ymd.push(p2);
+                1
+            } else {
+                // Fallback: YYYYMM
+                let year = match fast_parse_int(&token[0..4]) { Some(v) => v, None => return 0 };
+                let month = match fast_parse_int(&token[4..6]) { Some(v) => v, None => return 0 };
+                if (1..=12).contains(&month) {
+                    ymd.century_specified = true;
+                    ymd.ystridx = Some(0);
+                    ymd.push(year);
+                    ymd.push(month);
+                    1
+                } else {
+                    0
+                }
+            }
+        }
+        6 if ymd.count == 3 && res.hour.is_none() => {
+            // HHMMSS after date is already parsed (e.g., after "T" separator)
+            let hour = match fast_parse_int(&token[0..2]) { Some(v) => v, None => return 0 };
+            let minute = match fast_parse_int(&token[2..4]) { Some(v) => v, None => return 0 };
+            let second = match fast_parse_int(&token[4..6]) { Some(v) => v, None => return 0 };
+
+            if hour <= 23 && minute <= 59 && second <= 59 {
+                res.hour = Some(hour as u32);
+                res.minute = Some(minute as u32);
+                res.second = Some(second as u32);
+                1
+            } else {
+                0
+            }
+        }
+        10 if ymd.count == 0 => {
+            // YYYYMMDDHH — optionally followed by :MM(:SS)?
+            let year = match fast_parse_int(&token[0..4]) { Some(v) => v, None => return 0 };
+            let month = match fast_parse_int(&token[4..6]) { Some(v) => v, None => return 0 };
+            let day = match fast_parse_int(&token[6..8]) { Some(v) => v, None => return 0 };
+            let hour = match fast_parse_int(&token[8..10]) { Some(v) => v, None => return 0 };
+
+            if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 {
+                return 0;
+            }
+
+            ymd.century_specified = true;
+            ymd.ystridx = Some(0);
+            ymd.push(year);
+            ymd.push(month);
+            ymd.push(day);
+            res.hour = Some(hour as u32);
+
+            // Try to consume :MM(:SS(.ffffff)?)?
+            let mut consumed = 1;
+            if i + 2 < len && tokens[i + 1] == ":" {
+                if let Some(min) = fast_parse_int(&tokens[i + 2]) {
+                    res.minute = Some(min as u32);
+                    consumed = 3;
+                    if i + 4 < len && tokens[i + 3] == ":" {
+                        if let Some(sec) = fast_parse_int(&tokens[i + 4]) {
+                            res.second = Some(sec as u32);
+                            consumed = 5;
+                        } else if let Some((sec, us)) = fast_parse_decimal(&tokens[i + 4]) {
+                            res.second = Some(sec as u32);
+                            if us > 0 {
+                                res.microsecond = Some(us);
+                            }
+                            consumed = 5;
+                        }
+                    }
+                }
+            }
+
+            consumed
+        }
+        _ => 0,
+    }
+}
+
 #[inline]
 /// Returns the number of tokens consumed (0 = not matched).
 fn try_parse_token<'a>(
@@ -503,6 +678,11 @@ fn try_parse_token<'a>(
 ) -> usize {
     let token = &tokens[i];
 
+    // Handle dot-separated dates (e.g., "2003.09.25", "09.25.2003")
+    if ymd.count == 0 && try_parse_dot_date(token, ymd) {
+        return 1;
+    }
+
     // Try as number — fast integer path first, then decimal (no f64)
     let num: Option<(i32, u32)> = if let Some(vi) = fast_parse_int(token) {
         Some((vi, 0))
@@ -510,6 +690,14 @@ fn try_parse_token<'a>(
         fast_parse_decimal(token)
     };
     if let Some((value_i, value_us)) = num {
+        // Handle compact numeric formats (YYYYMMDD, YYMMDD, HHMMSS, etc.)
+        if value_us == 0 {
+            let compact = try_parse_compact(tokens, i, len, res, ymd, token);
+            if compact > 0 {
+                return compact;
+            }
+        }
+
         // Check for HH:MM:SS pattern (number followed by ":" or HMS word)
         if i + 1 < len && tokens[i + 1] == ":" {
             return try_parse_time_component(tokens, i, len, res, value_i as u32);

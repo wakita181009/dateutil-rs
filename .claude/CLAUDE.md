@@ -2,18 +2,9 @@
 
 ## Project Vision
 
-Build the **definitive date utility library** — a drop-in replacement for python-dateutil with massive performance gains, usable both as a native Rust crate and as a Python package (`python-dateutil-rs`) via PyO3/maturin.
+Build the **definitive date utility library** — a performance-focused alternative to python-dateutil, usable both as a native Rust crate (`dateutil-core`) and as a Python package (`python-dateutil-rs`) via PyO3/maturin.
 
-### Versioning Strategy
-
-| Version | Codename | Description |
-|---------|----------|-------------|
-| **0.x** | v0 | Full python-dateutil API compatibility. Direct Rust port of python-dateutil v2.9.0. Priority: correctness & compatibility. |
-| **1.x** | v1 | Rust-optimized minimal core. Clean break from legacy. Priority: performance & simplicity. |
-
-- `pip install python-dateutil-rs==0.x` → drop-in replacement for python-dateutil
-- `pip install python-dateutil-rs==1.x` → blazing fast, streamlined API
-- Rust users: `dateutil-core` on crates.io
+**Design philosophy**: Cover 95%+ of real-world usage with maximum performance. Intentionally excludes rarely-used features (fuzzy parsing, POSIX TZ strings, etc.) in favor of a clean, fast API.
 
 ## Directory Structure
 
@@ -24,7 +15,7 @@ dateutil-rs/                            # Repository
 ├── pyproject.toml                      # Python project config (maturin)
 │
 ├── crates/
-│   ├── dateutil-core/                  # v1: Pure Rust optimized core (crates.io)
+│   ├── dateutil-core/                  # Pure Rust optimized core (crates.io)
 │   │   ├── Cargo.toml                  # rlib only, no PyO3
 │   │   └── src/
 │   │       ├── lib.rs                  # Crate root, public API
@@ -35,79 +26,44 @@ dateutil-rs/                            # Repository
 │   │       ├── parser.rs             # parse() entry point
 │   │       ├── parser/
 │   │       │   ├── tokenizer.rs      # Zero-copy tokenizer
+│   │       │   ├── parserinfo.rs     # Customizable parser info
 │   │       │   └── isoparser.rs      # isoparse() — ISO-8601
 │   │       ├── rrule.rs              # RRule entry point
 │   │       ├── rrule/
 │   │       │   ├── iter.rs           # Buffer-reusing iterator
 │   │       │   ├── parse.rs          # rrulestr() RFC string parsing
 │   │       │   └── set.rs            # RRuleSet
+│   │       ├── tz.rs                 # Timezone module entry point
 │   │       └── tz/
 │   │           ├── utc.rs            # TzUtc — UTC timezone
 │   │           ├── offset.rs         # TzOffset — fixed-offset timezone
 │   │           ├── file.rs           # TzFile — TZif binary timezone
 │   │           └── local.rs          # TzLocal — system local timezone
 │   │
-│   ├── dateutil-py/                    # PyO3 thin binding layer
-│   │   ├── Cargo.toml                  # depends on dateutil-core + pyo3
-│   │   └── src/
-│   │       ├── lib.rs                  # Module registration
-│   │       ├── py.rs                   # Binding root
-│   │       └── py/
-│   │           ├── common.rs          # Weekday bindings
-│   │           ├── easter.rs          # Easter bindings
-│   │           ├── parser.rs          # Parser bindings
-│   │           ├── relativedelta.rs   # RelativeDelta bindings
-│   │           ├── rrule.rs           # RRule/RRuleSet bindings
-│   │           └── tz.rs             # Timezone bindings
-│   │
-│   └── dateutil-rs/                    # v0: python-dateutil compat
-│       ├── Cargo.toml
+│   └── dateutil-py/                    # PyO3 binding layer → PyPI package
+│       ├── Cargo.toml                  # depends on dateutil-core + pyo3
 │       └── src/
-│           ├── lib.rs                  # Crate root + unified #[pymodule]
-│           ├── common.rs
-│           ├── easter.rs
-│           ├── utils.rs
-│           ├── relativedelta.rs
-│           ├── parser/
-│           │   ├── mod.rs
-│           │   └── isoparser.rs
-│           ├── rrule/
-│           │   ├── mod.rs
-│           │   └── iter.rs
-│           └── tz/
-│               ├── mod.rs
-│               ├── utc.rs
-│               ├── offset.rs
-│               ├── file.rs
-│               ├── local.rs
-│               └── range.rs
+│           ├── lib.rs                  # Module registration
+│           ├── py.rs                   # Binding root + #[pymodule]
+│           └── py/
+│               ├── common.rs          # Weekday bindings
+│               ├── conv.rs            # Shared conversion utilities
+│               ├── easter.rs          # Easter bindings
+│               ├── parser.rs          # Parser bindings
+│               ├── relativedelta.rs   # RelativeDelta bindings
+│               ├── rrule.rs           # RRule/RRuleSet bindings
+│               └── tz.rs             # Timezone bindings
 │
 ├── python/                             # Python package (maturin mixed layout)
 │   └── dateutil_rs/                    # import dateutil_rs
 │       ├── __init__.py                 # Re-exports from Rust native module
-│       ├── _native.pyi                # Type stubs for v0 native module
+│       ├── _native.pyi                # Type stubs for native module
 │       ├── py.typed                    # PEP 561 marker
-│       ├── common.py
-│       ├── easter.py
-│       ├── parser.py
-│       ├── relativedelta.py
-│       ├── rrule.py
-│       ├── tz.py
-│       ├── utils.py
-│       └── v1/                         # v1 optimized API
-│           ├── __init__.py
-│           ├── _native.pyi            # Type stubs for v1 native module
-│           ├── py.typed
-│           ├── common.py
-│           ├── easter.py
-│           ├── parser.py
-│           ├── relativedelta.py
-│           ├── rrule.py
-│           └── tz.py
+│       └── parser.py                  # parserinfo (Python subclass support)
 │
-├── tests/                              # Python tests (from python-dateutil)
+├── tests/                              # Python tests
 ├── benchmarks/                         # Performance benchmarks
-├── .github/                            # CI workflows
+├── .github/                            # CI workflows (ci.yml, publish.yml)
 ├── LICENSE
 └── Makefile
 ```
@@ -116,88 +72,42 @@ dateutil-rs/                            # Repository
 
 | Crate | Purpose | PyO3 | Publish To |
 |-------|---------|------|------------|
-| `dateutil-core` | v1 pure Rust optimized core | No | crates.io |
-| `dateutil-py` | Thin PyO3 binding layer for v1 | Yes | (via dateutil-rs) |
-| `dateutil-rs` | v0 python-dateutil compat + unified native module | Yes | PyPI (`python-dateutil-rs`) |
+| `dateutil-core` | Pure Rust optimized core | No | crates.io |
+| `dateutil-py` | PyO3 binding layer | Yes | PyPI (`python-dateutil-rs`) |
 
-### Unified Native Module
-
-Both v0 and v1 are compiled into a single `_native` shared library. The `dateutil-rs` crate depends on `dateutil-py` (via feature flag `v1`) and registers both module trees under one `#[pymodule]`:
-
-```
-dateutil_rs._native       → v0 API (parser, rrule, tz, etc.)
-dateutil_rs.v1._native    → v1 API (parse, rrule, rruleset, etc.)
-```
-
-### Migration Path
-
-```
-v0.x release:  dateutil-rs  → v0 compat (current)
-               dateutil-py  → v1 bindings (embedded in dateutil-rs via feature flag)
-v1.0 release:  dateutil-py  → wraps dateutil-core (standalone)
-v0.x EOL:      dateutil-rs crate archived
-```
-
-## v0 — python-dateutil Compatibility (Current)
-
-Full python-dateutil v2.9.0 API compatibility. All modules implemented:
-
-| Python Module | Rust Module | Status | Speedup |
-|---|---|---|---|
-| `dateutil.parser` | `dateutil_rs::parser` | ✅ | 1.3x–23.0x |
-| `dateutil.rrule` | `dateutil_rs::rrule` | ✅ | 1.7x–20.6x |
-| `dateutil.tz` | `dateutil_rs::tz` | ✅ | 0.4x–101.2x |
-| `dateutil.relativedelta` | `dateutil_rs::relativedelta` | ✅ | 4.0x–25.2x |
-| `dateutil.easter` | `dateutil_rs::easter` | ✅ | 4.9x–7.3x |
-| `dateutil.utils` | `dateutil_rs::utils` | ✅ (partial) | — |
-| `dateutil._common` | `dateutil_rs::common` | ✅ | — |
-
-## v1 — Rust-Optimized Core
-
-### Design Principles
-
-1. **Zero-copy where possible** — `&str` slices instead of `String` clones
-2. **Buffer reuse** — pre-allocated buffers cleared and reused across iterations
-3. **Compile-time optimization** — `phf` perfect hash maps, const evaluation
-4. **Minimal allocations** — `SmallVec`, stack buffers, bitflags
-5. **No legacy baggage** — drop rarely-used features that add complexity
-
-### v1 Implementation Status
-
-| Module | Rust Crate | PyO3 Bindings | Status |
-|--------|-----------|---------------|--------|
-| `common` (Weekday) | `dateutil_core::common` | `dateutil_py::common` | ✅ Complete |
-| `easter` | `dateutil_core::easter` | `dateutil_py::easter` | ✅ Complete |
-| `relativedelta` | `dateutil_core::relativedelta` | `dateutil_py::relativedelta` | ✅ Complete |
-| `parser` | `dateutil_core::parser` | `dateutil_py::parser` | ✅ Complete |
-| `rrule` | `dateutil_core::rrule` | `dateutil_py::rrule` | ✅ Complete |
-| `tz` | `dateutil_core::tz` | `dateutil_py::tz` | ✅ Complete (tzutc, tzoffset, tzfile, tzlocal, gettz) |
-
-### v1 Feature Scope
+## Feature Scope
 
 ```
 Included (covers 95%+ of real-world usage):
   ✅ parse(timestr)        — date/time string parsing (zero-copy tokenizer)
   ✅ isoparse(dt_str)      — ISO-8601 strict parsing
+  ✅ parse_to_dict(timestr) — returns parsed fields as dict
+  ✅ parserinfo            — customizable parser lookup tables
   ✅ relativedelta          — relative date arithmetic
   ✅ rrule / rruleset       — RFC 5545 recurrence rules
   ✅ rrulestr(s)            — RFC string parsing
+  ✅ rrule __getitem__      — indexing and slicing support
+  ✅ rrule count()          — total occurrence count
+  ✅ rrule __contains__     — membership test
   ✅ easter(year)           — Easter date calculation
   ✅ Weekday (MO–SU)        — weekday constants with N-th occurrence
-  ✅ gettz(name)            — timezone lookup
+  ✅ gettz(name)            — timezone lookup (cached)
   ✅ tzutc / tzoffset       — UTC and fixed-offset timezones
   ✅ tzfile                 — TZif binary timezone files
   ✅ tzlocal                — system local timezone
+  ✅ datetime_exists / datetime_ambiguous / resolve_imaginary
 
 Excluded (legacy / low usage):
-  ❌ parserinfo customization  — complex, rarely used
   ❌ parser fuzzy mode          — low precision, ambiguous results
   ❌ tzrange / tzstr            — POSIX TZ strings (IANA names suffice)
   ❌ tzical                     — iCalendar VTIMEZONE (rrulestr covers RFC 5545)
   ❌ parser timezone resolution — Python-specific tzinfos callback
+  ❌ utils (within_delta, today, default_tzinfo) — trivial to implement in Python
+  ❌ isoparser class            — isoparse() function suffices
+  ❌ rrule xafter/replace       — use iter/list/between instead
 ```
 
-### v1 Key Optimizations
+## Key Optimizations
 
 **Parser:**
 - Zero-copy tokenizer operating on `&str` slices (`&input[start..end]`)
@@ -217,26 +127,18 @@ Excluded (legacy / low usage):
 - Strategic `#[inline]` on hot-path functions
 - Criterion benchmarks integrated in the crate for regression testing
 
-### v1 Measured Performance (2026-04-11)
+## Measured Performance (2026-04-11, vs python-dateutil)
 
-| Module | v0 Speedup (vs Python) | v1 Speedup (vs Python) |
-|--------|------------------------|------------------------|
-| Parser (parse) | 1.3x–3.5x | **19.5x–36.0x** |
-| Parser (isoparse) | 5.1x–23.0x | **13.0x–38.4x** |
-| RRule | 1.7x–20.6x | **5.9x–63.7x** |
-| Timezone | 0.4x–101.2x | **1.0x–896.7x** ¹ |
-| RelativeDelta | 4.0x–25.2x | **2.0x–28.1x** ² |
-| Easter | 4.9x–7.3x | **5.0x–7.3x** |
+| Module | Speedup |
+|--------|---------|
+| Parser (parse) | **19.5x–36.0x** |
+| Parser (isoparse) | **13.0x–38.4x** |
+| RRule | **5.9x–63.7x** |
+| Timezone | **1.0x–896.7x** ¹ |
+| RelativeDelta | **2.0x–28.1x** |
+| Easter | **5.0x–7.3x** |
 
 ¹ Excludes `tzlocal()` which reads `/etc/localtime` on every call without caching.
-² v1 creation is slower due to Python-side kwarg wrapper; arithmetic operations are significantly faster.
-
-### v1 Remaining Phases
-
-**Phase 5 — Release**
-- Full test suite passing for v1
-- Publish dateutil-core to crates.io
-- Publish python-dateutil-rs 1.0 to PyPI
 
 ## Build Configuration
 
@@ -244,11 +146,11 @@ Excluded (legacy / low usage):
 
 ```toml
 [workspace]
-members = ["crates/dateutil-core", "crates/dateutil-py", "crates/dateutil-rs"]
+members = ["crates/dateutil-core", "crates/dateutil-py"]
 resolver = "2"
 ```
 
-### crates/dateutil-core/Cargo.toml (v1 core)
+### crates/dateutil-core/Cargo.toml
 
 ```toml
 [package]
@@ -266,12 +168,13 @@ chrono = "0.4"
 phf = { version = "0.13", features = ["macros"] }
 smallvec = "1.15"
 thiserror = "2"
+iana-time-zone = "0.1"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
 ```
 
-### crates/dateutil-py/Cargo.toml (PyO3 bindings)
+### crates/dateutil-py/Cargo.toml
 
 ```toml
 [package]
@@ -293,67 +196,38 @@ default = []
 python = ["pyo3"]
 ```
 
-### crates/dateutil-rs/Cargo.toml (v0 + unified module)
-
-```toml
-[package]
-name = "dateutil-rs"
-version = "0.0.15"
-edition = "2021"
-
-[lib]
-name = "dateutil_rs"
-crate-type = ["rlib"]
-
-[dependencies]
-chrono = "0.4"
-thiserror = "2"
-pyo3 = { version = "0.28", features = ["extension-module", "chrono"], optional = true }
-dateutil-py = { path = "../dateutil-py", optional = true }
-
-[features]
-default = []
-python = ["pyo3"]
-v1 = ["dateutil-py/python"]
-```
-
 ### pyproject.toml
 
 ```toml
 [build-system]
-requires = ["maturin>=1.0"]
+requires = ["maturin>=1.13"]
 build-backend = "maturin"
 
 [tool.maturin]
-manifest-path = "crates/dateutil-rs/Cargo.toml"
-features = ["python", "v1"]
+manifest-path = "crates/dateutil-py/Cargo.toml"
+features = ["python"]
 python-source = "python"
 module-name = "dateutil_rs._native"
 ```
 
 ## Testing Strategy
 
-- **v1 Rust unit tests:** `cargo test -p dateutil-core` — Tests pure Rust core without Python.
-- **v0 Rust unit tests:** `cargo test -p dateutil-rs` — Tests v0 Rust logic.
-- **Rust benchmarks:** `cargo bench -p dateutil-core` — Criterion benchmarks for v1 core.
-- **Python reference tests:** `uv run pytest tests/` — Tests against python-dateutil. Defines "correct behavior".
-- **Python integration tests:** `uv run pytest` — After `maturin develop`, tests dateutil package.
+- **Rust unit tests:** `cargo test -p dateutil-core` — Tests pure Rust core.
+- **Rust benchmarks:** `cargo bench -p dateutil-core` — Criterion benchmarks.
+- **Python integration tests:** `uv run pytest tests/` — Tests against python-dateutil.
 - **Benchmarks:** `uv run pytest benchmarks/ --benchmark-enable` — Python-side comparison.
 
 ## Development Commands
 
-### v1 Core (dateutil-core crate)
-- `cargo test -p dateutil-core` — Run v1 Rust tests
-- `cargo clippy -p dateutil-core` — Lint v1 code
+### Rust (dateutil-core crate)
+- `cargo test -p dateutil-core` — Run Rust tests
+- `cargo clippy -p dateutil-core` — Lint code
 - `cargo bench -p dateutil-core` — Run Criterion benchmarks
 
-### v0 Compat (dateutil-rs crate)
-- `cargo test -p dateutil-rs` — Run v0 Rust tests
-- `cargo clippy -p dateutil-rs` — Lint v0 code
-
 ### Python
-- `maturin develop -F python -F v1` — Build Python extension (v0 + v1)
-- `uv run pytest tests/` — Run reference Python tests
+- `maturin develop -F python` — Build Python extension (dev)
+- `maturin develop --release` — Build Python extension (release)
+- `uv run pytest tests/` — Run Python tests
 - `uv run pytest benchmarks/ --benchmark-enable` — Run benchmarks
 - `uv run ruff check tests/ python/` — Python linter
 - `uv run mypy python/` — Type checking

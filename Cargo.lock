@@ -241,17 +241,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dateutil-rs"
-version = "0.0.15"
-dependencies = [
- "chrono",
- "criterion",
- "dateutil-py",
- "pyo3",
- "thiserror",
-]
-
-[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

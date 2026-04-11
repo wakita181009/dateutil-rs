@@ -17,4 +17,3 @@ pyo3 = { version = "0.28", features = ["extension-module", "chrono"], optional =
 [features]
 default = []
 python = ["pyo3"]
-standalone = []  # emit #[pymodule] entry point for standalone cdylib builds

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/dateutil-core", "crates/dateutil-py", "crates/dateutil-rs"]
+members = ["crates/dateutil-core", "crates/dateutil-py"]
 resolver = "2"
 
 [profile.release]

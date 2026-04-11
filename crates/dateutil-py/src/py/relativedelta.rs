@@ -1,6 +1,7 @@
 use super::common::PyWeekday;
 use super::conv;
 use chrono::{Datelike, NaiveDateTime};
+use dateutil_core::common;
 use dateutil_core::relativedelta::{RelativeDelta, RelativeDeltaBuilder};
 use pyo3::prelude::*;
 use pyo3::types::{PyDate, PyDateTime, PyDelta, PyDeltaAccess, PyTzInfoAccess};
@@ -16,6 +17,7 @@ pub struct PyRelativeDelta {
 impl PyRelativeDelta {
     #[new]
     #[pyo3(signature = (
+        dt1=None, dt2=None,
         years=0, months=0, days=0, weeks=0,
         hours=0, minutes=0, seconds=0, microseconds=0,
         leapdays=0,
@@ -26,6 +28,8 @@ impl PyRelativeDelta {
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
+        dt1: Option<&Bound<'_, PyAny>>,
+        dt2: Option<&Bound<'_, PyAny>>,
         years: i32,
         months: i32,
         days: i32,
@@ -38,7 +42,7 @@ impl PyRelativeDelta {
         year: Option<i32>,
         month: Option<i32>,
         day: Option<i32>,
-        weekday: Option<PyWeekday>,
+        weekday: Option<Bound<'_, PyAny>>,
         yearday: Option<i32>,
         nlyearday: Option<i32>,
         hour: Option<i32>,
@@ -46,6 +50,23 @@ impl PyRelativeDelta {
         second: Option<i32>,
         microsecond: Option<i32>,
     ) -> PyResult<Self> {
+        // If both dt1 and dt2 are provided, compute the difference
+        // (matches python-dateutil's relativedelta(dt1, dt2) API)
+        if let (Some(d1), Some(d2)) = (dt1, dt2) {
+            let (ndt1, aware1) = py_any_to_ndt_for_diff(d1)?;
+            let (ndt2, aware2) = py_any_to_ndt_for_diff(d2)?;
+
+            if aware1 != aware2 {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "can't compare offset-naive and offset-aware datetimes",
+                ));
+            }
+
+            return Ok(Self {
+                inner: RelativeDelta::from_diff(ndt1, ndt2),
+            });
+        }
+
         let mut builder = RelativeDeltaBuilder::new()
             .years(years)
             .months(months)
@@ -60,7 +81,16 @@ impl PyRelativeDelta {
         if let Some(v) = year { builder = builder.year(v); }
         if let Some(v) = month { builder = builder.month(v); }
         if let Some(v) = day { builder = builder.day(v); }
-        if let Some(wd) = weekday { builder = builder.weekday(wd.into()); }
+        if let Some(ref wd) = weekday {
+            let core_wd = if let Ok(py_wd) = wd.extract::<PyWeekday>() {
+                py_wd.into()
+            } else {
+                let day: u8 = wd.extract()?;
+                common::Weekday::try_from(day)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
+            };
+            builder = builder.weekday(core_wd);
+        }
         if let Some(v) = yearday { builder = builder.yearday(v); }
         if let Some(v) = nlyearday { builder = builder.nlyearday(v); }
         if let Some(v) = hour { builder = builder.hour(v); }
@@ -122,6 +152,8 @@ impl PyRelativeDelta {
     fn microseconds(&self) -> i64 { self.inner.microseconds() }
     #[getter]
     fn weeks(&self) -> i32 { self.inner.weeks() }
+    #[setter]
+    fn set_weeks(&mut self, val: i32) { self.inner.set_weeks(val); }
     #[getter]
     fn leapdays(&self) -> i32 { self.inner.leapdays() }
 

@@ -31,6 +31,8 @@ pub enum EasterError {
 pub enum WeekdayError {
     #[error("invalid weekday: {0} (must be 0..=6)")]
     InvalidWeekday(u8),
+    #[error("N must not be 0")]
+    InvalidN,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

@@ -5,7 +5,8 @@ use std::fmt;
 ///
 /// The `weekday` field is 0-based: 0=Monday, 1=Tuesday, ..., 6=Sunday.
 /// The `n` field indicates the N-th occurrence (e.g., 2nd Tuesday = TU(+2)).
-/// When `n` is `None` or `Some(0)`, only the day name is displayed.
+/// When `n` is `None`, only the day name is displayed.
+/// `n = Some(0)` is rejected at construction time (`Weekday::new`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Weekday {
     weekday: u8,
@@ -22,6 +23,9 @@ impl Weekday {
         if weekday > 6 {
             return Err(WeekdayError::InvalidWeekday(weekday));
         }
+        if n == Some(0) {
+            return Err(WeekdayError::InvalidN);
+        }
         Ok(Self { weekday, n })
     }
 
@@ -36,11 +40,20 @@ impl Weekday {
     }
 
     /// Create a new Weekday with the same day but different `n`.
+    /// `Some(0)` is normalized to `None` (n=0 is semantically "any occurrence").
     pub fn with_n(&self, n: Option<i32>) -> Self {
         Self {
             weekday: self.weekday,
-            n,
+            n: if n == Some(0) { None } else { n },
         }
+    }
+}
+
+impl TryFrom<u8> for Weekday {
+    type Error = WeekdayError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        Self::new(value, None)
     }
 }
 
@@ -48,7 +61,7 @@ impl fmt::Display for Weekday {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = DAY_NAMES[self.weekday as usize];
         match self.n {
-            None | Some(0) => write!(f, "{name}"),
+            None => write!(f, "{name}"),
             Some(n) => write!(f, "{name}({n:+})"),
         }
     }
@@ -124,9 +137,11 @@ mod tests {
     }
 
     #[test]
-    fn test_weekday_display_n_zero() {
-        let wd = Weekday::new(0, Some(0)).unwrap();
-        assert_eq!(wd.to_string(), "MO");
+    fn test_weekday_n_zero_rejected() {
+        assert!(matches!(
+            Weekday::new(0, Some(0)),
+            Err(WeekdayError::InvalidN)
+        ));
     }
 
     #[test]
@@ -214,11 +229,10 @@ mod tests {
 
     #[test]
     fn test_weekday_eq_none_vs_zero() {
+        // n=0 is now rejected at construction time (Weekday::new).
+        // with_n() bypasses validation for internal use, so test display.
         let a = MO.with_n(None);
-        let b = MO.with_n(Some(0));
-        // Display is the same but PartialEq differs (n field differs)
-        assert_eq!(a.to_string(), b.to_string());
-        assert_ne!(a, b);
+        assert_eq!(a.to_string(), "MO");
     }
 
     #[test]
@@ -276,11 +290,11 @@ mod tests {
     }
 
     #[test]
-    fn test_weekday_hash_set_with_n_none_vs_some0() {
+    fn test_weekday_hash_set_none() {
         use std::collections::HashSet;
         let mut set = HashSet::new();
         set.insert(MO.with_n(None));
-        set.insert(MO.with_n(Some(0)));
+        set.insert(MO.with_n(Some(1)));
         assert_eq!(set.len(), 2);
     }
 }

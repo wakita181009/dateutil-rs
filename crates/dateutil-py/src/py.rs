@@ -19,9 +19,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-/// Standalone entry point — only emitted for benchmark builds
-/// (`cargo rustc -p dateutil-py -F python,standalone --crate-type cdylib`).
-#[cfg(feature = "standalone")]
+/// PyO3 module entry point.
+#[cfg(feature = "python")]
 #[pymodule]
 pub fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     register_all(m)

@@ -20,20 +20,30 @@ impl PyWeekday {
 
     /// Create a new weekday with the given N-th occurrence.
     /// e.g. MO(2) means "the 2nd Monday".
+    /// Calling with the same N returns the same object (identity).
     #[pyo3(signature = (n=None))]
-    fn __call__(&self, n: Option<i32>) -> Self {
-        Self {
-            inner: self.inner.with_n(n),
+    fn __call__(slf: Py<Self>, py: Python<'_>, n: Option<i32>) -> PyResult<Py<Self>> {
+        if n == Some(0) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "N must not be 0",
+            ));
         }
+        // Weekday is Copy — borrow once
+        let inner = slf.borrow(py).inner;
+        // If the N-th value is the same, return the same object (identity)
+        if inner.n() == n {
+            return Ok(slf);
+        }
+        Py::new(py, Self { inner: inner.with_n(n) })
     }
 
     #[getter]
-    fn weekday(&self) -> u8 {
+    pub fn weekday(&self) -> u8 {
         self.inner.weekday()
     }
 
     #[getter]
-    fn n(&self) -> Option<i32> {
+    pub fn n(&self) -> Option<i32> {
         self.inner.n()
     }
 
