@@ -120,7 +120,7 @@ Benchmarks compare the original `python-dateutil` (PyPI) and the Rust extension 
 | Parser (parse) | **19.5x-36.0x** |
 | Parser (isoparse) | **13.0x-38.4x** |
 | RRule | **5.9x-63.7x** |
-| Timezone | **1.0x-896.7x** ¹ |
+| Timezone | **1.0x-896.7x** |
 | RelativeDelta | **2.0x-28.1x** |
 | Easter | **5.0x-7.3x** |
 

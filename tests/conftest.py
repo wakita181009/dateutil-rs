@@ -105,11 +105,7 @@ _RUST_XFAIL = {
         "testRelativeDeltaNormalizeFractionalSeconds",
     ),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalAbsolutes"),
-    # -- rrule: unsupported features (xafter, replace, TZID, date dtstart) --
-    ("test_rrule", "RRuleTest", "testDTStartIsDate"),
-    ("test_rrule", "RRuleTest", "testReplaceIfNotSet"),
-    ("test_rrule", "RRuleTest", "testReplaceIfSet"),
-    ("test_rrule", "RRuleTest", "testStrMultipleDTStartComma"),
+    # -- rrule: unsupported features (TZID, aware dtstart) --
     ("test_rrule", "RRuleTest", "testStrSetExDateValueDateTimeWithTZID"),
     ("test_rrule", "RRuleTest", "testStrSetExDateWithTZID"),
     ("test_rrule", "RRuleTest", "testStrUntilMustBeUTC"),
@@ -119,10 +115,6 @@ _RUST_XFAIL = {
     ("test_rrule", "RRuleTest", "testStrWithTZIDCallable"),
     ("test_rrule", "RRuleTest", "testStrWithTZIDCallableFailure"),
     ("test_rrule", "RRuleTest", "testStrWithTZIDMapping"),
-    ("test_rrule", "RRuleTest", "testUntilWithDate"),
-    ("test_rrule", "RRuleTest", "testXAfter"),
-    ("test_rrule", "RRuleTest", "testXAfterInc"),
-    ("test_rrule", "WeekdayTest", "testWeekdayEqualitySubclass"),
     ("test_rrule", "", "test_generated_aware_dtstart"),
     # -- tz: TZICalTest — iCalendar VTIMEZONE not supported --
     ("test_tz", "TZICalTest", "testAmbiguousNegativeUTCOffset"),
@@ -171,6 +163,15 @@ def _make_xfail_key(item):
     return file_stem, cls, item.name
 
 
+# ---------------------------------------------------------------------------
+# Upstream xfail removals: tests with @pytest.mark.xfail in the source that
+# actually pass in the Rust implementation (would become XPASS(strict)).
+# ---------------------------------------------------------------------------
+_RUST_REMOVE_XFAIL = {
+    ("test_rrule", "", "test_generated_aware_dtstart_rrulestr"),
+}
+
+
 # Configure pytest to ignore xfailing tests
 # See: https://stackoverflow.com/a/53198349/467366
 def pytest_collection_modifyitems(config, items):
@@ -184,6 +185,9 @@ def pytest_collection_modifyitems(config, items):
                     strict=True,
                 )
             )
+        # Remove upstream xfail markers for tests that pass in Rust
+        if rust_mode and _make_xfail_key(item) in _RUST_REMOVE_XFAIL:
+            item.own_markers = [m for m in item.own_markers if m.name != "xfail"]
 
         marker_getter = getattr(item, "get_closest_marker", None)
 

@@ -115,6 +115,11 @@ pub fn rrulestr(
                 }
             }
         } else if prop.eq_ignore_ascii_case("DTSTART") {
+            if value.contains(',') {
+                return Err(RRuleError::ValueError(
+                    "DTSTART must be a single date-time value".into(),
+                ));
+            }
             if let Some(dt) = parse_rfc_datetime(value) {
                 dtstart = Some(dt);
             }

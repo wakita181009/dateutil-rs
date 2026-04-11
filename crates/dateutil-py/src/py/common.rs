@@ -2,7 +2,7 @@ use dateutil_core::common;
 use pyo3::prelude::*;
 
 /// Python wrapper for dateutil_core::common::Weekday.
-#[pyclass(name = "weekday", frozen, hash, eq, from_py_object)]
+#[pyclass(name = "weekday", frozen, from_py_object)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PyWeekday {
     inner: common::Weekday,
@@ -45,6 +45,34 @@ impl PyWeekday {
     #[getter]
     pub fn n(&self) -> Option<i32> {
         self.inner.n()
+    }
+
+    fn __hash__(&self) -> isize {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.inner.hash(&mut hasher);
+        hasher.finish() as isize
+    }
+
+    fn __eq__(&self, _py: Python<'_>, other: &Bound<'_, PyAny>) -> bool {
+        // Fast path: other is a PyWeekday
+        if let Ok(wd) = other.extract::<PyWeekday>() {
+            return self.inner == wd.inner;
+        }
+        // Duck-type: must have both `weekday` AND `n` attributes
+        let Ok(wd_attr) = other.getattr("weekday") else {
+            return false;
+        };
+        let Ok(n_attr) = other.getattr("n") else {
+            return false;
+        };
+        let Ok(wd_val) = wd_attr.extract::<u8>() else {
+            return false;
+        };
+        let Ok(n_val) = n_attr.extract::<Option<i32>>() else {
+            return false;
+        };
+        self.inner.weekday() == wd_val && self.inner.n() == n_val
     }
 
     fn __repr__(&self) -> String {

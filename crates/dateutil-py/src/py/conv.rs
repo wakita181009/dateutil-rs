@@ -149,6 +149,26 @@ pub fn ndt_to_py_datetime_with_fold<'py>(
 }
 
 // ---------------------------------------------------------------------------
+// Scalar-or-sequence extraction helpers
+// ---------------------------------------------------------------------------
+
+/// Accept either a single `i32` or a list of `i32`.
+pub fn extract_i32_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<i32>> {
+    if let Ok(v) = obj.extract::<i32>() {
+        return Ok(vec![v]);
+    }
+    obj.extract::<Vec<i32>>()
+}
+
+/// Accept either a single `u8` or a list of `u8`.
+pub fn extract_u8_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    if let Ok(v) = obj.extract::<u8>() {
+        return Ok(vec![v]);
+    }
+    obj.extract::<Vec<u8>>()
+}
+
+// ---------------------------------------------------------------------------
 // Timezone / timedelta helpers
 // ---------------------------------------------------------------------------
 

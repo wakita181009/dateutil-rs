@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use super::common::PyWeekday;
+use super::conv::{extract_i32_list, extract_u8_list, py_any_to_naive_datetime};
 use dateutil_core::common::Weekday;
 use dateutil_core::rrule::iter::RRuleIter as CoreRRuleIter;
 use dateutil_core::rrule::{
@@ -13,24 +14,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PySlice};
 
 // ---------------------------------------------------------------------------
-// Helpers: accept scalar-or-sequence for by* parameters
+// Helper: accept weekday scalar-or-sequence for byweekday parameter
 // ---------------------------------------------------------------------------
-
-/// Accept either a single `i32` or a list of `i32`.
-fn extract_i32_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<i32>> {
-    if let Ok(v) = obj.extract::<i32>() {
-        return Ok(vec![v]);
-    }
-    obj.extract::<Vec<i32>>()
-}
-
-/// Accept either a single `u8` or a list of `u8`.
-fn extract_u8_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
-    if let Ok(v) = obj.extract::<u8>() {
-        return Ok(vec![v]);
-    }
-    obj.extract::<Vec<u8>>()
-}
 
 /// Accept a single weekday/int or a list/tuple of weekday/int and return `Vec<Weekday>`.
 fn extract_byweekday_any(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Weekday>> {
@@ -128,11 +113,11 @@ impl PyRRule {
     fn new(
         py: Python<'_>,
         freq: u8,
-        dtstart: Option<chrono::NaiveDateTime>,
+        dtstart: Option<&Bound<'_, PyAny>>,
         interval: u32,
         wkst: Option<Bound<'_, PyAny>>,
         count: Option<u32>,
-        until: Option<chrono::NaiveDateTime>,
+        until: Option<&Bound<'_, PyAny>>,
         bysetpos: Option<Bound<'_, PyAny>>,
         bymonth: Option<Bound<'_, PyAny>>,
         bymonthday: Option<Bound<'_, PyAny>>,
@@ -149,8 +134,8 @@ impl PyRRule {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let mut builder = RRuleBuilder::new(f).interval(interval);
 
-        if let Some(dt) = dtstart {
-            builder = builder.dtstart(dt);
+        if let Some(obj) = dtstart {
+            builder = builder.dtstart(py_any_to_naive_datetime(obj)?);
         }
         if let Some(ref w) = wkst {
             let val = if let Ok(wd) = w.extract::<PyWeekday>() {
@@ -176,8 +161,8 @@ impl PyRRule {
         if let Some(c) = count {
             builder = builder.count(c);
         }
-        if let Some(u) = until {
-            builder = builder.until(u);
+        if let Some(obj) = until {
+            builder = builder.until(py_any_to_naive_datetime(obj)?);
         }
         if let Some(ref v) = bysetpos {
             builder = builder.bysetpos(extract_i32_list(v)?);
@@ -412,6 +397,170 @@ impl PyRRule {
             return cached.binary_search(&dt).is_ok();
         }
         self.inner.contains(dt)
+    }
+
+    /// Return an iterator yielding `count` occurrences after `dt`.
+    #[pyo3(signature = (dt, count=1, inc=false))]
+    fn xafter(
+        &self,
+        dt: chrono::NaiveDateTime,
+        count: usize,
+        inc: bool,
+    ) -> Vec<chrono::NaiveDateTime> {
+        if let Some(cached) = self.get_cache() {
+            let start = if inc {
+                cached.partition_point(|&x| x < dt)
+            } else {
+                cached.partition_point(|&x| x <= dt)
+            };
+            return cached[start..].iter().copied().take(count).collect();
+        }
+        self.inner
+            .iter()
+            .filter(move |&i| if inc { i >= dt } else { i > dt })
+            .take(count)
+            .collect()
+    }
+
+    /// Return a new rrule with specified parameters replaced.
+    #[pyo3(signature = (
+        freq=None,
+        dtstart=None,
+        interval=None,
+        wkst=None,
+        count=None,
+        until=None,
+        bysetpos=None,
+        bymonth=None,
+        bymonthday=None,
+        byyearday=None,
+        byeaster=None,
+        byweekno=None,
+        byweekday=None,
+        byhour=None,
+        byminute=None,
+        bysecond=None,
+        cache=None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn replace(
+        &self,
+        freq: Option<u8>,
+        dtstart: Option<&Bound<'_, PyAny>>,
+        interval: Option<u32>,
+        wkst: Option<Bound<'_, PyAny>>,
+        count: Option<u32>,
+        until: Option<&Bound<'_, PyAny>>,
+        bysetpos: Option<Bound<'_, PyAny>>,
+        bymonth: Option<Bound<'_, PyAny>>,
+        bymonthday: Option<Bound<'_, PyAny>>,
+        byyearday: Option<Bound<'_, PyAny>>,
+        byeaster: Option<Bound<'_, PyAny>>,
+        byweekno: Option<Bound<'_, PyAny>>,
+        byweekday: Option<Bound<'_, PyAny>>,
+        byhour: Option<Bound<'_, PyAny>>,
+        byminute: Option<Bound<'_, PyAny>>,
+        bysecond: Option<Bound<'_, PyAny>>,
+        cache: Option<bool>,
+    ) -> PyResult<Self> {
+        let f = if let Some(fv) = freq {
+            Frequency::try_from(fv)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
+        } else {
+            self.inner.freq()
+        };
+        let mut builder = RRuleBuilder::new(f);
+
+        builder = builder.dtstart(if let Some(obj) = dtstart {
+            py_any_to_naive_datetime(obj)?
+        } else {
+            self.inner.dtstart()
+        });
+
+        builder = builder.interval(interval.unwrap_or_else(|| self.inner.interval()));
+
+        let wkst_val = if let Some(ref w) = wkst {
+            if let Ok(wd) = w.extract::<PyWeekday>() {
+                wd.weekday()
+            } else {
+                w.extract::<u8>()?
+            }
+        } else {
+            self.inner.wkst()
+        };
+        builder = builder.wkst(wkst_val);
+
+        if let Some(c) = count.or(self.inner.count()) {
+            builder = builder.count(c);
+        }
+        if let Some(obj) = until {
+            builder = builder.until(py_any_to_naive_datetime(obj)?);
+        } else if let Some(u) = self.inner.until() {
+            builder = builder.until(u);
+        }
+
+        // by* fields: use provided override, else copy from existing rule
+        if let Some(ref v) = bysetpos {
+            builder = builder.bysetpos(extract_i32_list(v)?);
+        } else if let Some(v) = self.inner.bysetpos() {
+            builder = builder.bysetpos(v.to_vec());
+        }
+        if let Some(ref v) = bymonth {
+            builder = builder.bymonth(extract_u8_list(v)?);
+        } else if let Some(v) = self.inner.bymonth() {
+            builder = builder.bymonth(v.to_vec());
+        }
+        if let Some(ref v) = bymonthday {
+            builder = builder.bymonthday(extract_i32_list(v)?);
+        } else if !self.inner.bymonthday().is_empty() {
+            builder = builder.bymonthday(self.inner.bymonthday().to_vec());
+        }
+        if let Some(ref v) = byyearday {
+            builder = builder.byyearday(extract_i32_list(v)?);
+        } else if let Some(v) = self.inner.byyearday() {
+            builder = builder.byyearday(v.to_vec());
+        }
+        if let Some(ref v) = byeaster {
+            builder = builder.byeaster(extract_i32_list(v)?);
+        } else if let Some(v) = self.inner.byeaster() {
+            builder = builder.byeaster(v.to_vec());
+        }
+        if let Some(ref v) = byweekno {
+            builder = builder.byweekno(extract_i32_list(v)?);
+        } else if let Some(v) = self.inner.byweekno() {
+            builder = builder.byweekno(v.to_vec());
+        }
+        if let Some(ref v) = byweekday {
+            builder = builder.byweekday(extract_byweekday_any(v)?);
+        } else if let Some(v) = self.inner.byweekday() {
+            builder = builder.byweekday(v.to_vec());
+        }
+        if let Some(ref v) = byhour {
+            builder = builder.byhour(extract_u8_list(v)?);
+        } else if let Some(v) = self.inner.byhour() {
+            builder = builder.byhour(v.to_vec());
+        }
+        if let Some(ref v) = byminute {
+            builder = builder.byminute(extract_u8_list(v)?);
+        } else if let Some(v) = self.inner.byminute() {
+            builder = builder.byminute(v.to_vec());
+        }
+        if let Some(ref v) = bysecond {
+            builder = builder.bysecond(extract_u8_list(v)?);
+        } else if let Some(v) = self.inner.bysecond() {
+            builder = builder.bysecond(v.to_vec());
+        }
+
+        let inner = builder
+            .build()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let cache_val = cache.unwrap_or(self.cache_enabled);
+        let cache_enabled = cache_val && inner.is_finite();
+        Ok(Self {
+            inner,
+            cache_enabled,
+            cache: OnceLock::new(),
+        })
     }
 }
 
@@ -874,12 +1023,13 @@ impl PyRRuleSetIter {
 fn rrulestr_py(
     py: Python<'_>,
     s: &str,
-    dtstart: Option<chrono::NaiveDateTime>,
+    dtstart: Option<&Bound<'_, PyAny>>,
     forceset: bool,
     compatible: bool,
     unfold: bool,
     cache: bool,
 ) -> PyResult<Py<PyAny>> {
+    let dtstart = dtstart.map(py_any_to_naive_datetime).transpose()?;
     let result = core_rrulestr(s, dtstart, forceset, compatible, unfold)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     match result {
