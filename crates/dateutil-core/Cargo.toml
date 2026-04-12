@@ -1,10 +1,10 @@
 [package]
 name = "dateutil"
-version = "0.1.3"
-edition = "2021"
-license = "MIT"
 description = "Fast date utility library — parser, relativedelta, rrule, timezone (Rust reimplementation of python-dateutil)"
-repository = "https://github.com/wakita181009/dateutil-rs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 keywords = ["date", "datetime", "parser", "rrule", "timezone"]
 categories = ["date-and-time", "parser-implementations"]
 readme = "README.md"

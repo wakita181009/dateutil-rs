@@ -195,15 +195,6 @@ dateutil-rs/
 | tz (tzutc, tzoffset, tzfile, tzlocal) | ✅ | 1.0x-896.7x faster |
 | tz utilities (gettz, datetime_exists, etc.) | ✅ | gettz with caching |
 
-## Roadmap
-
-1. ~~Python-only phase — Pure Python port with full test coverage~~ ✅
-2. ~~Rust core + PyO3 bindings — easter, relativedelta, parser, weekday~~ ✅
-3. ~~Rust rrule — Rewrite recurrence rules in Rust~~ ✅
-4. ~~Rust tz — Rewrite timezone support in Rust~~ ✅
-5. ~~Optimized core — zero-copy parser, buffer-reusing rrule, consolidated architecture~~ ✅
-6. **Release** — Publish dateutil-core to crates.io and python-dateutil-rs 1.0 to PyPI
-
 ## License
 
 [MIT](LICENSE)
