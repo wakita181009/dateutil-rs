@@ -7,31 +7,17 @@ use chrono::{Datelike, Timelike};
 use dateutil::parser;
 use dateutil::parser::{IsoParser, IsoTz, ParserInfo};
 use dateutil::tz::TzOffset;
-use pyo3::exceptions::{PyTypeError, PyUnicodeDecodeError, PyValueError};
+use pyo3::create_exception;
+use pyo3::exceptions::{PyRuntimeWarning, PyTypeError, PyUnicodeDecodeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyByteArray, PyBytes, PyDate, PyDict, PyTime, PyType, PyTzInfo};
 
 // ---------------------------------------------------------------------------
-// ParserError — cached lookup of dateutil.parser.ParserError
+// Exception types exposed to Python
 // ---------------------------------------------------------------------------
 
-static PARSER_ERROR: PyOnceLock<Py<PyType>> = PyOnceLock::new();
-
-fn parser_error_type(py: Python<'_>) -> PyResult<&Py<PyType>> {
-    PARSER_ERROR.get_or_try_init(py, || {
-        let cls = py.import("dateutil.parser")?.getattr("ParserError")?;
-        Ok(cls.cast_into::<PyType>()?.unbind())
-    })
-}
-
-/// Build a `dateutil.parser.ParserError(msg)` PyErr.
-fn parser_error(py: Python<'_>, msg: impl Into<String>) -> PyErr {
-    match parser_error_type(py) {
-        Ok(cls) => PyErr::from_type(cls.bind(py).clone(), (msg.into(),)),
-        Err(e) => e,
-    }
-}
+create_exception!(dateutil_py, ParserError, PyValueError);
+create_exception!(dateutil_py, UnknownTimezoneWarning, PyRuntimeWarning);
 
 // ---------------------------------------------------------------------------
 // Input coercion: str | bytes | bytearray | stream with .read() -> str
@@ -317,18 +303,19 @@ fn parse_py<'py>(
 
     let res = py
         .detach(|| parser::parse_to_result(&timestr, df, yf, info_ref))
-        .map_err(|e| parser_error(py, e.to_string()))?;
+        .map_err(|e| ParserError::new_err(e.to_string()))?;
 
     let now = chrono::Local::now().naive_local();
     let default_dt = default.unwrap_or_else(|| now.date().and_hms_opt(0, 0, 0).unwrap());
-    let ndt = parser::build_naive(&res, default_dt).map_err(|e| parser_error(py, e.to_string()))?;
+    let ndt =
+        parser::build_naive(&res, default_dt).map_err(|e| ParserError::new_err(e.to_string()))?;
 
     // Remap Python-side datetime construction errors (e.g. year=0, day=32)
     // from ValueError -> ParserError so callers can catch either consistently.
     let to_py_dt = |tz: Option<&Bound<'py, PyTzInfo>>| -> PyResult<Bound<'py, pyo3::PyAny>> {
         ndt_to_py_datetime(py, ndt, tz).map_err(|e| {
             if e.is_instance_of::<PyValueError>(py) {
-                parser_error(py, e.value(py).to_string())
+                ParserError::new_err(e.value(py).to_string())
             } else {
                 e
             }
@@ -396,7 +383,7 @@ fn parse_to_dict_py<'py>(
 
     let res = py
         .detach(|| parser::parse_to_result(&timestr, df, yf, info_ref))
-        .map_err(|e| parser_error(py, e.to_string()))?;
+        .map_err(|e| ParserError::new_err(e.to_string()))?;
 
     let dict = PyDict::new(py);
     dict.set_item("year", res.year)?;
@@ -580,6 +567,12 @@ impl PyIsoParser {
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    m.add("ParserError", py.get_type::<ParserError>())?;
+    m.add(
+        "UnknownTimezoneWarning",
+        py.get_type::<UnknownTimezoneWarning>(),
+    )?;
     m.add_class::<PyParserInfo>()?;
     m.add_class::<PyIsoParser>()?;
     m.add_function(pyo3::wrap_pyfunction!(parse_py, m)?)?;

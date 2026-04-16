@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import sys
 from collections.abc import Callable, Iterator, Mapping
-from typing import Final, Literal, TypeAlias, TypedDict, overload
+from typing import IO, Final, Literal, TypeAlias, TypedDict, overload
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -59,6 +59,12 @@ def easter(year: int, method: _EasterMethod = EASTER_WESTERN) -> datetime.date: 
 # parser
 # ---------------------------------------------------------------------------
 
+class ParserError(ValueError):
+    """Exception raised when a string cannot be parsed as a date/time."""
+
+class UnknownTimezoneWarning(RuntimeWarning):
+    """Warning raised when an unknown timezone string is encountered."""
+
 class ParseResultDict(TypedDict):
     year: int | None
     month: int | None
@@ -98,8 +104,10 @@ class _ParserInfoBase:
 _TzData = datetime.tzinfo | int | str | None
 _TzInfos = Mapping[str, _TzData] | Callable[[str, int], _TzData]
 
+_TimeStr = str | bytes | bytearray | IO[str] | IO[bytes]
+
 def parse(
-    timestr: str,
+    timestr: _TimeStr,
     parserinfo: _ParserInfoBase | None = None,
     *,
     dayfirst: bool | None = None,
@@ -109,7 +117,7 @@ def parse(
     tzinfos: _TzInfos | None = None,
 ) -> datetime.datetime: ...
 def parse_to_dict(
-    timestr: str,
+    timestr: _TimeStr,
     *,
     parserinfo: _ParserInfoBase | None = None,
     dayfirst: bool | None = None,
