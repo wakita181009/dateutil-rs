@@ -5,7 +5,8 @@ pub mod tokenizer;
 pub use isoparser::{isoparse, IsoParsed, IsoParser, IsoTimeParsed, IsoTz};
 pub use parserinfo::ParserInfo;
 use parserinfo::{
-    do_ampm, do_hms, do_jump, do_month, do_pertain, do_tzoffset, do_utczone, do_weekday,
+    do_ampm_lc, do_hms, do_jump, do_jump_lc, do_month_lc, do_pertain_lc, do_tzoffset_lc,
+    do_utczone_lc, do_weekday_lc,
 };
 
 use crate::error::ParseError;
@@ -116,7 +117,7 @@ static UTCZONE: phf::Set<&'static str> = phf::phf_set! { "utc", "gmt", "z" };
 /// Lowercase a token into a stack buffer (max 16 bytes).
 /// Returns None if too long or contains non-ASCII bytes (safety guard for unsafe lower_str).
 #[inline]
-fn lowercase_buf(s: &str) -> Option<[u8; 16]> {
+pub(crate) fn lowercase_buf(s: &str) -> Option<[u8; 16]> {
     let bytes = s.as_bytes();
     if bytes.len() > 16 || !bytes.iter().all(|b| b.is_ascii()) {
         return None;
@@ -129,28 +130,25 @@ fn lowercase_buf(s: &str) -> Option<[u8; 16]> {
 }
 
 #[inline]
-fn lower_str<'a>(s: &str, buf: &'a [u8; 16]) -> &'a str {
+pub(crate) fn lower_str<'a>(s: &str, buf: &'a [u8; 16]) -> &'a str {
     // SAFETY: lowercase_buf() validates all bytes are ASCII before lowercasing,
     // so the result is guaranteed valid UTF-8.
     unsafe { std::str::from_utf8_unchecked(&buf[..s.len()]) }
 }
 
 #[inline]
-fn lookup_jump(s: &str) -> bool {
-    lowercase_buf(s).is_some_and(|buf| JUMP.contains(lower_str(s, &buf)))
+pub(crate) fn lookup_jump_lc(low: Option<&str>) -> bool {
+    low.is_some_and(|l| JUMP.contains(l))
 }
 
 #[inline]
-fn lookup_weekday(s: &str) -> Option<usize> {
-    let buf = lowercase_buf(s)?;
-    let low = lower_str(s, &buf);
+pub(crate) fn lookup_weekday_lc(original_len: usize, low: Option<&str>) -> Option<usize> {
+    let low = low?;
     if let Some(&v) = WEEKDAYS.get(low) {
         return Some(v);
     }
-    // Prefix match for 4+ letter abbreviations
-    if s.len() >= 4 {
-        let prefix = &low[..3];
-        if let Some(&v) = WEEKDAYS.get(prefix) {
+    if original_len >= 4 {
+        if let Some(&v) = WEEKDAYS.get(&low[..3]) {
             return Some(v);
         }
     }
@@ -158,31 +156,81 @@ fn lookup_weekday(s: &str) -> Option<usize> {
 }
 
 #[inline]
-fn lookup_month(s: &str) -> Option<usize> {
-    let buf = lowercase_buf(s)?;
-    MONTHS.get(lower_str(s, &buf)).copied()
+pub(crate) fn lookup_month_lc(low: Option<&str>) -> Option<usize> {
+    low.and_then(|l| MONTHS.get(l).copied())
 }
 
+#[inline]
+pub(crate) fn lookup_hms_lc(low: Option<&str>) -> Option<usize> {
+    low.and_then(|l| HMS.get(l).copied())
+}
+
+#[inline]
+pub(crate) fn lookup_ampm_lc(low: Option<&str>) -> Option<usize> {
+    low.and_then(|l| AMPM.get(l).copied())
+}
+
+#[inline]
+pub(crate) fn lookup_pertain_lc(low: Option<&str>) -> bool {
+    low.is_some_and(|l| PERTAIN.contains(l))
+}
+
+#[inline]
+pub(crate) fn lookup_utczone_lc(low: Option<&str>) -> bool {
+    low.is_some_and(|l| UTCZONE.contains(l))
+}
+
+// ---- Wrappers that recompute lowercase_buf ----
+// Test-only variants (non-_lc) keep existing regression tests readable.
+// The jump/hms wrappers are also used by the rare non-hot-path dispatchers
+// in parserinfo.rs (do_jump on prev token, do_hms on lookahead token).
+
+#[inline]
+fn lookup_jump(s: &str) -> bool {
+    let buf = lowercase_buf(s);
+    lookup_jump_lc(buf.as_ref().map(|b| lower_str(s, b)))
+}
+
+#[cfg(test)]
+#[inline]
+fn lookup_weekday(s: &str) -> Option<usize> {
+    let buf = lowercase_buf(s);
+    lookup_weekday_lc(s.len(), buf.as_ref().map(|b| lower_str(s, b)))
+}
+
+#[cfg(test)]
+#[inline]
+fn lookup_month(s: &str) -> Option<usize> {
+    let buf = lowercase_buf(s);
+    lookup_month_lc(buf.as_ref().map(|b| lower_str(s, b)))
+}
+
+// lookup_hms retained for the non-test caller do_hms() below.
 #[inline]
 fn lookup_hms(s: &str) -> Option<usize> {
-    let buf = lowercase_buf(s)?;
-    HMS.get(lower_str(s, &buf)).copied()
+    let buf = lowercase_buf(s);
+    lookup_hms_lc(buf.as_ref().map(|b| lower_str(s, b)))
 }
 
+#[cfg(test)]
 #[inline]
 fn lookup_ampm(s: &str) -> Option<usize> {
-    let buf = lowercase_buf(s)?;
-    AMPM.get(lower_str(s, &buf)).copied()
+    let buf = lowercase_buf(s);
+    lookup_ampm_lc(buf.as_ref().map(|b| lower_str(s, b)))
 }
 
+#[cfg(test)]
 #[inline]
 fn lookup_pertain(s: &str) -> bool {
-    lowercase_buf(s).is_some_and(|buf| PERTAIN.contains(lower_str(s, &buf)))
+    let buf = lowercase_buf(s);
+    lookup_pertain_lc(buf.as_ref().map(|b| lower_str(s, b)))
 }
 
+#[cfg(test)]
 #[inline]
 fn lookup_utczone(s: &str) -> bool {
-    lowercase_buf(s).is_some_and(|buf| UTCZONE.contains(lower_str(s, &buf)))
+    let buf = lowercase_buf(s);
+    lookup_utczone_lc(buf.as_ref().map(|b| lower_str(s, b)))
 }
 
 // ---------------------------------------------------------------------------
@@ -758,21 +806,28 @@ fn try_parse_token<'a>(
         return 0;
     }
 
+    // Lower-case the token once and reuse the view across all alphabetic
+    // dispatch helpers. Non-ASCII / overlong tokens get `None` — none of the
+    // PHF tables or ParserInfo HashMaps will match those.
+    let lc_buf = lowercase_buf(token);
+    let lc: Option<&str> = lc_buf.as_ref().map(|b| lower_str(token, b));
+    let token_len = token.len();
+
     // Try as weekday
-    if let Some(wd) = do_weekday(token, info) {
+    if let Some(wd) = do_weekday_lc(token_len, lc, info) {
         res.weekday = Some(wd);
         return 1;
     }
 
     // Try as month
-    if let Some(mo) = do_month(token, info) {
+    if let Some(mo) = do_month_lc(lc, info) {
         ymd.mstridx = Some(ymd.count);
         ymd.push(mo as i32);
         return 1;
     }
 
     // Try as AM/PM
-    if let Some(ampm) = do_ampm(token, info) {
+    if let Some(ampm) = do_ampm_lc(lc, info) {
         if let Some(h) = res.hour {
             if ampm == 1 && h < 12 {
                 res.hour = Some(h + 12);
@@ -831,26 +886,26 @@ fn try_parse_token<'a>(
     }
 
     // Known timezone abbreviation from parserinfo (e.g. EST → -18000)
-    if let Some(offset) = do_tzoffset(token, info) {
+    if let Some(offset) = do_tzoffset_lc(lc, info) {
         res.tzname = Some(token.clone());
         res.tzoffset = Some(offset);
         return 1;
     }
 
     // UTC zone
-    if do_utczone(token, info) {
+    if do_utczone_lc(lc, info) {
         res.tzname = Some("UTC".into());
         res.tzoffset = Some(0);
         return 1;
     }
 
     // Jump word
-    if do_jump(token, info) {
+    if do_jump_lc(lc, info) {
         return 1;
     }
 
     // Pertain word
-    if do_pertain(token, info) {
+    if do_pertain_lc(lc, info) {
         return 1;
     }
 

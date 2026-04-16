@@ -123,6 +123,17 @@ fn bench_parser(c: &mut Criterion) {
         })
     });
 
+    // Worst-case alphabetic dispatch: the alpha token falls through weekday/
+    // month/ampm/utczone/jump/pertain lookups and is finally consumed as
+    // tzname. Exercises the lowercase_buf recomputation path.
+    c.bench_function("parse_unknown_alpha_cascade", |b| {
+        b.iter(|| {
+            black_box(
+                parser::parse(black_box("2024-01-15 10:30 xyz"), false, false, None, None).unwrap(),
+            );
+        })
+    });
+
     c.bench_function("isoparse_full", |b| {
         b.iter(|| {
             black_box(parser::isoparse(black_box("2024-01-15T10:30:45.123456")).unwrap());

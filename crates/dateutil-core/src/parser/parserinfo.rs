@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    lookup_ampm, lookup_hms, lookup_jump, lookup_month, lookup_pertain, lookup_utczone,
-    lookup_weekday,
+    lookup_ampm_lc, lookup_hms, lookup_jump, lookup_jump_lc, lookup_month_lc, lookup_pertain_lc,
+    lookup_utczone_lc, lookup_weekday_lc,
 };
 use super::{lower_str, lowercase_buf};
 
@@ -124,17 +124,68 @@ impl Default for ParserInfo {
 impl ParserInfo {
     #[inline]
     pub fn jump(&self, s: &str) -> bool {
-        lowercase_buf(s).is_some_and(|buf| self.jump.contains(lower_str(s, &buf)))
+        let buf = lowercase_buf(s);
+        self.jump_lc(buf.as_ref().map(|b| lower_str(s, b)))
     }
 
     #[inline]
     pub fn weekday(&self, s: &str) -> Option<usize> {
-        let buf = lowercase_buf(s)?;
-        let low = lower_str(s, &buf);
+        let buf = lowercase_buf(s);
+        self.weekday_lc(s.len(), buf.as_ref().map(|b| lower_str(s, b)))
+    }
+
+    #[inline]
+    pub fn month(&self, s: &str) -> Option<usize> {
+        let buf = lowercase_buf(s);
+        self.month_lc(buf.as_ref().map(|b| lower_str(s, b)))
+    }
+
+    #[inline]
+    pub fn hms(&self, s: &str) -> Option<usize> {
+        let buf = lowercase_buf(s);
+        self.hms_lc(buf.as_ref().map(|b| lower_str(s, b)))
+    }
+
+    #[inline]
+    pub fn ampm(&self, s: &str) -> Option<usize> {
+        let buf = lowercase_buf(s);
+        self.ampm_lc(buf.as_ref().map(|b| lower_str(s, b)))
+    }
+
+    #[inline]
+    pub fn pertain(&self, s: &str) -> bool {
+        let buf = lowercase_buf(s);
+        self.pertain_lc(buf.as_ref().map(|b| lower_str(s, b)))
+    }
+
+    #[inline]
+    pub fn utczone(&self, s: &str) -> bool {
+        let buf = lowercase_buf(s);
+        self.utczone_lc(buf.as_ref().map(|b| lower_str(s, b)))
+    }
+
+    /// Look up a known timezone abbreviation. Returns offset in seconds.
+    /// UTC-equivalent zones return `Some(0)`. Matching is case-insensitive.
+    #[inline]
+    pub fn tzoffset(&self, name: &str) -> Option<i32> {
+        let buf = lowercase_buf(name);
+        self.tzoffset_lc(buf.as_ref().map(|b| lower_str(name, b)))
+    }
+
+    // ---- Pre-lowered variants (skip lowercase_buf recomputation) ----
+
+    #[inline]
+    pub(crate) fn jump_lc(&self, low: Option<&str>) -> bool {
+        low.is_some_and(|l| self.jump.contains(l))
+    }
+
+    #[inline]
+    pub(crate) fn weekday_lc(&self, original_len: usize, low: Option<&str>) -> Option<usize> {
+        let low = low?;
         if let Some(&v) = self.weekdays.get(low) {
             return Some(v);
         }
-        if s.len() >= 4 {
+        if original_len >= 4 {
             if let Some(&v) = self.weekdays.get(&low[..3]) {
                 return Some(v);
             }
@@ -143,40 +194,33 @@ impl ParserInfo {
     }
 
     #[inline]
-    pub fn month(&self, s: &str) -> Option<usize> {
-        let buf = lowercase_buf(s)?;
-        self.months.get(lower_str(s, &buf)).copied()
+    pub(crate) fn month_lc(&self, low: Option<&str>) -> Option<usize> {
+        low.and_then(|l| self.months.get(l).copied())
     }
 
     #[inline]
-    pub fn hms(&self, s: &str) -> Option<usize> {
-        let buf = lowercase_buf(s)?;
-        self.hms.get(lower_str(s, &buf)).copied()
+    pub(crate) fn hms_lc(&self, low: Option<&str>) -> Option<usize> {
+        low.and_then(|l| self.hms.get(l).copied())
     }
 
     #[inline]
-    pub fn ampm(&self, s: &str) -> Option<usize> {
-        let buf = lowercase_buf(s)?;
-        self.ampm.get(lower_str(s, &buf)).copied()
+    pub(crate) fn ampm_lc(&self, low: Option<&str>) -> Option<usize> {
+        low.and_then(|l| self.ampm.get(l).copied())
     }
 
     #[inline]
-    pub fn pertain(&self, s: &str) -> bool {
-        lowercase_buf(s).is_some_and(|buf| self.pertain.contains(lower_str(s, &buf)))
+    pub(crate) fn pertain_lc(&self, low: Option<&str>) -> bool {
+        low.is_some_and(|l| self.pertain.contains(l))
     }
 
     #[inline]
-    pub fn utczone(&self, s: &str) -> bool {
-        lowercase_buf(s).is_some_and(|buf| self.utczone.contains(lower_str(s, &buf)))
+    pub(crate) fn utczone_lc(&self, low: Option<&str>) -> bool {
+        low.is_some_and(|l| self.utczone.contains(l))
     }
 
-    /// Look up a known timezone abbreviation. Returns offset in seconds.
-    /// UTC-equivalent zones return `Some(0)`. Matching is case-insensitive.
-    /// Single `lowercase_buf` call covers both utczone and tzoffset lookups.
     #[inline]
-    pub fn tzoffset(&self, name: &str) -> Option<i32> {
-        let buf = lowercase_buf(name)?;
-        let low = lower_str(name, &buf);
+    pub(crate) fn tzoffset_lc(&self, low: Option<&str>) -> Option<i32> {
+        let low = low?;
         if self.utczone.contains(low) {
             return Some(0);
         }
@@ -188,44 +232,75 @@ impl ParserInfo {
 // Dispatch helpers — use ParserInfo when provided, PHF otherwise.
 // ---------------------------------------------------------------------------
 
-#[inline]
-pub(super) fn do_jump(s: &str, info: Option<&ParserInfo>) -> bool {
-    info.map_or_else(|| lookup_jump(s), |i| i.jump(s))
-}
-
-#[inline]
-pub(super) fn do_weekday(s: &str, info: Option<&ParserInfo>) -> Option<usize> {
-    info.map_or_else(|| lookup_weekday(s), |i| i.weekday(s))
-}
-
-#[inline]
-pub(super) fn do_month(s: &str, info: Option<&ParserInfo>) -> Option<usize> {
-    info.map_or_else(|| lookup_month(s), |i| i.month(s))
-}
-
+// Non-_lc helpers retained for rare callers that only check a single token
+// (e.g. the lookahead HMS check on tokens[i+1], or the tz-prev-token check).
 #[inline]
 pub(super) fn do_hms(s: &str, info: Option<&ParserInfo>) -> Option<usize> {
     info.map_or_else(|| lookup_hms(s), |i| i.hms(s))
 }
 
 #[inline]
-pub(super) fn do_ampm(s: &str, info: Option<&ParserInfo>) -> Option<usize> {
-    info.map_or_else(|| lookup_ampm(s), |i| i.ampm(s))
+pub(super) fn do_jump(s: &str, info: Option<&ParserInfo>) -> bool {
+    info.map_or_else(|| lookup_jump(s), |i| i.jump(s))
+}
+
+// ---- Pre-lowered dispatch helpers (used in try_parse_token hot path) ----
+
+#[inline]
+pub(super) fn do_jump_lc(low: Option<&str>, info: Option<&ParserInfo>) -> bool {
+    match info {
+        Some(i) => i.jump_lc(low),
+        None => lookup_jump_lc(low),
+    }
 }
 
 #[inline]
-pub(super) fn do_pertain(s: &str, info: Option<&ParserInfo>) -> bool {
-    info.map_or_else(|| lookup_pertain(s), |i| i.pertain(s))
+pub(super) fn do_weekday_lc(
+    original_len: usize,
+    low: Option<&str>,
+    info: Option<&ParserInfo>,
+) -> Option<usize> {
+    match info {
+        Some(i) => i.weekday_lc(original_len, low),
+        None => lookup_weekday_lc(original_len, low),
+    }
 }
 
 #[inline]
-pub(super) fn do_utczone(s: &str, info: Option<&ParserInfo>) -> bool {
-    info.map_or_else(|| lookup_utczone(s), |i| i.utczone(s))
+pub(super) fn do_month_lc(low: Option<&str>, info: Option<&ParserInfo>) -> Option<usize> {
+    match info {
+        Some(i) => i.month_lc(low),
+        None => lookup_month_lc(low),
+    }
 }
 
 #[inline]
-pub(super) fn do_tzoffset(name: &str, info: Option<&ParserInfo>) -> Option<i32> {
-    info.and_then(|i| i.tzoffset(name))
+pub(super) fn do_ampm_lc(low: Option<&str>, info: Option<&ParserInfo>) -> Option<usize> {
+    match info {
+        Some(i) => i.ampm_lc(low),
+        None => lookup_ampm_lc(low),
+    }
+}
+
+#[inline]
+pub(super) fn do_pertain_lc(low: Option<&str>, info: Option<&ParserInfo>) -> bool {
+    match info {
+        Some(i) => i.pertain_lc(low),
+        None => lookup_pertain_lc(low),
+    }
+}
+
+#[inline]
+pub(super) fn do_utczone_lc(low: Option<&str>, info: Option<&ParserInfo>) -> bool {
+    match info {
+        Some(i) => i.utczone_lc(low),
+        None => lookup_utczone_lc(low),
+    }
+}
+
+#[inline]
+pub(super) fn do_tzoffset_lc(low: Option<&str>, info: Option<&ParserInfo>) -> Option<i32> {
+    info.and_then(|i| i.tzoffset_lc(low))
 }
 
 #[cfg(test)]
@@ -299,16 +374,30 @@ mod tests {
         assert_eq!(info.month("January"), Some(1));
     }
 
+    // Helper to call a _lc dispatcher with fresh lowercase.
+    fn low<'a>(s: &'a str, buf: &'a mut [u8; 16]) -> Option<&'a str> {
+        let bytes = s.as_bytes();
+        if bytes.len() > 16 || !bytes.iter().all(|b| b.is_ascii()) {
+            return None;
+        }
+        for (i, &b) in bytes.iter().enumerate() {
+            buf[i] = b.to_ascii_lowercase();
+        }
+        // SAFETY: all bytes are ASCII after lowercase copy
+        Some(unsafe { std::str::from_utf8_unchecked(&buf[..bytes.len()]) })
+    }
+
     #[test]
     fn test_dispatch_with_none_uses_phf() {
-        assert_eq!(do_month("January", None), Some(1));
-        assert_eq!(do_weekday("Monday", None), Some(0));
+        let mut buf = [0u8; 16];
+        assert_eq!(do_month_lc(low("January", &mut buf), None), Some(1));
+        assert_eq!(do_weekday_lc(6, low("Monday", &mut buf), None), Some(0));
         assert!(do_jump("at", None));
-        assert!(do_utczone("UTC", None));
+        assert!(do_utczone_lc(low("UTC", &mut buf), None));
         assert_eq!(do_hms("hour", None), Some(0));
-        assert_eq!(do_ampm("AM", None), Some(0));
-        assert!(do_pertain("of", None));
-        assert_eq!(do_tzoffset("EST", None), None);
+        assert_eq!(do_ampm_lc(low("AM", &mut buf), None), Some(0));
+        assert!(do_pertain_lc(low("of", &mut buf), None));
+        assert_eq!(do_tzoffset_lc(low("EST", &mut buf), None), None);
     }
 
     #[test]
@@ -316,9 +405,16 @@ mod tests {
         let mut info = ParserInfo::default();
         info.tzoffset.insert("est".into(), -18000);
 
-        assert_eq!(do_tzoffset("EST", Some(&info)), Some(-18000));
-        assert_eq!(do_tzoffset("est", Some(&info)), Some(-18000));
-        assert_eq!(do_month("January", Some(&info)), Some(1));
+        let mut buf = [0u8; 16];
+        assert_eq!(
+            do_tzoffset_lc(low("EST", &mut buf), Some(&info)),
+            Some(-18000)
+        );
+        assert_eq!(
+            do_tzoffset_lc(low("est", &mut buf), Some(&info)),
+            Some(-18000)
+        );
+        assert_eq!(do_month_lc(low("January", &mut buf), Some(&info)), Some(1));
     }
 
     #[test]
@@ -352,12 +448,16 @@ mod tests {
     #[test]
     fn test_dispatch_with_some_info() {
         let info = ParserInfo::default();
+        let mut buf = [0u8; 16];
         assert!(do_jump(",", Some(&info)));
-        assert_eq!(do_weekday("Monday", Some(&info)), Some(0));
-        assert_eq!(do_month("January", Some(&info)), Some(1));
+        assert_eq!(
+            do_weekday_lc(6, low("Monday", &mut buf), Some(&info)),
+            Some(0)
+        );
+        assert_eq!(do_month_lc(low("January", &mut buf), Some(&info)), Some(1));
         assert_eq!(do_hms("hour", Some(&info)), Some(0));
-        assert_eq!(do_ampm("AM", Some(&info)), Some(0));
-        assert!(do_pertain("of", Some(&info)));
-        assert!(do_utczone("UTC", Some(&info)));
+        assert_eq!(do_ampm_lc(low("AM", &mut buf), Some(&info)), Some(0));
+        assert!(do_pertain_lc(low("of", &mut buf), Some(&info)));
+        assert!(do_utczone_lc(low("UTC", &mut buf), Some(&info)));
     }
 }
