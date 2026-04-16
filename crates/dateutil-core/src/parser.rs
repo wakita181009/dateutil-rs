@@ -1114,23 +1114,6 @@ fn parse_tzoffset(s: &str) -> Option<i32> {
 
 /// Build a `NaiveDateTime` from a `ParseResult`, filling missing fields from
 /// `default`.
-#[inline]
-fn days_in_month(year: i32, month: u32) -> u32 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-            if leap {
-                29
-            } else {
-                28
-            }
-        }
-        _ => 31, // will be rejected later by NaiveDate::from_ymd_opt
-    }
-}
-
 pub fn build_naive(
     res: &ParseResult<'_>,
     default: NaiveDateTime,
@@ -1152,7 +1135,7 @@ pub fn build_naive(
     // 2009-04-30 rather than an invalid 2009-04-31.
     let day = match res.day {
         Some(d) => d,
-        None => default.day().min(days_in_month(year, month)),
+        None => default.day().min(crate::common::days_in_month(year, month)),
     };
     let hour = res.hour.unwrap_or(default.hour());
     let minute = res.minute.unwrap_or(default.minute());
