@@ -34,7 +34,7 @@ def _bootstrap_tzdata() -> None:
 
 _bootstrap_tzdata()
 
-from dateutil._native import (
+from dateutil._native import (  # noqa: E402
     DAILY,
     EASTER_JULIAN,
     EASTER_ORTHODOX,
@@ -69,8 +69,8 @@ from dateutil._native import (
     tzutc,
     weekday,
 )
-from dateutil.parser import isoparse, isoparser, parserinfo
-from dateutil.utils import default_tzinfo, today, within_delta
+from dateutil.parser import isoparse, isoparser, parserinfo  # noqa: E402
+from dateutil.utils import default_tzinfo, today, within_delta  # noqa: E402
 
 __all__ = [
     "DAILY",
