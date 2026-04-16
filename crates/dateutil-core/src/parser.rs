@@ -254,6 +254,7 @@ pub struct ParseResult<'a> {
     ampm_no_hour: bool,
     ampm_out_of_range: bool,
     malformed_time: bool,
+    last_hms_idx: Option<u8>,
 }
 
 impl ParseResult<'_> {
@@ -832,11 +833,57 @@ fn try_parse_token<'a>(
             return try_parse_time_component(tokens, i, len, res, value_i as u32);
         }
 
-        // Check if next token is HMS
-        if i + 1 < len {
-            if let Some(hms_idx) = do_hms(&tokens[i + 1], info) {
-                assign_hms(res, hms_idx, value_i as u32, value_us);
-                return 2; // number + HMS word
+        // Check if next token is HMS (skip intervening jump-but-not-HMS
+        // tokens; "m"/"t" appear in both sets, so we must stop on HMS match).
+        {
+            let mut j = i + 1;
+            while j < len
+                && do_jump(&tokens[j], info)
+                && do_hms(&tokens[j], info).is_none()
+            {
+                j += 1;
+            }
+            if j < len {
+                if let Some(hms_idx) = do_hms(&tokens[j], info) {
+                    assign_hms(res, hms_idx, value_i as u32, value_us);
+                    return j + 1 - i;
+                }
+            }
+        }
+
+        // Continuation of an HMS run: after hour/minute via HMS word, a bare
+        // number means the next smaller unit ("01h02" → hour=1, minute=2).
+        if let Some(prev) = res.last_hms_idx {
+            let next_idx = (prev as usize) + 1;
+            if next_idx <= 2 && (0..60).contains(&value_i) {
+                let already_set = match next_idx {
+                    1 => res.minute.is_some(),
+                    2 => res.second.is_some(),
+                    _ => true,
+                };
+                if !already_set {
+                    assign_hms(res, next_idx, value_i as u32, value_us);
+                    return 1;
+                }
+            }
+        }
+
+        // Continuation of an HMS run: after "Xh", a bare "Y" means minute;
+        // after "Xm", a bare "Y" means second. Applies to "01h02", "01m02",
+        // "01h02m03", "36 m 05", etc.
+        if value_us == 0 {
+            if let Some(prev) = res.last_hms_idx {
+                let next_idx = prev as usize + 1;
+                if next_idx == 1 && res.minute.is_none() && value_i < 60 {
+                    res.minute = Some(value_i as u32);
+                    res.last_hms_idx = Some(1);
+                    return 1;
+                }
+                if next_idx == 2 && res.second.is_none() && value_i < 60 {
+                    res.second = Some(value_i as u32);
+                    res.last_hms_idx = Some(2);
+                    return 1;
+                }
             }
         }
 
@@ -1042,7 +1089,7 @@ fn try_parse_time_component(
             if let Some(min) = fast_parse_int(&tokens[i + 2]) {
                 res.minute = Some(min as u32);
                 consumed = 3; // hour + ":" + minute
-                // Look for :SS — seconds may have fractional part
+                              // Look for :SS — seconds may have fractional part
                 if i + 4 < len && tokens[i + 3] == ":" {
                     if let Some(sec) = fast_parse_int(&tokens[i + 4]) {
                         // Pure integer seconds (fast path)
@@ -1094,6 +1141,9 @@ fn assign_hms(res: &mut ParseResult<'_>, hms_idx: usize, int_val: u32, us: u32) 
             }
         }
         _ => {}
+    }
+    if hms_idx <= 2 {
+        res.last_hms_idx = Some(hms_idx as u8);
     }
 }
 

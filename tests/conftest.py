@@ -138,44 +138,7 @@ _RUST_XFAIL = {
         "",
         "test_parser[December.0031.30-expected_datetime58-BYd corner case (GH#687)]",
     ),
-    ("test_parser", "", "test_parser_default[01h02-expected_datetime39-random format]"),
-    (
-        "test_parser",
-        "",
-        "test_parser_default[01h02m03-expected_datetime38-random format]",
-    ),
-    ("test_parser", "", "test_parser_default[01m02-expected_datetime41-random format]"),
-    (
-        "test_parser",
-        "",
-        "test_parser_default[10 h 36-expected_datetime13-hour with letters strip]",
-    ),
-    (
-        "test_parser",
-        "",
-        "test_parser_default[10 h 36.5-expected_datetime14-hour with letter strip]",
-    ),
     ("test_parser", "", "test_parser_default[31-Dec-00-expected_datetime34-zero year]"),
-    (
-        "test_parser",
-        "",
-        "test_parser_default[36 m 05 s-expected_datetime18-minutes with letters spaces]",
-    ),
-    (
-        "test_parser",
-        "",
-        "test_parser_default[36 m 05-expected_datetime17-minute with letters spaces]",
-    ),
-    (
-        "test_parser",
-        "",
-        "test_parser_default[36 m 5 s-expected_datetime16-minute with letters spaces]",
-    ),
-    (
-        "test_parser",
-        "",
-        "test_parser_default[36 m 5-expected_datetime15-hour with letters spaces]",
-    ),
     # =======================================================================
     # tz: unsupported tz features
     # =======================================================================
