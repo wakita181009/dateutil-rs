@@ -63,7 +63,10 @@ impl RRuleSet {
 }
 
 impl Recurrence for RRuleSet {
-    type Iter = RRuleSetIter;
+    type Iter<'a>
+        = RRuleSetIter
+    where
+        Self: 'a;
 
     fn iter(&self) -> RRuleSetIter {
         RRuleSetIter::new(self)
@@ -85,7 +88,7 @@ impl Default for RRuleSet {
 // ---------------------------------------------------------------------------
 
 enum IterSource {
-    Rule(Box<RRuleIter>),
+    Rule(Box<RRuleIter<'static>>),
     Dates {
         data: Arc<Vec<NaiveDateTime>>,
         cursor: usize,

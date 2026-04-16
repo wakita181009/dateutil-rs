@@ -594,7 +594,7 @@ impl PyRRule {
 // ---------------------------------------------------------------------------
 
 enum PyRRuleIterInner {
-    Lazy(Box<CoreRRuleIter>),
+    Lazy(Box<CoreRRuleIter<'static>>),
     Cached {
         data: Arc<Vec<chrono::NaiveDateTime>>,
         idx: usize,

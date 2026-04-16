@@ -437,6 +437,22 @@ fn bench_rrule_before_after(c: &mut Criterion) {
             ));
         })
     });
+
+    c.bench_function("rrule_contains_10x", |b| {
+        b.iter(|| {
+            for day in 1..=10 {
+                black_box(rule.contains(black_box(dt(2020, 3, day, 9, 0, 0))));
+            }
+        })
+    });
+
+    c.bench_function("rrule_nth_10x_early", |b| {
+        b.iter(|| {
+            for n in 0..10 {
+                black_box(rule.nth(black_box(n)));
+            }
+        })
+    });
 }
 
 fn bench_rruleset(c: &mut Criterion) {

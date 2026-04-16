@@ -9,11 +9,34 @@ use super::*;
 use crate::common::{days_in_month, is_leap_year};
 
 // ---------------------------------------------------------------------------
+// RuleRef — shared-or-borrowed RRule handle used by the iterator
+// ---------------------------------------------------------------------------
+
+/// Either a borrowed reference or an owned `Arc<RRule>`. Deref exposes the
+/// underlying rule so downstream code reads fields uniformly regardless of
+/// how the iterator was constructed.
+pub(crate) enum RuleRef<'a> {
+    Borrowed(&'a RRule),
+    Owned(Arc<RRule>),
+}
+
+impl std::ops::Deref for RuleRef<'_> {
+    type Target = RRule;
+    #[inline]
+    fn deref(&self) -> &RRule {
+        match self {
+            RuleRef::Borrowed(r) => r,
+            RuleRef::Owned(a) => a,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // IterInfo — cached year/month masks with reusable buffers
 // ---------------------------------------------------------------------------
 
-pub(crate) struct IterInfo {
-    pub rule: Arc<RRule>,
+pub(crate) struct IterInfo<'a> {
+    pub rule: RuleRef<'a>,
 
     pub yearlen: u16,
     pub nextyearlen: u16,
@@ -37,8 +60,8 @@ pub(crate) struct IterInfo {
     lastmonth: Option<u32>,
 }
 
-impl IterInfo {
-    pub fn new(rule: Arc<RRule>) -> Self {
+impl<'a> IterInfo<'a> {
+    pub fn new(rule: RuleRef<'a>) -> Self {
         Self {
             rule,
             yearlen: 0,
@@ -387,8 +410,8 @@ impl IterInfo {
 // RRuleIter
 // ---------------------------------------------------------------------------
 
-pub struct RRuleIter {
-    ii: IterInfo,
+pub struct RRuleIter<'a> {
+    ii: IterInfo<'a>,
     year: i32,
     month: u32,
     day: u32,
@@ -407,12 +430,10 @@ pub struct RRuleIter {
     diverged: bool,
 }
 
-impl RRuleIter {
-    /// Create an iterator from a shared `Arc<RRule>`.
-    ///
-    /// Use this when you already have an `Arc<RRule>` to avoid cloning.
-    /// For convenience, `RRule::iter()` wraps this with an automatic clone.
-    pub fn new(rule: Arc<RRule>) -> Self {
+impl<'a> RRuleIter<'a> {
+    // Called by `from_ref` (binds `'a` to the caller's borrow) and by `new`
+    // on `RRuleIter<'static>` (binds `'a = 'static` via `RuleRef::Owned`).
+    fn from_ref_internal(rule: RuleRef<'a>) -> Self {
         let dt = rule.dtstart;
         let remaining = rule.count;
         Self {
@@ -434,6 +455,25 @@ impl RRuleIter {
         }
     }
 
+    /// Create an iterator that borrows the rule — zero allocation.
+    #[inline]
+    pub fn from_ref(rule: &'a RRule) -> Self {
+        Self::from_ref_internal(RuleRef::Borrowed(rule))
+    }
+}
+
+impl RRuleIter<'static> {
+    /// Create an iterator from a shared `Arc<RRule>`.
+    ///
+    /// The iterator owns the `Arc` and so carries a `'static` lifetime.
+    /// Preferred when the same rule backs multiple iterators or when the
+    /// iterator must outlive the original `&RRule` (e.g. stored in a heap).
+    pub fn new(rule: Arc<RRule>) -> Self {
+        Self::from_ref_internal(RuleRef::Owned(rule))
+    }
+}
+
+impl<'a> RRuleIter<'a> {
     /// Returns `true` if the iterator stopped because the recurrence
     /// parameters form an impossible combination (e.g. MINUTELY with an
     /// interval that can never land on any of the BYHOUR values).
@@ -874,7 +914,7 @@ impl EmitCtx<'_> {
     }
 }
 
-impl Iterator for RRuleIter {
+impl<'a> Iterator for RRuleIter<'a> {
     type Item = NaiveDateTime;
 
     fn next(&mut self) -> Option<NaiveDateTime> {

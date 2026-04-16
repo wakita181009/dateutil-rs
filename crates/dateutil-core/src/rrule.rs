@@ -132,9 +132,11 @@ pub fn slice_sorted(
 
 /// Trait for types that produce a sequence of recurrence datetimes.
 pub trait Recurrence {
-    type Iter: Iterator<Item = NaiveDateTime>;
+    type Iter<'a>: Iterator<Item = NaiveDateTime>
+    where
+        Self: 'a;
 
-    fn iter(&self) -> Self::Iter;
+    fn iter(&self) -> Self::Iter<'_>;
     fn is_finite(&self) -> bool;
 
     fn all(&self) -> Result<Vec<NaiveDateTime>, RRuleError> {
@@ -717,14 +719,11 @@ impl RRule {
 }
 
 impl Recurrence for RRule {
-    type Iter = iter::RRuleIter;
+    type Iter<'a> = iter::RRuleIter<'a>;
 
-    /// Return an iterator. Clones self into an Arc.
-    ///
-    /// If you plan to create multiple iterators from the same rule,
-    /// wrap in `Arc` first and use `RRuleIter::new(arc)` directly.
-    fn iter(&self) -> iter::RRuleIter {
-        iter::RRuleIter::new(Arc::new(self.clone()))
+    /// Iterate over this rule by borrowing — zero allocation.
+    fn iter(&self) -> iter::RRuleIter<'_> {
+        iter::RRuleIter::from_ref(self)
     }
 
     fn is_finite(&self) -> bool {
@@ -734,19 +733,35 @@ impl Recurrence for RRule {
 
 impl IntoIterator for RRule {
     type Item = NaiveDateTime;
-    type IntoIter = iter::RRuleIter;
+    type IntoIter = iter::RRuleIter<'static>;
 
     /// Consume self and return an iterator without cloning.
-    fn into_iter(self) -> iter::RRuleIter {
+    fn into_iter(self) -> iter::RRuleIter<'static> {
         iter::RRuleIter::new(Arc::new(self))
     }
 }
 
+impl<'r> IntoIterator for &'r RRule {
+    type Item = NaiveDateTime;
+    type IntoIter = iter::RRuleIter<'r>;
+
+    /// Borrow the rule to iterate — enables `for dt in &rule { ... }`.
+    fn into_iter(self) -> iter::RRuleIter<'r> {
+        iter::RRuleIter::from_ref(self)
+    }
+}
+
 impl Recurrence for Arc<RRule> {
-    type Iter = iter::RRuleIter;
+    // The iterator owns a fresh `Arc` so it carries `'static`; the GAT
+    // lifetime `'a` is intentionally unused because the result does not
+    // borrow from `&self`.
+    type Iter<'a>
+        = iter::RRuleIter<'static>
+    where
+        Self: 'a;
 
     /// Iterate without cloning — reuses the existing `Arc`.
-    fn iter(&self) -> iter::RRuleIter {
+    fn iter(&self) -> iter::RRuleIter<'static> {
         iter::RRuleIter::new(Arc::clone(self))
     }
 
