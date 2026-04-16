@@ -396,9 +396,14 @@ pub fn parse(
     default: Option<NaiveDateTime>,
     info: Option<&ParserInfo>,
 ) -> Result<NaiveDateTime, ParseError> {
-    let now = chrono::Local::now().naive_local();
-    let default = default.unwrap_or_else(|| now.date().and_hms_opt(0, 0, 0).unwrap());
-    let res = parse_to_result_with_year(timestr, dayfirst, yearfirst, now.year(), info)?;
+    let (default, current_year) = match default {
+        Some(d) => (d, None),
+        None => {
+            let now = chrono::Local::now().naive_local();
+            (now.date().and_hms_opt(0, 0, 0).unwrap(), Some(now.year()))
+        }
+    };
+    let res = parse_to_result_with_year(timestr, dayfirst, yearfirst, current_year, info)?;
     build_naive(&res, default)
 }
 
@@ -412,15 +417,14 @@ pub fn parse_to_result<'a>(
     yearfirst: bool,
     info: Option<&ParserInfo>,
 ) -> Result<ParseResult<'a>, ParseError> {
-    let current_year = chrono::Local::now().naive_local().year();
-    parse_to_result_with_year(timestr, dayfirst, yearfirst, current_year, info)
+    parse_to_result_with_year(timestr, dayfirst, yearfirst, None, info)
 }
 
 fn parse_to_result_with_year<'a>(
     timestr: &'a str,
     dayfirst: bool,
     yearfirst: bool,
-    current_year: i32,
+    current_year: Option<i32>,
     info: Option<&ParserInfo>,
 ) -> Result<ParseResult<'a>, ParseError> {
     let tokens = tokenizer::tokenize(timestr);
@@ -448,7 +452,11 @@ fn parse_to_result_with_year<'a>(
     res.century_specified = ymd.century_specified;
 
     if let Some(y) = res.year {
-        res.year = Some(convertyear(y, res.century_specified, current_year));
+        if y < 100 && !res.century_specified {
+            let now_year =
+                current_year.unwrap_or_else(|| chrono::Local::now().naive_local().year());
+            res.year = Some(convertyear(y, false, now_year));
+        }
     }
 
     // UTC zone normalization
