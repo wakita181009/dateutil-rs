@@ -22,7 +22,6 @@ from dateutil._native import (
     datetime_exists,
     easter,
     gettz,
-    isoparse,
     parse,
     parse_to_dict,
     relativedelta,
@@ -36,7 +35,7 @@ from dateutil._native import (
     tzutc,
     weekday,
 )
-from dateutil.parser import parserinfo
+from dateutil.parser import isoparse, isoparser, parserinfo
 from dateutil.utils import default_tzinfo, today, within_delta
 
 __all__ = [

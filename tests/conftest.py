@@ -107,6 +107,7 @@ def _should_xfail(item):
 # ---------------------------------------------------------------------------
 _RUST_REMOVE_XFAIL = {
     ("test_rrule", "", "test_generated_aware_dtstart_rrulestr"),
+    ("test_isoparser", "", "test_isoparser_byte_sep"),
 }
 
 

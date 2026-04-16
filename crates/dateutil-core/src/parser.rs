@@ -2,7 +2,7 @@ mod isoparser;
 mod parserinfo;
 pub mod tokenizer;
 
-pub use isoparser::isoparse;
+pub use isoparser::{isoparse, IsoParsed, IsoParser, IsoTimeParsed, IsoTz};
 pub use parserinfo::ParserInfo;
 use parserinfo::{
     do_ampm, do_hms, do_jump, do_month, do_pertain, do_tzoffset, do_utczone, do_weekday,

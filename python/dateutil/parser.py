@@ -1,6 +1,6 @@
 """dateutil.parser - Date/time string parsing."""
 
-from dateutil._native import _ParserInfoBase, isoparse, parse, parse_to_dict
+from dateutil._native import _ParserInfoBase, isoparser, parse, parse_to_dict
 
 
 class parserinfo(_ParserInfoBase):
@@ -29,10 +29,15 @@ class UnknownTimezoneWarning(RuntimeWarning):
     """Warning raised when an unknown timezone string is found during parsing."""
 
 
+# Module-level convenience — matches python-dateutil's DEFAULT_ISOPARSER pattern
+_DEFAULT_ISOPARSER = isoparser()
+isoparse = _DEFAULT_ISOPARSER.isoparse
+
 __all__ = [
     "ParserError",
     "UnknownTimezoneWarning",
     "isoparse",
+    "isoparser",
     "parse",
     "parse_to_dict",
     "parserinfo",

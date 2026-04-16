@@ -1,622 +1,755 @@
 use crate::error::ParseError;
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime};
 
-/// Parse an ISO-8601 date/time string.
-///
-/// Supports: YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS, YYYY-MM-DDTHH:MM:SS.ffffff
-/// Also supports compact forms: YYYYMMDD, YYYYMMDDTHHMMSS
-pub fn isoparse(s: &str) -> Result<NaiveDateTime, ParseError> {
-    let s = s.trim();
-    if s.is_empty() {
-        return Err(ParseError::NoDate("".into()));
-    }
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
 
-    // Split on T or space separator
-    let (date_part, time_part) = if let Some(t_pos) = s.bytes().position(|b| b == b'T' || b == b' ')
-    {
-        (&s[..t_pos], Some(&s[t_pos + 1..]))
-    } else {
-        (s, None)
-    };
-
-    let date = parse_iso_date(date_part)?;
-
-    let time = if let Some(tp) = time_part {
-        // Strip timezone suffix for time parsing
-        let tp = strip_tz_suffix(tp);
-        parse_iso_time(tp)?
-    } else {
-        NaiveTime::from_hms_opt(0, 0, 0).unwrap()
-    };
-
-    Ok(NaiveDateTime::new(date, time))
+/// Timezone info from ISO-8601 parsing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IsoTz {
+    /// UTC timezone (from 'Z' or zero offset with `zero_as_utc`).
+    Utc,
+    /// Fixed offset in total seconds from UTC.
+    Offset(i32),
 }
 
-#[inline]
-fn parse_iso_date(s: &str) -> Result<NaiveDate, ParseError> {
-    let bytes = s.as_bytes();
+/// Result of a full ISO-8601 datetime parse.
+#[derive(Debug)]
+pub struct IsoParsed {
+    pub datetime: NaiveDateTime,
+    pub tz: Option<IsoTz>,
+}
 
-    match bytes.len() {
-        // YYYY-MM-DD
-        10 if bytes[4] == b'-' && bytes[7] == b'-' => {
-            let year = parse_int(&s[0..4])?;
-            let month = parse_int(&s[5..7])? as u32;
-            let day = parse_int(&s[8..10])? as u32;
-            NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| {
-                ParseError::ValueError(format!("invalid date: {s}").into_boxed_str())
-            })
-        }
-        // YYYYMMDD
-        8 if bytes.iter().all(|b| b.is_ascii_digit()) => {
-            let year = parse_int(&s[0..4])?;
-            let month = parse_int(&s[4..6])? as u32;
-            let day = parse_int(&s[6..8])? as u32;
-            NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| {
-                ParseError::ValueError(format!("invalid date: {s}").into_boxed_str())
-            })
-        }
-        // YYYY-MM
-        7 if bytes[4] == b'-' => {
-            let year = parse_int(&s[0..4])?;
-            let month = parse_int(&s[5..7])? as u32;
-            NaiveDate::from_ymd_opt(year, month, 1).ok_or_else(|| {
-                ParseError::ValueError(format!("invalid date: {s}").into_boxed_str())
-            })
-        }
-        // YYYY
-        4 if bytes.iter().all(|b| b.is_ascii_digit()) => {
-            let year = parse_int(&s[0..4])?;
-            NaiveDate::from_ymd_opt(year, 1, 1).ok_or_else(|| {
-                ParseError::ValueError(format!("invalid date: {s}").into_boxed_str())
-            })
-        }
-        _ => Err(ParseError::ValueError(
-            format!("unrecognized ISO date format: {s}").into_boxed_str(),
-        )),
+/// Result of an ISO-8601 time parse.
+#[derive(Debug)]
+pub struct IsoTimeParsed {
+    pub time: NaiveTime,
+    pub tz: Option<IsoTz>,
+}
+
+// ---------------------------------------------------------------------------
+// IsoParser
+// ---------------------------------------------------------------------------
+
+/// ISO-8601 parser with configurable date/time separator.
+pub struct IsoParser {
+    sep: Option<u8>,
+}
+
+impl Default for IsoParser {
+    fn default() -> Self {
+        Self { sep: None }
     }
 }
 
-#[inline]
-fn parse_iso_time(s: &str) -> Result<NaiveTime, ParseError> {
-    let bytes = s.as_bytes();
-    if bytes.is_empty() {
-        return Ok(NaiveTime::from_hms_opt(0, 0, 0).unwrap());
-    }
-
-    // HH:MM:SS.ffffff or HH:MM:SS or HH:MM or HHMMSS or HHMM
-    let (h, m, s_sec, us) = if bytes.len() >= 8 && bytes[2] == b':' && bytes[5] == b':' {
-        // HH:MM:SS[.ffffff]
-        let h = parse_int(&s[0..2])?;
-        let m = parse_int(&s[3..5])? as u32;
-        let sec_str = &s[6..];
-        let (sec, us) = parse_seconds_with_frac(sec_str)?;
-        (h, m, sec, us)
-    } else if bytes.len() >= 5 && bytes[2] == b':' {
-        // HH:MM
-        let h = parse_int(&s[0..2])?;
-        let m = parse_int(&s[3..5])? as u32;
-        (h, m, 0u32, 0u32)
-    } else if bytes.len() >= 6 && bytes.iter().take(6).all(|b| b.is_ascii_digit()) {
-        // HHMMSS[.ffffff]
-        let h = parse_int(&s[0..2])?;
-        let m = parse_int(&s[2..4])? as u32;
-        let sec_str = &s[4..];
-        let (sec, us) = parse_seconds_with_frac(sec_str)?;
-        (h, m, sec, us)
-    } else if bytes.len() >= 4 && bytes.iter().take(4).all(|b| b.is_ascii_digit()) {
-        // HHMM
-        let h = parse_int(&s[0..2])?;
-        let m = parse_int(&s[2..4])? as u32;
-        (h, m, 0u32, 0u32)
-    } else if bytes.len() >= 2 && bytes[0].is_ascii_digit() && bytes[1].is_ascii_digit() {
-        // HH
-        let h = parse_int(&s[0..2])?;
-        (h, 0u32, 0u32, 0u32)
-    } else {
-        return Err(ParseError::ValueError(
-            format!("unrecognized ISO time format: {s}").into_boxed_str(),
-        ));
-    };
-
-    NaiveTime::from_hms_micro_opt(h as u32, m, s_sec, us)
-        .ok_or_else(|| ParseError::ValueError(format!("invalid time: {s}").into_boxed_str()))
-}
-
-#[inline]
-fn parse_seconds_with_frac(s: &str) -> Result<(u32, u32), ParseError> {
-    if let Some(dot_pos) = s.find('.') {
-        let sec = parse_int(&s[..dot_pos])? as u32;
-        let frac_str = &s[dot_pos + 1..];
-        // Convert fractional digits to microseconds via arithmetic (no String allocation)
-        let us = if frac_str.is_empty() {
-            0u32
-        } else if frac_str.len() >= 6 {
-            parse_int(&frac_str[..6])? as u32
-        } else {
-            let raw = parse_int(frac_str)? as u32;
-            // Multiply by 10^(6-len) to left-align: "123" → 123_000
-            const SCALE: [u32; 5] = [100_000, 10_000, 1_000, 100, 10];
-            raw * SCALE[frac_str.len() - 1]
-        };
-        Ok((sec, us))
-    } else {
-        // Just digits, take first 2 as seconds
-        let sec_end = s.len().min(2);
-        let sec = parse_int(&s[..sec_end])? as u32;
-        Ok((sec, 0))
-    }
-}
-
-#[inline]
-fn strip_tz_suffix(s: &str) -> &str {
-    // Remove trailing Z, +HH:MM, -HH:MM, +HHMM, -HHMM
-    let bytes = s.as_bytes();
-    if bytes.is_empty() {
-        return s;
-    }
-    if bytes[bytes.len() - 1] == b'Z' {
-        return &s[..s.len() - 1];
-    }
-    // Find + or - for timezone offset
-    for i in (1..bytes.len()).rev() {
-        if (bytes[i] == b'+' || bytes[i] == b'-') && bytes[i - 1].is_ascii_digit() {
-            return &s[..i];
-        }
-    }
-    s
-}
-
-/// Fast integer parse optimized for short ASCII digit strings (ISO date/time fields).
-#[inline]
-fn parse_int(s: &str) -> Result<i32, ParseError> {
-    let bytes = s.as_bytes();
-    if !bytes.is_empty() && bytes.len() <= 6 {
-        let mut n: i32 = 0;
-        for &b in bytes {
-            if !b.is_ascii_digit() {
-                return Err(ParseError::ValueError(
-                    format!("expected integer: {s}").into_boxed_str(),
+impl IsoParser {
+    /// Create a new parser.  `sep` must be a non-digit ASCII byte.
+    pub fn new(sep: Option<u8>) -> Result<Self, ParseError> {
+        if let Some(s) = sep {
+            if !s.is_ascii() || s.is_ascii_digit() {
+                return Err(verr(
+                    "Separator must be a single, non-numeric ASCII character",
                 ));
             }
-            n = n * 10 + (b - b'0') as i32;
         }
-        return Ok(n);
+        Ok(Self { sep })
     }
-    s.parse::<i32>()
-        .map_err(|_| ParseError::ValueError(format!("expected integer: {s}").into_boxed_str()))
+
+    // -----------------------------------------------------------------------
+    // Public methods
+    // -----------------------------------------------------------------------
+
+    /// Parse a full ISO-8601 datetime string.
+    pub fn isoparse(&self, s: &str) -> Result<IsoParsed, ParseError> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Err(ParseError::NoDate("".into()));
+        }
+        let bytes = s.as_bytes();
+
+        let (date, pos) = self.internal_parse_isodate(bytes)?;
+
+        if pos >= bytes.len() {
+            return Ok(IsoParsed {
+                datetime: date.and_hms_opt(0, 0, 0).unwrap(),
+                tz: None,
+            });
+        }
+
+        // Validate separator
+        let sep_byte = bytes[pos];
+        if let Some(expected) = self.sep {
+            if sep_byte != expected {
+                return Err(verr("String contains unknown ISO components"));
+            }
+        }
+
+        let time_str = &bytes[pos + 1..];
+        let (time, tz, hour24) = self.internal_parse_isotime(time_str)?;
+
+        let datetime = if hour24 {
+            date.and_hms_opt(0, 0, 0).unwrap() + chrono::Duration::days(1)
+        } else {
+            NaiveDateTime::new(date, time)
+        };
+
+        Ok(IsoParsed { datetime, tz })
+    }
+
+    /// Parse just the date portion of an ISO string.
+    pub fn parse_isodate(&self, s: &str) -> Result<NaiveDate, ParseError> {
+        let bytes = s.as_bytes();
+        let (date, pos) = self.internal_parse_isodate(bytes)?;
+        if pos < bytes.len() {
+            return Err(verr(&format!(
+                "String contains unknown ISO components: '{s}'"
+            )));
+        }
+        Ok(date)
+    }
+
+    /// Parse just the time portion of an ISO string.
+    pub fn parse_isotime(&self, s: &str) -> Result<IsoTimeParsed, ParseError> {
+        let bytes = s.as_bytes();
+        let (time, tz, hour24) = self.internal_parse_isotime(bytes)?;
+        let time = if hour24 {
+            NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+        } else {
+            time
+        };
+        Ok(IsoTimeParsed { time, tz })
+    }
+
+    /// Parse a timezone offset string.
+    pub fn parse_tzstr(&self, s: &str, zero_as_utc: bool) -> Result<IsoTz, ParseError> {
+        self.internal_parse_tzstr(s.as_bytes(), zero_as_utc)
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal: date parsing
+    // -----------------------------------------------------------------------
+
+    fn internal_parse_isodate(&self, bytes: &[u8]) -> Result<(NaiveDate, usize), ParseError> {
+        self.parse_isodate_common(bytes)
+            .or_else(|_| self.parse_isodate_uncommon(bytes))
+    }
+
+    fn parse_isodate_common(&self, bytes: &[u8]) -> Result<(NaiveDate, usize), ParseError> {
+        let len = bytes.len();
+        if len < 4 {
+            return Err(verr("ISO string too short"));
+        }
+
+        let year = parse_int_range(bytes, 0, 4)?;
+        let mut pos = 4;
+
+        if pos >= len {
+            // YYYY only
+            return Ok((make_date(year, 1, 1)?, pos));
+        }
+
+        let has_sep = bytes[pos] == b'-';
+        if has_sep {
+            pos += 1;
+        }
+
+        if pos >= len {
+            // YYYY- (trailing dash)
+            return Err(verr("Incomplete date"));
+        }
+
+        // Non-digit after year → delegate non-common formats (W, ordinal)
+        // or return YYYY-only when no separator (e.g. "2014T12:00")
+        if !bytes[pos].is_ascii_digit() {
+            if has_sep || bytes[pos] == b'W' {
+                // YYYY-W... or YYYYW... → delegate to uncommon (week/ordinal)
+                return Err(verr("not a common date format"));
+            }
+            return Ok((make_date(year, 1, 1)?, 4));
+        }
+
+        // Need at least 2 digits for month
+        if pos + 2 > len || !bytes[pos + 1].is_ascii_digit() {
+            return Err(verr("Incomplete month"));
+        }
+
+        let month = parse_int_range(bytes, pos, pos + 2)? as u32;
+        pos += 2;
+
+        if !has_sep {
+            // Compact: must have 2 more digits for day (YYYYMMDD)
+            // YYYYMM (6 chars without day) is not a valid ISO format
+            if pos + 2 > len || !bytes[pos].is_ascii_digit() {
+                return Err(verr("Invalid format"));
+            }
+            let day = parse_int_range(bytes, pos, pos + 2)? as u32;
+            pos += 2;
+            return Ok((make_date(year, month, day)?, pos));
+        }
+
+        // Extended: YYYY-MM, or YYYY-MM-DD if another '-' follows
+        if pos >= len || bytes[pos] != b'-' {
+            // If a digit follows, this isn't YYYY-MM — likely ordinal (YYYY-DDD)
+            if pos < len && bytes[pos].is_ascii_digit() {
+                return Err(verr("not a common date format"));
+            }
+            return Ok((make_date(year, month, 1)?, pos));
+        }
+
+        pos += 1; // skip second '-'
+        if pos + 2 > len {
+            return Err(verr("Incomplete date"));
+        }
+        let day = parse_int_range(bytes, pos, pos + 2)? as u32;
+        pos += 2;
+
+        Ok((make_date(year, month, day)?, pos))
+    }
+
+    fn parse_isodate_uncommon(&self, bytes: &[u8]) -> Result<(NaiveDate, usize), ParseError> {
+        if bytes.len() < 4 {
+            return Err(verr("ISO string too short"));
+        }
+
+        let year = parse_int_range(bytes, 0, 4)?;
+        let has_sep = bytes.get(4) == Some(&b'-');
+        let mut pos = 4 + has_sep as usize;
+
+        if pos >= bytes.len() {
+            return Err(verr("Incomplete date"));
+        }
+
+        if bytes[pos] == b'W' {
+            // Week date: YYYY-Www[-D] or YYYYWww[D]
+            pos += 1;
+            if pos + 2 > bytes.len() {
+                return Err(verr("Invalid week date"));
+            }
+            let weekno = parse_int_range(bytes, pos, pos + 2)?;
+            pos += 2;
+
+            let mut dayno = 1;
+            if pos < bytes.len() && (bytes[pos].is_ascii_digit() || bytes[pos] == b'-') {
+                let day_has_sep = bytes[pos] == b'-';
+                if day_has_sep != has_sep {
+                    return Err(verr("Inconsistent use of dash separator"));
+                }
+                if day_has_sep {
+                    pos += 1;
+                }
+                if pos < bytes.len() && bytes[pos].is_ascii_digit() {
+                    dayno = (bytes[pos] - b'0') as i32;
+                    pos += 1;
+                }
+            }
+
+            let date = calculate_weekdate(year, weekno, dayno)?;
+            Ok((date, pos))
+        } else {
+            // Ordinal date: YYYY-DDD or YYYYDDD
+            if pos + 3 > bytes.len() {
+                return Err(verr("Invalid ordinal day"));
+            }
+            let ordinal = parse_int_range(bytes, pos, pos + 3)?;
+            pos += 3;
+
+            let is_leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+            let max_days = if is_leap { 366 } else { 365 };
+            if ordinal < 1 || ordinal > max_days {
+                return Err(verr(&format!(
+                    "Invalid ordinal day {ordinal} for year {year}"
+                )));
+            }
+
+            let base = make_date(year, 1, 1)?;
+            let date = base + chrono::Duration::days((ordinal - 1) as i64);
+            Ok((date, pos))
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal: time parsing
+    // -----------------------------------------------------------------------
+
+    /// Returns (time, tz, is_hour_24).
+    fn internal_parse_isotime(
+        &self,
+        bytes: &[u8],
+    ) -> Result<(NaiveTime, Option<IsoTz>, bool), ParseError> {
+        let len = bytes.len();
+        if len < 2 {
+            return Err(verr("ISO time too short"));
+        }
+
+        let hour = parse_int_range(bytes, 0, 2)?;
+        let mut pos = 2;
+        let mut minute = 0i32;
+        let mut second = 0i32;
+        let mut microsecond = 0u32;
+        let mut tz: Option<IsoTz> = None;
+
+        if pos < len && is_tz_char(bytes[pos]) {
+            tz = Some(self.internal_parse_tzstr(&bytes[pos..], true)?);
+            pos = len;
+        } else if pos < len && (bytes[pos].is_ascii_digit() || bytes[pos] == b':') {
+            let has_sep = bytes[pos] == b':';
+            if has_sep {
+                pos += 1;
+            }
+            if pos + 2 > len {
+                return Err(verr("Incomplete time"));
+            }
+            minute = parse_int_range(bytes, pos, pos + 2)?;
+            pos += 2;
+
+            // Seconds
+            if pos < len && !is_tz_char(bytes[pos]) {
+                if bytes[pos] == b':' {
+                    if !has_sep {
+                        return Err(verr("Inconsistent separator use"));
+                    }
+                    pos += 1;
+                } else if has_sep && bytes[pos].is_ascii_digit() {
+                    return Err(verr("Inconsistent separator use"));
+                }
+
+                if pos + 2 <= len && bytes[pos].is_ascii_digit() {
+                    second = parse_int_range(bytes, pos, pos + 2)?;
+                    pos += 2;
+
+                    // Fractional seconds (. or ,)
+                    if pos < len && (bytes[pos] == b'.' || bytes[pos] == b',') {
+                        pos += 1;
+                        let frac_start = pos;
+                        while pos < len && bytes[pos].is_ascii_digit() {
+                            pos += 1;
+                        }
+                        let frac_len = pos - frac_start;
+                        if frac_len > 0 {
+                            microsecond = parse_microseconds(&bytes[frac_start..pos], frac_len)?;
+                        }
+                    }
+                }
+            }
+
+            // Timezone after time components
+            if pos < len && is_tz_char(bytes[pos]) {
+                tz = Some(self.internal_parse_tzstr(&bytes[pos..], true)?);
+                pos = len;
+            }
+        }
+
+        if pos < len {
+            return Err(verr("Unused components in ISO string"));
+        }
+
+        // Hour 24 handling
+        let hour24 = hour == 24;
+        let actual_hour = if hour24 {
+            if minute != 0 || second != 0 || microsecond != 0 {
+                return Err(verr("Hour may only be 24 at 24:00:00.000"));
+            }
+            0
+        } else {
+            if hour > 23 {
+                return Err(verr("Invalid hours"));
+            }
+            hour
+        };
+
+        if minute > 59 {
+            return Err(verr("Invalid minutes"));
+        }
+        if second > 59 {
+            return Err(verr("Invalid seconds"));
+        }
+
+        let time = NaiveTime::from_hms_micro_opt(
+            actual_hour as u32,
+            minute as u32,
+            second as u32,
+            microsecond,
+        )
+        .ok_or_else(|| verr("invalid time"))?;
+
+        Ok((time, tz, hour24))
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal: timezone parsing
+    // -----------------------------------------------------------------------
+
+    fn internal_parse_tzstr(&self, bytes: &[u8], zero_as_utc: bool) -> Result<IsoTz, ParseError> {
+        if bytes.is_empty() {
+            return Err(verr("Empty timezone string"));
+        }
+
+        // Exact Z/z match (single byte only)
+        if bytes.len() == 1 && (bytes[0] == b'Z' || bytes[0] == b'z') {
+            return Ok(IsoTz::Utc);
+        }
+
+        let len = bytes.len();
+        if len != 3 && len != 5 && len != 6 {
+            return Err(verr("Time zone offset must be 1, 3, 5 or 6 characters"));
+        }
+
+        let mult: i32 = match bytes[0] {
+            b'+' => 1,
+            b'-' => -1,
+            _ => return Err(verr("Time zone offset requires sign")),
+        };
+
+        let hours = parse_int_range(bytes, 1, 3)?;
+        let minutes = if len == 3 {
+            0
+        } else if bytes[3] == b':' {
+            parse_int_range(bytes, 4, 6)?
+        } else {
+            parse_int_range(bytes, 3, 5)?
+        };
+
+        if hours > 23 {
+            return Err(verr("Invalid hours in time zone offset"));
+        }
+        if minutes > 59 {
+            return Err(verr("Invalid minutes in time zone offset"));
+        }
+
+        if zero_as_utc && hours == 0 && minutes == 0 {
+            return Ok(IsoTz::Utc);
+        }
+
+        Ok(IsoTz::Offset(mult * (hours * 60 + minutes) * 60))
+    }
 }
+
+// ---------------------------------------------------------------------------
+// Convenience functions
+// ---------------------------------------------------------------------------
+
+/// Parse an ISO-8601 datetime string with the default parser.
+pub fn isoparse(s: &str) -> Result<IsoParsed, ParseError> {
+    IsoParser::default().isoparse(s)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+#[inline]
+fn verr(msg: &str) -> ParseError {
+    ParseError::ValueError(msg.to_string().into_boxed_str())
+}
+
+#[inline]
+fn make_date(year: i32, month: u32, day: u32) -> Result<NaiveDate, ParseError> {
+    NaiveDate::from_ymd_opt(year, month, day)
+        .ok_or_else(|| verr(&format!("invalid date: {year}-{month}-{day}")))
+}
+
+#[inline]
+fn is_tz_char(b: u8) -> bool {
+    matches!(b, b'+' | b'-' | b'Z' | b'z')
+}
+
+#[inline]
+fn parse_int_range(bytes: &[u8], start: usize, end: usize) -> Result<i32, ParseError> {
+    if end > bytes.len() {
+        return Err(verr("unexpected end of string"));
+    }
+    let mut n: i32 = 0;
+    for &b in &bytes[start..end] {
+        if !b.is_ascii_digit() {
+            return Err(verr("expected digit"));
+        }
+        n = n * 10 + (b - b'0') as i32;
+    }
+    Ok(n)
+}
+
+#[inline]
+fn parse_microseconds(bytes: &[u8], frac_len: usize) -> Result<u32, ParseError> {
+    if frac_len >= 6 {
+        let mut n: u32 = 0;
+        for &b in &bytes[..6] {
+            if !b.is_ascii_digit() {
+                return Err(verr("expected digit in fractional seconds"));
+            }
+            n = n * 10 + (b - b'0') as u32;
+        }
+        Ok(n)
+    } else {
+        let mut raw: u32 = 0;
+        for &b in &bytes[..frac_len] {
+            if !b.is_ascii_digit() {
+                return Err(verr("expected digit in fractional seconds"));
+            }
+            raw = raw * 10 + (b - b'0') as u32;
+        }
+        const SCALE: [u32; 5] = [100_000, 10_000, 1_000, 100, 10];
+        Ok(raw * SCALE[frac_len - 1])
+    }
+}
+
+fn calculate_weekdate(year: i32, week: i32, day: i32) -> Result<NaiveDate, ParseError> {
+    if week < 1 || week > 53 {
+        return Err(verr(&format!("Invalid week: {week}")));
+    }
+    if day < 1 || day > 7 {
+        return Err(verr(&format!("Invalid weekday: {day}")));
+    }
+
+    // Jan 4 is always in ISO week 1
+    let jan_4 = NaiveDate::from_ymd_opt(year, 1, 4).ok_or_else(|| verr("invalid year"))?;
+    let iso_wd = jan_4.weekday().num_days_from_monday() as i64;
+    let week_1_monday = jan_4 - chrono::Duration::days(iso_wd);
+
+    let offset = ((week - 1) * 7 + (day - 1)) as i64;
+    Ok(week_1_monday + chrono::Duration::days(offset))
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Datelike, Timelike};
+    use chrono::Timelike;
 
     #[test]
-    fn test_iso_date_only() {
-        let dt = isoparse("2024-01-15").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
-        assert_eq!(dt.hour(), 0);
+    fn iso_date_only() {
+        let r = isoparse("2024-01-15").unwrap();
+        assert_eq!(
+            r.datetime.date(),
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()
+        );
+        assert!(r.tz.is_none());
     }
 
     #[test]
-    fn test_iso_datetime() {
-        let dt = isoparse("2024-01-15T10:30:45").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
-        assert_eq!(dt.second(), 45);
+    fn iso_datetime() {
+        let r = isoparse("2024-01-15T10:30:45").unwrap();
+        assert_eq!(r.datetime.hour(), 10);
+        assert_eq!(r.datetime.minute(), 30);
+        assert_eq!(r.datetime.second(), 45);
     }
 
     #[test]
-    fn test_iso_compact() {
-        let dt = isoparse("20240115T103045").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
-        assert_eq!(dt.second(), 45);
+    fn iso_compact() {
+        let r = isoparse("20240115T103045").unwrap();
+        assert_eq!(
+            r.datetime.date(),
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()
+        );
+        assert_eq!(r.datetime.hour(), 10);
     }
 
     #[test]
-    fn test_iso_microseconds() {
-        let dt = isoparse("2024-01-15T10:30:45.123456").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 123456);
+    fn iso_with_tz_z() {
+        let r = isoparse("2024-01-15T10:30:45Z").unwrap();
+        assert_eq!(r.tz, Some(IsoTz::Utc));
     }
 
     #[test]
-    fn test_iso_with_tz_z() {
-        let dt = isoparse("2024-01-15T10:30:45Z").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.second(), 45);
+    fn iso_with_tz_offset() {
+        let r = isoparse("2024-01-15T10:30:45+05:30").unwrap();
+        assert_eq!(r.tz, Some(IsoTz::Offset(19800)));
     }
 
     #[test]
-    fn test_iso_with_tz_offset() {
-        let dt = isoparse("2024-01-15T10:30:45+05:30").unwrap();
-        assert_eq!(dt.hour(), 10);
+    fn iso_week_date() {
+        let r = isoparse("2017-W10").unwrap();
+        assert_eq!(
+            r.datetime.date(),
+            NaiveDate::from_ymd_opt(2017, 3, 6).unwrap()
+        );
     }
 
     #[test]
-    fn test_iso_year_month() {
-        let dt = isoparse("2024-01").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+    fn iso_week_date_with_day() {
+        let r = isoparse("2016-W13-7").unwrap();
+        assert_eq!(
+            r.datetime.date(),
+            NaiveDate::from_ymd_opt(2016, 4, 3).unwrap()
+        );
     }
 
     #[test]
-    fn test_iso_year_only() {
-        let dt = isoparse("2024").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+    fn iso_ordinal() {
+        let r = isoparse("2016-060").unwrap();
+        assert_eq!(
+            r.datetime.date(),
+            NaiveDate::from_ymd_opt(2016, 2, 29).unwrap()
+        );
     }
 
     #[test]
-    fn test_iso_space_separator() {
-        let dt = isoparse("2024-01-15 10:30:45").unwrap();
-        assert_eq!(dt.hour(), 10);
+    fn iso_hour24_midnight() {
+        let r = isoparse("2014-04-10T24:00:00").unwrap();
+        assert_eq!(
+            r.datetime,
+            NaiveDate::from_ymd_opt(2014, 4, 11)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+        );
     }
 
     #[test]
-    fn test_iso_empty() {
+    fn iso_comma_decimal() {
+        let r = isoparse("2024-01-15T10:30:45,123456").unwrap();
+        assert_eq!(r.datetime.nanosecond() / 1000, 123456);
+    }
+
+    #[test]
+    fn iso_empty() {
         assert!(isoparse("").is_err());
     }
 
     #[test]
-    fn test_iso_invalid() {
-        assert!(isoparse("not-a-date").is_err());
+    fn iso_trailing_t() {
+        assert!(isoparse("2024-01-15T").is_err());
     }
 
     #[test]
-    fn test_iso_compact_date() {
-        let dt = isoparse("20240115").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+    fn iso_yyyymm_invalid() {
+        assert!(IsoParser::default().parse_isodate("201202").is_err());
     }
 
     #[test]
-    fn test_iso_hhmm() {
-        let dt = isoparse("2024-01-15T1030").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
+    fn iso_sep_validation() {
+        assert!(IsoParser::new(Some(b'9')).is_err());
+        assert!(IsoParser::new(Some(b'T')).is_ok());
     }
 
     #[test]
-    fn test_iso_frac_3_digits() {
-        let dt = isoparse("2024-01-15T10:30:45.123").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 123000);
+    fn parse_tzstr_utc() {
+        let p = IsoParser::default();
+        assert_eq!(p.parse_tzstr("Z", true).unwrap(), IsoTz::Utc);
+        assert_eq!(p.parse_tzstr("+00:00", true).unwrap(), IsoTz::Utc);
+        assert_eq!(p.parse_tzstr("+00:00", false).unwrap(), IsoTz::Offset(0));
     }
 
     #[test]
-    fn test_iso_invalid_date_feb_30() {
-        assert!(isoparse("2024-02-30").is_err());
+    fn parse_tzstr_offset() {
+        let p = IsoParser::default();
+        assert_eq!(p.parse_tzstr("+05:30", true).unwrap(), IsoTz::Offset(19800));
+        assert_eq!(
+            p.parse_tzstr("-08:00", true).unwrap(),
+            IsoTz::Offset(-28800)
+        );
     }
 
     #[test]
-    fn test_iso_invalid_date_month_13() {
-        assert!(isoparse("2024-13-01").is_err());
+    fn parse_isodate_common() {
+        let p = IsoParser::default();
+        assert_eq!(
+            p.parse_isodate("2024-01-15").unwrap(),
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()
+        );
+        assert_eq!(
+            p.parse_isodate("20240115").unwrap(),
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()
+        );
+        assert_eq!(
+            p.parse_isodate("2024-01").unwrap(),
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap()
+        );
+        assert_eq!(
+            p.parse_isodate("2024").unwrap(),
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap()
+        );
     }
 
     #[test]
-    fn test_iso_invalid_date_day_00() {
-        assert!(isoparse("2024-01-00").is_err());
+    fn parse_isotime_basic() {
+        let p = IsoParser::default();
+        let r = p.parse_isotime("10:30:45.123456").unwrap();
+        assert_eq!(
+            r.time,
+            NaiveTime::from_hms_micro_opt(10, 30, 45, 123456).unwrap()
+        );
+        assert!(r.tz.is_none());
     }
 
     #[test]
-    fn test_iso_leap_year_feb_29() {
-        let dt = isoparse("2024-02-29").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
+    fn parse_isotime_with_tz() {
+        let p = IsoParser::default();
+        let r = p.parse_isotime("10:30:45Z").unwrap();
+        assert_eq!(r.tz, Some(IsoTz::Utc));
     }
 
     #[test]
-    fn test_iso_non_leap_year_feb_29() {
-        assert!(isoparse("2023-02-29").is_err());
+    fn parse_isotime_midnight_24() {
+        let p = IsoParser::default();
+        let r = p.parse_isotime("24:00:00").unwrap();
+        assert_eq!(r.time, NaiveTime::from_hms_opt(0, 0, 0).unwrap());
     }
 
     #[test]
-    fn test_iso_midnight() {
-        let dt = isoparse("2024-01-15T00:00:00").unwrap();
-        assert_eq!(dt.hour(), 0);
-        assert_eq!(dt.minute(), 0);
-        assert_eq!(dt.second(), 0);
+    fn week_date_compact() {
+        let r = isoparse("2017W10").unwrap();
+        assert_eq!(
+            r.datetime.date(),
+            NaiveDate::from_ymd_opt(2017, 3, 6).unwrap()
+        );
     }
 
     #[test]
-    fn test_iso_end_of_day() {
-        let dt = isoparse("2024-01-15T23:59:59").unwrap();
-        assert_eq!(dt.hour(), 23);
-        assert_eq!(dt.minute(), 59);
-        assert_eq!(dt.second(), 59);
+    fn ordinal_compact() {
+        let r = isoparse("2016060").unwrap();
+        assert_eq!(
+            r.datetime.date(),
+            NaiveDate::from_ymd_opt(2016, 2, 29).unwrap()
+        );
     }
 
     #[test]
-    fn test_iso_frac_1_digit() {
-        let dt = isoparse("2024-01-15T10:30:45.1").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 100000);
+    fn invalid_week_zero() {
+        assert!(isoparse("2012-W00").is_err());
     }
 
     #[test]
-    fn test_iso_frac_2_digits() {
-        let dt = isoparse("2024-01-15T10:30:45.12").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 120000);
+    fn invalid_weekday_zero() {
+        assert!(isoparse("2012-W01-0").is_err());
     }
 
     #[test]
-    fn test_iso_frac_4_digits() {
-        let dt = isoparse("2024-01-15T10:30:45.1234").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 123400);
+    fn invalid_ordinal_zero() {
+        assert!(isoparse("2013-000").is_err());
     }
 
     #[test]
-    fn test_iso_frac_5_digits() {
-        let dt = isoparse("2024-01-15T10:30:45.12345").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 123450);
+    fn invalid_ordinal_overflow() {
+        assert!(isoparse("2013-366").is_err());
     }
 
     #[test]
-    fn test_iso_frac_6_digits() {
-        let dt = isoparse("2024-01-15T10:30:45.123456").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 123456);
+    fn microseconds_frac_3() {
+        let r = isoparse("2024-01-15T10:30:45.123").unwrap();
+        assert_eq!(r.datetime.nanosecond() / 1000, 123000);
     }
 
     #[test]
-    fn test_iso_frac_more_than_6_digits_truncates() {
-        // Only first 6 fractional digits used
-        let dt = isoparse("2024-01-15T10:30:45.1234567").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 123456);
+    fn microseconds_frac_6() {
+        let r = isoparse("2024-01-15T10:30:45.123456").unwrap();
+        assert_eq!(r.datetime.nanosecond() / 1000, 123456);
     }
 
     #[test]
-    fn test_iso_compact_hhmmss() {
-        let dt = isoparse("20240115T103045").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
-        assert_eq!(dt.second(), 45);
+    fn custom_sep() {
+        let p = IsoParser::new(Some(b'C')).unwrap();
+        let r = p.isoparse("2012-04-25C01:25:00").unwrap();
+        assert_eq!(r.datetime.hour(), 1);
+        assert_eq!(r.datetime.minute(), 25);
     }
 
     #[test]
-    fn test_iso_compact_tz_offset() {
-        let dt = isoparse("2024-01-15T10:30:45+0530").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
-    }
-
-    #[test]
-    fn test_iso_compact_negative_tz() {
-        let dt = isoparse("2024-01-15T10:30:45-0800").unwrap();
-        assert_eq!(dt.hour(), 10);
-    }
-
-    #[test]
-    fn test_iso_hh_only() {
-        let dt = isoparse("2024-01-15T10").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 0);
-    }
-
-    #[test]
-    fn test_iso_leading_trailing_whitespace() {
-        let dt = isoparse("  2024-01-15T10:30:45  ").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
-        assert_eq!(dt.hour(), 10);
-    }
-
-    #[test]
-    fn test_iso_whitespace_only() {
-        assert!(isoparse("   ").is_err());
-    }
-
-    #[test]
-    fn test_iso_year_boundaries() {
-        let dt = isoparse("0001-01-01").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(1, 1, 1).unwrap());
-
-        let dt = isoparse("9999-12-31").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(9999, 12, 31).unwrap());
-    }
-
-    #[test]
-    fn test_iso_dec_31() {
-        let dt = isoparse("2024-12-31T23:59:59.999999").unwrap();
-        assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2024, 12, 31).unwrap());
-        assert_eq!(dt.hour(), 23);
-        assert_eq!(dt.nanosecond() / 1000, 999999);
-    }
-
-    #[test]
-    fn test_iso_partial_formats_invalid() {
-        assert!(isoparse("202").is_err()); // 3 digits
-        assert!(isoparse("2024-1").is_err()); // incomplete month
-        assert!(isoparse("2024-01-1").is_err()); // incomplete day
-    }
-
-    #[test]
-    fn test_iso_invalid_time_hour_24() {
-        assert!(isoparse("2024-01-15T24:00:00").is_err());
-    }
-
-    #[test]
-    fn test_iso_invalid_time_minute_60() {
-        assert!(isoparse("2024-01-15T10:60:00").is_err());
-    }
-
-    #[test]
-    fn test_iso_invalid_time_second_60() {
-        assert!(isoparse("2024-01-15T10:30:60").is_err());
-    }
-
-    #[test]
-    fn test_iso_compact_with_z() {
-        let dt = isoparse("20240115T103045Z").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
-        assert_eq!(dt.second(), 45);
-    }
-
-    #[test]
-    fn test_parse_int_edge_cases() {
-        assert_eq!(parse_int("0").unwrap(), 0);
-        assert_eq!(parse_int("000000").unwrap(), 0);
-        assert_eq!(parse_int("999999").unwrap(), 999999);
-        assert!(parse_int("").is_err());
-        assert!(parse_int("abc").is_err());
-        assert!(parse_int("12.3").is_err());
-    }
-
-    // ==== Edge case tests ====
-
-    #[test]
-    fn test_iso_year_0001() {
-        let dt = isoparse("0001-01-01").unwrap();
-        assert_eq!(dt.year(), 1);
-    }
-
-    #[test]
-    fn test_iso_year_9999() {
-        let dt = isoparse("9999-12-31").unwrap();
-        assert_eq!(dt.year(), 9999);
-        assert_eq!(dt.month(), 12);
-        assert_eq!(dt.day(), 31);
-    }
-
-    #[test]
-    fn test_iso_year_0001_with_time() {
-        let dt = isoparse("0001-01-01T00:00:00").unwrap();
-        assert_eq!(dt.year(), 1);
-        assert_eq!(dt.hour(), 0);
-    }
-
-    #[test]
-    fn test_iso_month_boundaries() {
-        assert!(isoparse("2024-01-01").is_ok());
-        assert!(isoparse("2024-12-31").is_ok());
-        assert!(isoparse("2024-00-01").is_err());
-        assert!(isoparse("2024-13-01").is_err());
-    }
-
-    #[test]
-    fn test_iso_day_boundaries_per_month() {
-        // 30-day months
-        assert!(isoparse("2024-04-30").is_ok());
-        assert!(isoparse("2024-04-31").is_err());
-        assert!(isoparse("2024-06-30").is_ok());
-        assert!(isoparse("2024-06-31").is_err());
-        assert!(isoparse("2024-09-30").is_ok());
-        assert!(isoparse("2024-09-31").is_err());
-        assert!(isoparse("2024-11-30").is_ok());
-        assert!(isoparse("2024-11-31").is_err());
-    }
-
-    #[test]
-    fn test_iso_feb_century_non_leap() {
-        assert!(isoparse("1900-02-29").is_err());
-        assert!(isoparse("1900-02-28").is_ok());
-    }
-
-    #[test]
-    fn test_iso_feb_century_leap() {
-        assert!(isoparse("2000-02-29").is_ok());
-    }
-
-    #[test]
-    fn test_iso_empty_time_after_t() {
-        let result = isoparse("2024-01-15T");
-        // T with no time part — should parse with time 00:00:00
-        assert!(result.is_ok());
-        let dt = result.unwrap();
-        assert_eq!(dt.hour(), 0);
-    }
-
-    #[test]
-    fn test_iso_fractional_seconds_all_zeros() {
-        let dt = isoparse("2024-01-15T10:30:45.000000").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 0);
-    }
-
-    #[test]
-    fn test_iso_fractional_seconds_7_digits_truncated() {
-        let dt = isoparse("2024-01-15T10:30:45.9999999").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 999999);
-    }
-
-    #[test]
-    fn test_iso_fractional_1_digit_edge() {
-        let dt = isoparse("2024-01-15T10:30:45.5").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 500_000);
-    }
-
-    #[test]
-    fn test_iso_fractional_2_digits_edge() {
-        let dt = isoparse("2024-01-15T10:30:45.25").unwrap();
-        assert_eq!(dt.nanosecond() / 1000, 250_000);
-    }
-
-    #[test]
-    fn test_iso_tz_compact_positive_edge() {
-        let dt = isoparse("2024-01-15T10:30:45+0530").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
-    }
-
-    #[test]
-    fn test_iso_tz_z_lowercase() {
-        // lowercase z may or may not be accepted
-        let _ = isoparse("2024-01-15T10:30:45z");
-    }
-
-    #[test]
-    fn test_iso_three_digit_year_invalid() {
-        assert!(isoparse("202").is_err());
-    }
-
-    #[test]
-    fn test_iso_five_digit_invalid() {
-        assert!(isoparse("20241").is_err());
-    }
-
-    #[test]
-    fn test_iso_only_whitespace_edge() {
-        assert!(isoparse("   ").is_err());
-    }
-
-    #[test]
-    fn test_iso_tabs_trimmed() {
-        let dt = isoparse("\t2024-01-15\t").unwrap();
-        assert_eq!(dt.year(), 2024);
-    }
-
-    #[test]
-    fn test_iso_parse_int_boundary() {
-        let result = isoparse("9999999-01-01");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_iso_compact_time_hhmm_edge() {
-        let dt = isoparse("2024-01-15T1030").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
-        assert_eq!(dt.second(), 0);
-    }
-
-    #[test]
-    fn test_iso_leap_second_rejected() {
-        assert!(isoparse("2024-01-15T23:59:60").is_err());
-    }
-
-    #[test]
-    fn test_iso_hhmm_colon_format() {
-        let dt = isoparse("2024-01-15T10:30").unwrap();
-        assert_eq!(dt.hour(), 10);
-        assert_eq!(dt.minute(), 30);
-        assert_eq!(dt.second(), 0);
-    }
-
-    #[test]
-    fn test_iso_unrecognized_time_format() {
-        let result = isoparse("2024-01-15TX");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_iso_fractional_dot_only() {
-        let dt = isoparse("2024-01-15T10:30:45.").unwrap();
-        assert_eq!(dt.second(), 45);
-        assert_eq!(dt.nanosecond(), 0);
+    fn custom_sep_mismatch() {
+        let p = IsoParser::new(Some(b'C')).unwrap();
+        assert!(p.isoparse("2012-04-25T01:25:00").is_err());
     }
 }

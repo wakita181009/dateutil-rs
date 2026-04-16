@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use super::conv::{make_py_tz, make_py_utc, ndt_to_py_datetime};
+use chrono::{Datelike, Timelike};
 use dateutil::parser;
-use dateutil::parser::ParserInfo;
+use dateutil::parser::{IsoParser, IsoTz, ParserInfo};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyType, PyTzInfo};
+use pyo3::types::{PyDate, PyDict, PyTime, PyType, PyTzInfo};
 
 // ---------------------------------------------------------------------------
 // parserinfo — Rust pyclass (internal base)
@@ -319,16 +320,174 @@ fn parse_to_dict_py<'py>(
     Ok(dict)
 }
 
-#[pyfunction]
-#[pyo3(name = "isoparse")]
-fn isoparse_py(dt_str: &str) -> PyResult<chrono::NaiveDateTime> {
-    parser::isoparse(dt_str).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+// ---------------------------------------------------------------------------
+// isoparser class
+// ---------------------------------------------------------------------------
+
+/// Extract a UTF-8 string from Python `str` or `bytes`.
+fn extract_iso_string(obj: &Bound<'_, pyo3::PyAny>) -> PyResult<String> {
+    if let Ok(s) = obj.extract::<String>() {
+        return Ok(s);
+    }
+    if let Ok(b) = obj.extract::<Vec<u8>>() {
+        return String::from_utf8(b).map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(
+                "ISO-8601 strings should contain only ASCII characters",
+            )
+        });
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "expected str or bytes",
+    ))
+}
+
+/// Build a `dateutil.tz.tzutc()` instance.
+fn make_dateutil_utc<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyTzInfo>> {
+    let tz_mod = py.import("dateutil.tz")?;
+    let obj = tz_mod.getattr("tzutc")?.call0()?;
+    obj.downcast_into::<PyTzInfo>()
+        .map_err(|e| pyo3::exceptions::PyTypeError::new_err(e.to_string()))
+}
+
+/// Build a `dateutil.tz.tzoffset(None, seconds)` instance.
+fn make_dateutil_offset<'py>(py: Python<'py>, secs: i32) -> PyResult<Bound<'py, PyTzInfo>> {
+    let tz_mod = py.import("dateutil.tz")?;
+    let obj = tz_mod.getattr("tzoffset")?.call1((py.None(), secs))?;
+    obj.downcast_into::<PyTzInfo>()
+        .map_err(|e| pyo3::exceptions::PyTypeError::new_err(e.to_string()))
+}
+
+/// Convert `IsoTz` to a Python `datetime.tzinfo` subclass.
+fn isotz_to_py<'py>(py: Python<'py>, tz: IsoTz) -> PyResult<Bound<'py, PyTzInfo>> {
+    match tz {
+        IsoTz::Utc => make_dateutil_utc(py),
+        IsoTz::Offset(secs) => make_dateutil_offset(py, secs),
+    }
+}
+
+#[pyclass(name = "isoparser")]
+pub struct PyIsoParser {
+    inner: IsoParser,
+}
+
+#[pymethods]
+impl PyIsoParser {
+    #[new]
+    #[pyo3(signature = (sep=None))]
+    fn new(sep: Option<&Bound<'_, pyo3::PyAny>>) -> PyResult<Self> {
+        let sep_byte = match sep {
+            None => None,
+            Some(obj) => {
+                let s = if let Ok(s) = obj.extract::<String>() {
+                    s
+                } else if let Ok(b) = obj.extract::<Vec<u8>>() {
+                    String::from_utf8(b).map_err(|_| {
+                        pyo3::exceptions::PyValueError::new_err(
+                            "Separator must be a single, non-numeric ASCII character",
+                        )
+                    })?
+                } else {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "Separator must be a single, non-numeric ASCII character",
+                    ));
+                };
+                if s.len() != 1 {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "Separator must be a single, non-numeric ASCII character",
+                    ));
+                }
+                let b = s.as_bytes()[0];
+                if b >= 128 || (b as char).is_ascii_digit() {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "Separator must be a single, non-numeric ASCII character",
+                    ));
+                }
+                Some(b)
+            }
+        };
+        let inner = IsoParser::new(sep_byte)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    fn isoparse<'py>(
+        &self,
+        py: Python<'py>,
+        dt_str: &Bound<'py, pyo3::PyAny>,
+    ) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        let s = extract_iso_string(dt_str)?;
+        let result = self
+            .inner
+            .isoparse(&s)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+        let tzinfo = match result.tz {
+            Some(tz) => Some(isotz_to_py(py, tz)?),
+            None => None,
+        };
+        ndt_to_py_datetime(py, result.datetime, tzinfo.as_ref())
+    }
+
+    fn parse_isodate<'py>(
+        &self,
+        py: Python<'py>,
+        datestr: &Bound<'py, pyo3::PyAny>,
+    ) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        let s = extract_iso_string(datestr)?;
+        let date = self
+            .inner
+            .parse_isodate(&s)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(PyDate::new(py, date.year(), date.month() as u8, date.day() as u8)?.into_any())
+    }
+
+    fn parse_isotime<'py>(
+        &self,
+        py: Python<'py>,
+        timestr: &Bound<'py, pyo3::PyAny>,
+    ) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        let s = extract_iso_string(timestr)?;
+        let result = self
+            .inner
+            .parse_isotime(&s)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+        let tzinfo = match result.tz {
+            Some(tz) => Some(isotz_to_py(py, tz)?),
+            None => None,
+        };
+        let us = (result.time.nanosecond() / 1000) % 1_000_000;
+        Ok(PyTime::new(
+            py,
+            result.time.hour() as u8,
+            result.time.minute() as u8,
+            result.time.second() as u8,
+            us,
+            tzinfo.as_ref(),
+        )?
+        .into_any())
+    }
+
+    #[pyo3(signature = (tzstr, zero_as_utc=true))]
+    fn parse_tzstr<'py>(
+        &self,
+        py: Python<'py>,
+        tzstr: &Bound<'py, pyo3::PyAny>,
+        zero_as_utc: bool,
+    ) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        let s = extract_iso_string(tzstr)?;
+        let result = self
+            .inner
+            .parse_tzstr(&s, zero_as_utc)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(isotz_to_py(py, result)?.into_any())
+    }
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyParserInfo>()?;
+    m.add_class::<PyIsoParser>()?;
     m.add_function(pyo3::wrap_pyfunction!(parse_py, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(parse_to_dict_py, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(isoparse_py, m)?)?;
     Ok(())
 }

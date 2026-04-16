@@ -54,6 +54,20 @@ impl PyTzUtc {
         ndt_to_py_datetime_with_fold(py, ndt, tz, false)
     }
 
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        if other.is_instance_of::<PyTzUtc>() {
+            return Ok(true);
+        }
+        if let Ok(off) = other.extract::<PyRef<'_, PyTzOffset>>() {
+            return Ok(off.inner.offset_seconds() == 0);
+        }
+        Ok(false)
+    }
+
+    fn __hash__(&self) -> u64 {
+        0 // Consistent: all UTC-equivalent timezones hash the same
+    }
+
     fn __repr__(&self) -> &str {
         "tzutc()"
     }
@@ -125,6 +139,20 @@ impl PyTzOffset {
         let wall = slf.borrow().inner.fromutc(ndt);
         let tz = slf.cast::<PyTzInfo>()?;
         ndt_to_py_datetime_with_fold(py, wall, tz, false)
+    }
+
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        if let Ok(off) = other.extract::<PyRef<'_, PyTzOffset>>() {
+            return Ok(self.inner.offset_seconds() == off.inner.offset_seconds());
+        }
+        if other.is_instance_of::<PyTzUtc>() {
+            return Ok(self.inner.offset_seconds() == 0);
+        }
+        Ok(false)
+    }
+
+    fn __hash__(&self) -> u64 {
+        self.inner.offset_seconds() as u64
     }
 
     fn __repr__(&self) -> String {
