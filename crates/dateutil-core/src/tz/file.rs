@@ -802,6 +802,7 @@ mod tests {
     // TZif parsing — real system files
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_parse_utc() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/UTC").unwrap();
@@ -812,6 +813,7 @@ mod tests {
         assert!(!tz.is_ambiguous(d));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_parse_tokyo() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/Asia/Tokyo").unwrap();
@@ -822,6 +824,7 @@ mod tests {
         assert!(!tz.is_ambiguous(d));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_parse_new_york_summer() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();
@@ -832,6 +835,7 @@ mod tests {
         assert_eq!(tz.tzname(d, false), "EDT");
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_parse_new_york_winter() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();
@@ -847,6 +851,7 @@ mod tests {
     // 2024-03-10 02:00 EST → 03:00 EDT (gap: 02:00-03:00 doesn't exist)
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_spring_forward_gap() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();
@@ -866,6 +871,7 @@ mod tests {
     // 2024-11-03 02:00 EDT → 01:00 EST (overlap: 01:00-02:00 happens twice)
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_fall_back_overlap() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();
@@ -884,6 +890,7 @@ mod tests {
     // fromutc
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_fromutc_tokyo() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/Asia/Tokyo").unwrap();
@@ -892,6 +899,7 @@ mod tests {
         assert_eq!(wall, dt(2024, 6, 15, 9, 0, 0));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_fromutc_new_york_summer() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();
@@ -952,6 +960,7 @@ mod tests {
     // TzFile Clone (Arc-based, cheap)
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_tzfile_clone_is_cheap() {
         let tz1 = TzFile::from_path("/usr/share/zoneinfo/UTC").unwrap();
@@ -975,12 +984,14 @@ mod tests {
     // filename accessor
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_filename() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/UTC").unwrap();
         assert_eq!(tz.filename(), Some("/usr/share/zoneinfo/UTC"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_filename_none_for_bytes() {
         let data = std::fs::read("/usr/share/zoneinfo/UTC").unwrap();
@@ -992,6 +1003,7 @@ mod tests {
     // Far-future dates (exercises POSIX TZ rule path)
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_far_future_posix_rule() {
         // Year 2100 is beyond stored transitions — uses POSIX footer rule
@@ -1004,6 +1016,7 @@ mod tests {
         assert_eq!(tz.utcoffset(d_winter, false), -5 * 3600);
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_far_future_ambiguous() {
         // November 2100 fall-back overlap should still work via POSIX rule
@@ -1013,6 +1026,7 @@ mod tests {
         assert!(tz.is_ambiguous(overlap_dt));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_far_future_no_dst_timezone() {
         // Tokyo has no DST — far future should still return JST
@@ -1025,6 +1039,7 @@ mod tests {
     // fromutc — winter (EST)
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_fromutc_new_york_winter() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();
@@ -1037,6 +1052,7 @@ mod tests {
     // Overlap boundary precision
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_overlap_boundary_start() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();
@@ -1045,6 +1061,7 @@ mod tests {
         assert!(tz.is_ambiguous(boundary));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_overlap_boundary_end() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();
@@ -1053,6 +1070,7 @@ mod tests {
         assert!(!tz.is_ambiguous(boundary));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_not_ambiguous_before_overlap() {
         let tz = TzFile::from_path("/usr/share/zoneinfo/America/New_York").unwrap();

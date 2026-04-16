@@ -160,6 +160,7 @@ mod tests {
         assert!(off.abs() <= 14 * 3600);
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_tzlocal_has_tzfile() {
         let tz = TzLocal::new();

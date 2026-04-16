@@ -399,7 +399,11 @@ fn py_any_to_ndt_for_diff(obj: &Bound<'_, PyAny>) -> PyResult<(NaiveDateTime, bo
         let aware = dt
             .get_tzinfo()
             .as_ref()
-            .map(|tzinfo| tzinfo.call_method1("utcoffset", (obj,)).map(|o| !o.is_none()))
+            .map(|tzinfo| {
+                tzinfo
+                    .call_method1("utcoffset", (obj,))
+                    .map(|o| !o.is_none())
+            })
             .transpose()?
             .unwrap_or(false);
         return Ok((ndt, aware));

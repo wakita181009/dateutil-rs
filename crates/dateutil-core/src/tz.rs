@@ -424,6 +424,7 @@ mod tests {
     // gettz()
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_gettz_iana_name() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -433,6 +434,7 @@ mod tests {
         assert_eq!(tz.utcoffset(dt(2024, 6, 15, 12, 0, 0), false), -4 * 3600);
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_gettz_tokyo() {
         let tz = gettz(Some("Asia/Tokyo")).unwrap();
@@ -454,6 +456,7 @@ mod tests {
         assert!(matches!(err, TzError::NotFound(_)));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_gettz_caching() {
         // First call resolves from disk
@@ -464,6 +467,7 @@ mod tests {
         assert_eq!(tz1.utcoffset(d, false), tz2.utcoffset(d, false));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_gettz_absolute_path() {
         let tz = gettz(Some("/usr/share/zoneinfo/UTC")).unwrap();
@@ -474,6 +478,7 @@ mod tests {
     // Helper functions with TzFile
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_datetime_exists_gap() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -485,6 +490,7 @@ mod tests {
         assert!(datetime_exists(dt(2024, 3, 10, 1, 30, 0), &tz));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_datetime_ambiguous_overlap() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -496,6 +502,7 @@ mod tests {
         assert!(!datetime_ambiguous(dt(2024, 11, 3, 2, 30, 0), &tz));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_resolve_imaginary() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -504,6 +511,7 @@ mod tests {
         assert_eq!(resolved, dt(2024, 3, 10, 3, 30, 0));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_resolve_imaginary_existing() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -547,6 +555,7 @@ mod tests {
         assert_eq!(tz.dst_delta(d, false), TimeDelta::zero());
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_dst_delta_with_dst_timezone() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -589,6 +598,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_gettz_colon_prefix() {
         // POSIX convention: leading colon
@@ -608,6 +618,7 @@ mod tests {
     // TimeZone::File dispatch
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_timezone_file_dispatch() {
         let tz = gettz(Some("Asia/Tokyo")).unwrap();
@@ -624,6 +635,7 @@ mod tests {
     // Overlap/gap boundary precision with helpers
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_datetime_exists_gap_boundaries() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -635,6 +647,7 @@ mod tests {
         assert!(!datetime_exists(dt(2024, 3, 10, 2, 0, 0), &tz));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_resolve_imaginary_gap_start() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -643,6 +656,7 @@ mod tests {
         assert_eq!(resolved, dt(2024, 3, 10, 3, 0, 0));
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_resolve_imaginary_gap_end() {
         let tz = gettz(Some("America/New_York")).unwrap();
@@ -670,6 +684,7 @@ mod tests {
     // Different geographic zones
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     #[test]
     fn test_gettz_europe() {
         let tz = gettz(Some("Europe/London")).unwrap();
@@ -679,6 +694,7 @@ mod tests {
         assert_eq!(tz.utcoffset(dt(2024, 7, 15, 12, 0, 0), false), 3600);
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_gettz_southern_hemisphere() {
         let tz = gettz(Some("Australia/Sydney")).unwrap();

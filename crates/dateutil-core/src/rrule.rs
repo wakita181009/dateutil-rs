@@ -1193,8 +1193,7 @@ impl fmt::Display for RRule {
         if self.explicit.contains(ExplicitFields::BYWEEKDAY) {
             if let Some(ref bwd) = self.orig_byweekday {
                 if !bwd.is_empty() {
-                    const DAY_NAMES: [&str; 7] =
-                        ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+                    const DAY_NAMES: [&str; 7] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
                     let strs: Vec<String> = bwd
                         .iter()
                         .map(|w| {

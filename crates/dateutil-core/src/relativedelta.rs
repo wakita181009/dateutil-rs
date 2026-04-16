@@ -957,10 +957,14 @@ impl fmt::Display for RelativeDelta {
         macro_rules! write_abs {
             ($val:expr, $name:expr) => {
                 if let Some(v) = $val {
-                    if !first { write!(f, ", ")?; }
+                    if !first {
+                        write!(f, ", ")?;
+                    }
                     write!(f, concat!($name, "={}"), v)?;
                     #[allow(unused_assignments)]
-                    { first = false; }
+                    {
+                        first = false;
+                    }
                 }
             };
         }
