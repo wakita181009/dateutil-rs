@@ -6,17 +6,87 @@ import datetime
 from typing import Any
 
 from dateutil._native import (
-    datetime_ambiguous,
-    datetime_exists,
+    datetime_ambiguous as _native_datetime_ambiguous,
+)
+from dateutil._native import (
+    datetime_exists as _native_datetime_exists,
+)
+from dateutil._native import (
     gettz,
-    resolve_imaginary,
     tzfile,
     tzlocal,
     tzoffset,
     tzutc,
 )
+from dateutil._native import (
+    resolve_imaginary as _native_resolve_imaginary,
+)
 
 UTC = tzutc()
+
+_NATIVE_TZ_TYPES = (tzutc, tzoffset, tzfile, tzlocal)
+
+
+def _resolve_tz(dt: datetime.datetime, tz: datetime.tzinfo | None) -> datetime.tzinfo:
+    if tz is not None:
+        return tz
+    if dt.tzinfo is None:
+        raise ValueError("Datetime is naive and no timezone provided.")
+    return dt.tzinfo
+
+
+def datetime_ambiguous(
+    dt: datetime.datetime, tz: datetime.tzinfo | None = None
+) -> bool:
+    """Return True iff ``dt`` falls in an ambiguous wall-clock window."""
+    resolved = _resolve_tz(dt, tz)
+    if isinstance(resolved, _NATIVE_TZ_TYPES):
+        return _native_datetime_ambiguous(dt.replace(tzinfo=None), resolved)
+
+    # Generic tzinfo: try its own is_ambiguous, then fall back to fold compare.
+    is_ambiguous_fn = getattr(resolved, "is_ambiguous", None)
+    if is_ambiguous_fn is not None:
+        try:
+            return bool(is_ambiguous_fn(dt))
+        except (AttributeError, NotImplementedError, TypeError):
+            # AttributeError/NotImplementedError: explicit opt-out.
+            # TypeError: incompatible signature (e.g. extra required args).
+            pass
+
+    wall = dt.replace(tzinfo=resolved)
+    wall_0 = wall.replace(fold=0)
+    wall_1 = wall.replace(fold=1)
+    same_offset = wall_0.utcoffset() == wall_1.utcoffset()
+    same_dst = wall_0.dst() == wall_1.dst()
+    return not (same_offset and same_dst)
+
+
+def datetime_exists(dt: datetime.datetime, tz: datetime.tzinfo | None = None) -> bool:
+    """Return True iff ``dt`` is a real wall-clock time (not a DST gap)."""
+    resolved = _resolve_tz(dt, tz)
+    if isinstance(resolved, _NATIVE_TZ_TYPES):
+        return _native_datetime_exists(dt.replace(tzinfo=None), resolved)
+
+    wall = dt.replace(tzinfo=resolved)
+    utc_equiv = (wall - wall.utcoffset()).replace(tzinfo=resolved)
+    return wall == utc_equiv
+
+
+def resolve_imaginary(dt: datetime.datetime) -> datetime.datetime:
+    """Shift a non-existent wall-clock datetime forward by the DST gap."""
+    if dt.tzinfo is None or not isinstance(dt.tzinfo, _NATIVE_TZ_TYPES):
+        if datetime_exists(dt):
+            return dt
+        # Generic fallback: offsets 24h before and after bracket the gap
+        day = datetime.timedelta(hours=24)
+        off_before = (dt - day).utcoffset()
+        off_after = (dt + day).utcoffset()
+        if off_before is None or off_after is None:
+            return dt
+        return dt + (off_after - off_before)
+    tzinfo = dt.tzinfo
+    resolved_naive = _native_resolve_imaginary(dt.replace(tzinfo=None), tzinfo)
+    return resolved_naive.replace(tzinfo=tzinfo)
 
 
 _NOT_IMPL = (

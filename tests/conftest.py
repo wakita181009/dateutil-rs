@@ -15,10 +15,6 @@ _XFAIL_CLASSES = {
     ("test_tz", "TzPickleFileTest"),  # Rust objects not picklable
     ("test_tz", "TzPickleTest"),  # Rust objects not picklable
     ("test_tz", "TestEnfold"),  # enfold() not supported
-    (
-        "test_tz",
-        "ImaginaryDateTest",
-    ),  # resolve_imaginary needs generic tzinfo extraction
     # -- parser: unimplemented features --
     ("test_parser", "TestFormat"),  # strftime round-trip not supported
     ("test_parser", "TestOutOfBounds"),  # error semantics differ
@@ -267,11 +263,9 @@ _RUST_XFAIL = {
     # tz: unsupported tz features
     # =======================================================================
     # -- TzUTCTest: singleton / inequality semantics --
-    ("test_tz", "TzUTCTest", "testAmbiguity"),
     ("test_tz", "TzUTCTest", "testInequalityUnsupported"),
     ("test_tz", "TzUTCTest", "testSingleton"),
     # -- TzOffsetTest: singleton / attribute / name semantics --
-    ("test_tz", "TzOffsetTest", "testAmbiguity"),
     ("test_tz", "TzOffsetTest", "testInequalityUnsupported"),
     ("test_tz", "TzOffsetTest", "testTzNameNone"),
     ("test_tz", "TzOffsetTest", "testTzOffsetInstance"),
@@ -323,19 +317,15 @@ _RUST_XFAIL = {
     ("test_tz", "DatetimeAmbiguousTest", "testIncompatibleAmbiguityFold0"),
     ("test_tz", "DatetimeAmbiguousTest", "testIncompatibleAmbiguityFold1"),
     ("test_tz", "DatetimeAmbiguousTest", "testNoSupportAmbiguity"),
-    ("test_tz", "DatetimeAmbiguousTest", "testNoTzSpecified"),
     ("test_tz", "DatetimeAmbiguousTest", "testNotAmbiguousLocal"),
     ("test_tz", "DatetimeAmbiguousTest", "testNotAmbiguousOffset"),
     ("test_tz", "DatetimeAmbiguousTest", "testNotAmbiguousUTC"),
-    ("test_tz", "DatetimeAmbiguousTest", "testSpecifiedTzOverridesAttached"),
     ("test_tz", "DatetimeAmbiguousTest", "testSupportAmbiguity"),
     ("test_tz", "DatetimeAmbiguousTest", "testSupportNoAmbiguity"),
     ("test_tz", "DatetimeAmbiguousTest", "testUnambiguousDatetime"),
     # -- DatetimeExistsTest: custom tzinfo classes --
     ("test_tz", "DatetimeExistsTest", "testExistsLocal"),
     ("test_tz", "DatetimeExistsTest", "testInGapLocal"),
-    ("test_tz", "DatetimeExistsTest", "testNoTzSpecified"),
-    ("test_tz", "DatetimeExistsTest", "testSpecifiedTzOverridesAttached"),
     # -- GettzTest --
     ("test_tz", "GettzTest", "testGetTZFromFile"),
     ("test_tz", "GettzTest", "testGetTZFromFileobj"),
@@ -370,11 +360,6 @@ _RUST_XFAIL = {
     ("test_tz", "", "test_invalid_GNU_tzstr[IST-2IDT,M3,2000,1/26,M10,5,0]"),
     ("test_tz", "", "test_invalid_GNU_tzstr[IST-2IDT,M3.4.-1/26,M10.5.0]"),
     ("test_tz", "", "test_invalid_GNU_tzstr[WART4WARST,J1,J365/-25]"),
-    ("test_tz", "", "test_resolve_imaginary[tzi0-dt0-dt_exp0]"),
-    ("test_tz", "", "test_resolve_imaginary[tzi1-dt1-dt_exp1]"),
-    ("test_tz", "", "test_resolve_imaginary[tzi2-dt2-dt_exp2]"),
-    ("test_tz", "", "test_resolve_imaginary[tzi3-dt3-dt_exp3]"),
-    ("test_tz", "", "test_resolve_imaginary[tzi4-dt4-dt_exp4]"),
     ("test_tz", "", "test_resolve_imaginary_ambiguous[dt0]"),
     ("test_tz", "", "test_resolve_imaginary_ambiguous[dt1]"),
     ("test_tz", "", "test_resolve_imaginary_ambiguous[dt2]"),
