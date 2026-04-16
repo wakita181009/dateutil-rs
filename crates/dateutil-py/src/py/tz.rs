@@ -252,8 +252,7 @@ impl PyTzFile {
         let py = slf.py();
         let ndt = extract_ndt(dt)?;
         let inner = &slf.borrow().inner;
-        let wall = inner.fromutc(ndt);
-        let fold = inner.is_ambiguous(wall);
+        let (wall, fold) = inner.fromutc_with_fold(ndt);
         let tz = slf.cast::<PyTzInfo>()?;
         ndt_to_py_datetime_with_fold(py, wall, tz, fold)
     }
@@ -340,8 +339,7 @@ impl PyTzLocal {
         let py = slf.py();
         let ndt = extract_ndt(dt)?;
         let inner = &slf.borrow().inner;
-        let wall = inner.fromutc(ndt);
-        let fold = inner.is_ambiguous(wall);
+        let (wall, fold) = inner.fromutc_with_fold(ndt);
         let tz = slf.cast::<PyTzInfo>()?;
         ndt_to_py_datetime_with_fold(py, wall, tz, fold)
     }

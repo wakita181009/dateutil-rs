@@ -150,6 +150,15 @@ impl TzLocal {
         dt + chrono::TimeDelta::seconds(chrono_local_offset(dt) as i64)
     }
 
+    /// Convert UTC to wall time and determine the PEP 495 fold.
+    pub fn fromutc_with_fold(&self, dt: NaiveDateTime) -> (NaiveDateTime, bool) {
+        if let Some(ref tz) = self.inner {
+            return tz.fromutc_with_fold(dt);
+        }
+        let wall = dt + chrono::TimeDelta::seconds(chrono_local_offset(dt) as i64);
+        (wall, false)
+    }
+
     /// The detected IANA timezone name.
     pub fn iana_name(&self) -> &str {
         &self.name

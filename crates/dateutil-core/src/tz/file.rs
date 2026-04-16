@@ -129,6 +129,20 @@ impl TzFile {
         self.0.fromutc(dt)
     }
 
+    /// Convert a UTC datetime to wall time and determine the PEP 495 fold.
+    pub fn fromutc_with_fold(&self, dt: NaiveDateTime) -> (NaiveDateTime, bool) {
+        let utc_ts = datetime_to_timestamp(dt);
+        let tti = self.0.find_ttinfo_utc(utc_ts);
+        let wall = dt + TimeDelta::seconds(tti.utoff as i64);
+        let fold = if self.0.is_ambiguous(wall) {
+            let tti_first = self.0.find_ttinfo_wall(wall, false);
+            tti.utoff < tti_first.utoff
+        } else {
+            false
+        };
+        (wall, fold)
+    }
+
     /// Source filename, if available.
     pub fn filename(&self) -> Option<&str> {
         self.0.filename.as_deref()
