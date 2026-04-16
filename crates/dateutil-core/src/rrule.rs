@@ -579,6 +579,9 @@ pub struct RRule {
     pub(crate) byweekday_mask: u8,
     pub(crate) bymonthday_mask: u32,
     pub(crate) bynmonthday_mask: u32,
+    pub(crate) byhour_mask: u32,
+    pub(crate) byminute_mask: u64,
+    pub(crate) bysecond_mask: u64,
 
     pub(crate) timeset: Option<SmallVec<[NaiveTime; 4]>>,
 
@@ -1126,6 +1129,18 @@ impl RRuleBuilder {
                 acc
             }
         });
+        let byhour_mask = byhour.as_deref().map_or(0u32, |v| {
+            v.iter()
+                .fold(0u32, |acc, &h| if h < 24 { acc | (1u32 << h) } else { acc })
+        });
+        let byminute_mask = byminute.as_deref().map_or(0u64, |v| {
+            v.iter()
+                .fold(0u64, |acc, &m| if m < 60 { acc | (1u64 << m) } else { acc })
+        });
+        let bysecond_mask = bysecond.as_deref().map_or(0u64, |v| {
+            v.iter()
+                .fold(0u64, |acc, &s| if s < 60 { acc | (1u64 << s) } else { acc })
+        });
 
         Ok(RRule {
             freq,
@@ -1149,6 +1164,9 @@ impl RRuleBuilder {
             byweekday_mask,
             bymonthday_mask,
             bynmonthday_mask,
+            byhour_mask,
+            byminute_mask,
+            bysecond_mask,
             timeset,
             by_present,
             orig_byweekday,
@@ -1298,12 +1316,17 @@ pub(crate) fn construct_byset(
     Ok(set)
 }
 
-pub(crate) fn mod_distance(
-    value: i64,
-    byxxx: &[u8],
-    base: i64,
-    interval: i64,
-) -> Option<(i64, i64)> {
+#[inline]
+pub(crate) fn in_mask_u32(mask: u32, v: u8) -> bool {
+    v < 32 && (mask & (1u32 << v)) != 0
+}
+
+#[inline]
+pub(crate) fn in_mask_u64(mask: u64, v: u8) -> bool {
+    v < 64 && (mask & (1u64 << v)) != 0
+}
+
+pub(crate) fn mod_distance(value: i64, mask: u64, base: i64, interval: i64) -> Option<(i64, i64)> {
     let mut acc = 0i64;
     let mut val = value;
     for _ in 1..=base {
@@ -1312,7 +1335,7 @@ pub(crate) fn mod_distance(
         let m = sum.rem_euclid(base);
         acc += d;
         val = m;
-        if byxxx.contains(&(val as u8)) {
+        if in_mask_u64(mask, val as u8) {
             return Some((acc, val));
         }
     }
@@ -3635,9 +3658,34 @@ mod tests {
 
     #[test]
     fn test_mod_distance_none() {
-        // No matching value within base iterations
-        let result = mod_distance(0, &[], 60, 1);
+        // No matching value within base iterations (empty mask)
+        let result = mod_distance(0, 0, 60, 1);
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_mod_distance_with_mask() {
+        // Match at minute=15 when starting from 0 with interval 15
+        let mask = (1u64 << 15) | (1u64 << 30) | (1u64 << 45);
+        let result = mod_distance(0, mask, 60, 15);
+        assert_eq!(result, Some((0, 15)));
+    }
+
+    #[test]
+    fn test_in_mask_u32_bounds() {
+        assert!(in_mask_u32(1u32 << 23, 23));
+        assert!(!in_mask_u32(0u32, 23));
+        // Out-of-range values must not panic or alias into valid bits
+        assert!(!in_mask_u32(u32::MAX, 32));
+        assert!(!in_mask_u32(u32::MAX, 100));
+    }
+
+    #[test]
+    fn test_in_mask_u64_bounds() {
+        assert!(in_mask_u64(1u64 << 59, 59));
+        assert!(!in_mask_u64(0u64, 59));
+        assert!(!in_mask_u64(u64::MAX, 64));
+        assert!(!in_mask_u64(u64::MAX, 200));
     }
 
     // ---- Coverage: invalid wkst ----

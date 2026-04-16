@@ -537,11 +537,14 @@ impl RRuleIter {
         let bysecond = rr.bysecond.as_deref();
 
         let invalid = (rr.freq >= Frequency::Hourly
-            && byhour.is_some_and(|bh| !bh.contains(&(self.hour as u8))))
+            && byhour.is_some()
+            && !in_mask_u32(rr.byhour_mask, self.hour as u8))
             || (rr.freq >= Frequency::Minutely
-                && byminute.is_some_and(|bm| !bm.contains(&(self.minute as u8))))
+                && byminute.is_some()
+                && !in_mask_u64(rr.byminute_mask, self.minute as u8))
             || (rr.freq >= Frequency::Secondly
-                && bysecond.is_some_and(|bs| !bs.contains(&(self.second as u8))));
+                && bysecond.is_some()
+                && !in_mask_u64(rr.bysecond_mask, self.second as u8));
 
         if invalid {
             return;
@@ -624,10 +627,13 @@ impl RRuleIter {
                 fixday = true;
             }
             Frequency::Hourly => {
-                if let Some(ref byhour) = self.ii.rule.byhour {
-                    if let Some((ndays, hour)) =
-                        mod_distance(self.hour as i64, byhour.as_slice(), 24, interval as i64)
-                    {
+                if self.ii.rule.byhour.is_some() {
+                    if let Some((ndays, hour)) = mod_distance(
+                        self.hour as i64,
+                        self.ii.rule.byhour_mask as u64,
+                        24,
+                        interval as i64,
+                    ) {
                         self.hour = hour as u32;
                         if ndays > 0 {
                             self.day += ndays as u32;
@@ -645,16 +651,17 @@ impl RRuleIter {
                 }
             }
             Frequency::Minutely => {
-                let byhour = self.ii.rule.byhour.as_deref();
+                let has_byhour = self.ii.rule.byhour.is_some();
+                let byhour_mask = self.ii.rule.byhour_mask;
                 let rep_rate: i64 = 24 * 60;
                 let g = gcd(interval as i64, rep_rate);
                 let mut valid = false;
 
                 for _ in 0..(rep_rate / g) {
-                    if let Some(ref byminute) = self.ii.rule.byminute {
+                    if self.ii.rule.byminute.is_some() {
                         if let Some((nhours, minute)) = mod_distance(
                             self.minute as i64,
-                            byminute.as_slice(),
+                            self.ii.rule.byminute_mask,
                             60,
                             interval as i64,
                         ) {
@@ -680,7 +687,7 @@ impl RRuleIter {
                         }
                     }
 
-                    if byhour.is_none_or(|bh| bh.contains(&(self.hour as u8))) {
+                    if !has_byhour || in_mask_u32(byhour_mask, self.hour as u8) {
                         valid = true;
                         break;
                     }
@@ -692,17 +699,19 @@ impl RRuleIter {
                 }
             }
             Frequency::Secondly => {
-                let byhour = self.ii.rule.byhour.as_deref();
-                let byminute = self.ii.rule.byminute.as_deref();
+                let has_byhour = self.ii.rule.byhour.is_some();
+                let has_byminute = self.ii.rule.byminute.is_some();
+                let byhour_mask = self.ii.rule.byhour_mask;
+                let byminute_mask = self.ii.rule.byminute_mask;
                 let rep_rate: i64 = 24 * 3600;
                 let g = gcd(interval as i64, rep_rate);
                 let mut valid = false;
 
                 for _ in 0..(rep_rate / g) {
-                    if let Some(ref bysecond) = self.ii.rule.bysecond {
+                    if self.ii.rule.bysecond.is_some() {
                         if let Some((nminutes, second)) = mod_distance(
                             self.second as i64,
-                            bysecond.as_slice(),
+                            self.ii.rule.bysecond_mask,
                             60,
                             interval as i64,
                         ) {
@@ -738,8 +747,8 @@ impl RRuleIter {
                         }
                     }
 
-                    if byhour.is_none_or(|bh| bh.contains(&(self.hour as u8)))
-                        && byminute.is_none_or(|bm| bm.contains(&(self.minute as u8)))
+                    if (!has_byhour || in_mask_u32(byhour_mask, self.hour as u8))
+                        && (!has_byminute || in_mask_u64(byminute_mask, self.minute as u8))
                     {
                         valid = true;
                         break;

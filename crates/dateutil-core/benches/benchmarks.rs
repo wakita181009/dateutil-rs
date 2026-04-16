@@ -358,6 +358,44 @@ fn bench_rrule_iter(c: &mut Criterion) {
             black_box(rule.all().unwrap());
         })
     });
+
+    c.bench_function("rrule_minutely_byhour_9to17", |b| {
+        let rule = RRuleBuilder::new(Frequency::Minutely)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .byhour(vec![9, 10, 11, 12, 13, 14, 15, 16, 17])
+            .count(500)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all().unwrap());
+        })
+    });
+
+    c.bench_function("rrule_hourly_byminute_bysecond", |b| {
+        let rule = RRuleBuilder::new(Frequency::Hourly)
+            .dtstart(dt(2020, 1, 1, 0, 0, 0))
+            .byminute(vec![0, 15, 30, 45])
+            .bysecond(vec![0, 30])
+            .count(200)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all().unwrap());
+        })
+    });
+
+    c.bench_function("rrule_secondly_byhour_byminute", |b| {
+        let rule = RRuleBuilder::new(Frequency::Secondly)
+            .dtstart(dt(2020, 1, 1, 9, 0, 0))
+            .byhour(vec![9, 12, 17])
+            .byminute(vec![0, 30])
+            .count(100)
+            .build()
+            .unwrap();
+        b.iter(|| {
+            black_box(rule.all().unwrap());
+        })
+    });
 }
 
 fn bench_rrule_before_after(c: &mut Criterion) {
