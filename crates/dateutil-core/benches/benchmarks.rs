@@ -8,6 +8,7 @@ use dateutil::relativedelta::RelativeDelta;
 use dateutil::rrule::parse::rrulestr;
 use dateutil::rrule::set::RRuleSet;
 use dateutil::rrule::{Frequency, RRuleBuilder, Recurrence};
+use dateutil::tz::TzFile;
 use std::hint::black_box;
 
 fn bench_tokenizer(c: &mut Criterion) {
@@ -592,6 +593,31 @@ fn bench_rrulestr(c: &mut Criterion) {
     });
 }
 
+fn bench_tz(c: &mut Criterion) {
+    // Build once at bench setup. Skip gracefully on systems without zoneinfo.
+    let ny = TzFile::from_path("/usr/share/zoneinfo/America/New_York").ok();
+
+    if let Some(tz) = ny {
+        // Worst case for the old code: repeat tzname() → per-call linear scan
+        // through abbr_data plus UTF-8 validation.
+        c.bench_function("tz_file_tzname_hot", |b| {
+            b.iter(|| {
+                for month in 1..=12 {
+                    black_box(tz.tzname(black_box(dt(2024, month, 15, 12, 0, 0)), false));
+                }
+            })
+        });
+
+        c.bench_function("tz_file_utcoffset_and_tzname", |b| {
+            b.iter(|| {
+                let when = black_box(dt(2024, 7, 15, 12, 0, 0));
+                black_box(tz.utcoffset(when, false));
+                black_box(tz.tzname(when, false));
+            })
+        });
+    }
+}
+
 criterion_group!(
     benches,
     bench_tokenizer,
@@ -604,5 +630,6 @@ criterion_group!(
     bench_rrule_before_after,
     bench_rruleset,
     bench_rrulestr,
+    bench_tz,
 );
 criterion_main!(benches);

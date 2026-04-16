@@ -22,10 +22,12 @@ pub(crate) struct TtInfo {
     pub utoff: i32,
     /// Whether this is a DST period.
     pub is_dst: bool,
-    /// Byte offset into `abbr_data`.
-    pub abbr_start: u16,
     /// DST portion of the offset in seconds (computed during parse).
     pub dst_offset: i32,
+    /// Pre-extracted abbreviation string, sliced from the TZif abbr block
+    /// during parse so that `tzname()` avoids a linear scan + UTF-8 check
+    /// on every call.
+    pub abbr: Box<str>,
 }
 
 /// Minimal POSIX TZ rule for TZif v2/v3 footer.
@@ -65,8 +67,6 @@ pub struct TzFileData {
     trans_idx: Vec<u8>,
     /// Transition type info entries.
     ttinfo: SmallVec<[TtInfo; 4]>,
-    /// Raw abbreviation bytes (NUL-separated).
-    abbr_data: Box<[u8]>,
     /// Ttinfo index for times before the first transition.
     ttinfo_before: u8,
     /// Cached ttinfo index for the first STD entry (O(1) POSIX resolve).
@@ -240,9 +240,9 @@ impl TzFileData {
         pos += timecnt;
 
         // TtInfo entries
-        let (ttinfo, abbr_data) = Self::parse_ttinfo_and_abbr(data, pos, typecnt, charcnt)?;
+        let ttinfo = Self::parse_ttinfo_and_abbr(data, pos, typecnt, charcnt)?;
 
-        Self::build(trans_utc, trans_idx, ttinfo, abbr_data, None, filename)
+        Self::build(trans_utc, trans_idx, ttinfo, None, filename)
     }
 
     fn parse_v2v3(data: &[u8], filename: Option<&str>) -> Result<Self, TzError> {
@@ -269,7 +269,7 @@ impl TzFileData {
         pos += timecnt;
 
         // TtInfo entries + abbreviations
-        let (ttinfo, abbr_data) = Self::parse_ttinfo_and_abbr(data, pos, typecnt, charcnt)?;
+        let ttinfo = Self::parse_ttinfo_and_abbr(data, pos, typecnt, charcnt)?;
         pos += typecnt * 6 + charcnt;
 
         // Skip leap seconds, isstd, isut
@@ -293,7 +293,7 @@ impl TzFileData {
             None
         };
 
-        Self::build(trans_utc, trans_idx, ttinfo, abbr_data, posix_tz, filename)
+        Self::build(trans_utc, trans_idx, ttinfo, posix_tz, filename)
     }
 
     fn parse_ttinfo_and_abbr(
@@ -301,31 +301,44 @@ impl TzFileData {
         pos: usize,
         typecnt: usize,
         charcnt: usize,
-    ) -> Result<(SmallVec<[TtInfo; 4]>, Box<[u8]>), TzError> {
-        #![allow(clippy::type_complexity)]
+    ) -> Result<SmallVec<[TtInfo; 4]>, TzError> {
+        let abbr_block_start = pos + typecnt * 6;
+        let abbr_block = &data[abbr_block_start..abbr_block_start + charcnt];
         let mut ttinfo = SmallVec::with_capacity(typecnt);
         let mut p = pos;
         for _ in 0..typecnt {
             let utoff = i32::from_be_bytes([data[p], data[p + 1], data[p + 2], data[p + 3]]);
             let is_dst = data[p + 4] != 0;
-            let abbr_start = data[p + 5] as u16;
+            let abbr_start = data[p + 5] as usize;
+            // Slice out the NUL-terminated ASCII abbreviation from the block
+            // and cache it on the entry. Malformed inputs fall back to "???".
+            let abbr: Box<str> = if abbr_start < abbr_block.len() {
+                let end = abbr_block[abbr_start..]
+                    .iter()
+                    .position(|&b| b == 0)
+                    .map(|p| abbr_start + p)
+                    .unwrap_or(abbr_block.len());
+                std::str::from_utf8(&abbr_block[abbr_start..end])
+                    .unwrap_or("???")
+                    .into()
+            } else {
+                "???".into()
+            };
             ttinfo.push(TtInfo {
                 utoff,
                 is_dst,
-                abbr_start,
                 dst_offset: 0, // computed later
+                abbr,
             });
             p += 6;
         }
-        let abbr_data = data[p..p + charcnt].into();
-        Ok((ttinfo, abbr_data))
+        Ok(ttinfo)
     }
 
     fn build(
         trans_utc: Vec<i64>,
         trans_idx: Vec<u8>,
         mut ttinfo: SmallVec<[TtInfo; 4]>,
-        abbr_data: Box<[u8]>,
         posix_tz: Option<PosixTzRule>,
         filename: Option<&str>,
     ) -> Result<Self, TzError> {
@@ -397,7 +410,6 @@ impl TzFileData {
             trans_wall,
             trans_idx,
             ttinfo,
-            abbr_data,
             ttinfo_before,
             ttinfo_std,
             ttinfo_dst,
@@ -407,17 +419,9 @@ impl TzFileData {
     }
 
     /// Get abbreviation string for a TtInfo.
-    fn abbr(&self, tti: &TtInfo) -> &str {
-        let start = tti.abbr_start as usize;
-        if start >= self.abbr_data.len() {
-            return "???";
-        }
-        let end = self.abbr_data[start..]
-            .iter()
-            .position(|&b| b == 0)
-            .map(|p| start + p)
-            .unwrap_or(self.abbr_data.len());
-        std::str::from_utf8(&self.abbr_data[start..end]).unwrap_or("???")
+    #[inline]
+    fn abbr<'a>(&self, tti: &'a TtInfo) -> &'a str {
+        &tti.abbr
     }
 
     // -----------------------------------------------------------------------
