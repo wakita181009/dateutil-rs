@@ -42,64 +42,58 @@ from dateutil._native import (
     tzutc,
 )
 
-
-def _build_du():
-    """Build the dateutil module namespace for benchmark fixtures."""
-    return SimpleNamespace(
-        name="dateutil",
-        easter=SimpleNamespace(
-            easter=easter,
-            EASTER_JULIAN=EASTER_JULIAN,
-            EASTER_ORTHODOX=EASTER_ORTHODOX,
-            EASTER_WESTERN=EASTER_WESTERN,
-        ),
-        parser=SimpleNamespace(
-            parse=parse,
-            isoparse=isoparse,
-        ),
-        relativedelta=SimpleNamespace(
-            relativedelta=relativedelta,
-            MO=MO,
-            TU=TU,
-            WE=WE,
-            TH=TH,
-            FR=FR,
-            SA=SA,
-            SU=SU,
-        ),
-        rrule=SimpleNamespace(
-            rrule=rrule,
-            rruleset=rruleset,
-            rrulestr=rrulestr,
-            YEARLY=YEARLY,
-            MONTHLY=MONTHLY,
-            WEEKLY=WEEKLY,
-            DAILY=DAILY,
-            HOURLY=HOURLY,
-            MINUTELY=MINUTELY,
-            SECONDLY=SECONDLY,
-            MO=MO,
-            TU=TU,
-            WE=WE,
-            TH=TH,
-            FR=FR,
-            SA=SA,
-            SU=SU,
-        ),
-        tz=SimpleNamespace(
-            tzutc=tzutc,
-            tzoffset=tzoffset,
-            tzlocal=tzlocal,
-            gettz=gettz,
-            UTC=tzutc(),
-            datetime_exists=datetime_exists,
-            datetime_ambiguous=datetime_ambiguous,
-            resolve_imaginary=resolve_imaginary,
-        ),
-    )
-
-
-_du = _build_du()
+_du = SimpleNamespace(
+    name="dateutil",
+    easter=SimpleNamespace(
+        easter=easter,
+        EASTER_JULIAN=EASTER_JULIAN,
+        EASTER_ORTHODOX=EASTER_ORTHODOX,
+        EASTER_WESTERN=EASTER_WESTERN,
+    ),
+    parser=SimpleNamespace(
+        parse=parse,
+        isoparse=isoparse,
+    ),
+    relativedelta=SimpleNamespace(
+        relativedelta=relativedelta,
+        MO=MO,
+        TU=TU,
+        WE=WE,
+        TH=TH,
+        FR=FR,
+        SA=SA,
+        SU=SU,
+    ),
+    rrule=SimpleNamespace(
+        rrule=rrule,
+        rruleset=rruleset,
+        rrulestr=rrulestr,
+        YEARLY=YEARLY,
+        MONTHLY=MONTHLY,
+        WEEKLY=WEEKLY,
+        DAILY=DAILY,
+        HOURLY=HOURLY,
+        MINUTELY=MINUTELY,
+        SECONDLY=SECONDLY,
+        MO=MO,
+        TU=TU,
+        WE=WE,
+        TH=TH,
+        FR=FR,
+        SA=SA,
+        SU=SU,
+    ),
+    tz=SimpleNamespace(
+        tzutc=tzutc,
+        tzoffset=tzoffset,
+        tzlocal=tzlocal,
+        gettz=gettz,
+        UTC=tzutc(),
+        datetime_exists=datetime_exists,
+        datetime_ambiguous=datetime_ambiguous,
+        resolve_imaginary=resolve_imaginary,
+    ),
+)
 
 
 @pytest.fixture

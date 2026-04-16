@@ -11,7 +11,10 @@ from dateutil._native import (
     tzutc,
 )
 
+UTC = tzutc()
+
 __all__ = [
+    "UTC",
     "datetime_ambiguous",
     "datetime_exists",
     "gettz",
