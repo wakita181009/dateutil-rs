@@ -176,7 +176,7 @@ pub enum RRuleStrResult {
 }
 
 impl RRuleStrResult {
-    pub fn all(&self) -> Vec<NaiveDateTime> {
+    pub fn all(&self) -> Result<Vec<NaiveDateTime>, RRuleError> {
         match self {
             RRuleStrResult::Single(r) => r.all(),
             RRuleStrResult::Set(s) => s.all(),

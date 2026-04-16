@@ -67,6 +67,8 @@ pub enum RRuleError {
     InvalidInterval,
     #[error("{0}")]
     ValueError(Box<str>),
+    #[error("all() called on infinite recurrence (set count or until)")]
+    InfiniteRecurrence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

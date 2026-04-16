@@ -137,17 +137,11 @@ pub trait Recurrence {
     fn iter(&self) -> Self::Iter;
     fn is_finite(&self) -> bool;
 
-    /// Collect all occurrences.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the recurrence is not finite (i.e., neither `count` nor `until` is set).
-    fn all(&self) -> Vec<NaiveDateTime> {
-        assert!(
-            self.is_finite(),
-            "all() called on infinite recurrence (set count or until)"
-        );
-        self.iter().collect()
+    fn all(&self) -> Result<Vec<NaiveDateTime>, RRuleError> {
+        if !self.is_finite() {
+            return Err(RRuleError::InfiniteRecurrence);
+        }
+        Ok(self.iter().collect())
     }
 
     fn before(&self, dt: NaiveDateTime, inc: bool) -> Option<NaiveDateTime> {
@@ -225,7 +219,7 @@ pub trait Recurrence {
         if !self.is_finite() {
             return None;
         }
-        let all = self.all();
+        let all = self.all().ok()?;
         all.len().checked_sub(n + 1).map(|i| all[i])
     }
 

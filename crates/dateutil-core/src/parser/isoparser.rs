@@ -33,14 +33,9 @@ pub struct IsoTimeParsed {
 // ---------------------------------------------------------------------------
 
 /// ISO-8601 parser with configurable date/time separator.
+#[derive(Default)]
 pub struct IsoParser {
     sep: Option<u8>,
-}
-
-impl Default for IsoParser {
-    fn default() -> Self {
-        Self { sep: None }
-    }
 }
 
 impl IsoParser {
@@ -494,10 +489,10 @@ fn parse_microseconds(bytes: &[u8], frac_len: usize) -> Result<u32, ParseError> 
 }
 
 fn calculate_weekdate(year: i32, week: i32, day: i32) -> Result<NaiveDate, ParseError> {
-    if week < 1 || week > 53 {
+    if !(1..=53).contains(&week) {
         return Err(verr(&format!("Invalid week: {week}")));
     }
-    if day < 1 || day > 7 {
+    if !(1..=7).contains(&day) {
         return Err(verr(&format!("Invalid weekday: {day}")));
     }
 
