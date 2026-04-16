@@ -79,19 +79,23 @@ def enfold(dt: datetime.datetime, fold: int = 1) -> datetime.datetime:
 
 def resolve_imaginary(dt: datetime.datetime) -> datetime.datetime:
     """Shift a non-existent wall-clock datetime forward by the DST gap."""
-    if dt.tzinfo is None or not isinstance(dt.tzinfo, _NATIVE_TZ_TYPES):
-        if datetime_exists(dt):
+    if dt.tzinfo is None:
+        return dt
+    if isinstance(dt.tzinfo, _NATIVE_TZ_TYPES):
+        naive = dt.replace(tzinfo=None)
+        if _native_datetime_exists(naive, dt.tzinfo):
             return dt
-        # Generic fallback: offsets 24h before and after bracket the gap
-        day = datetime.timedelta(hours=24)
-        off_before = (dt - day).utcoffset()
-        off_after = (dt + day).utcoffset()
-        if off_before is None or off_after is None:
-            return dt
-        return dt + (off_after - off_before)
-    tzinfo = dt.tzinfo
-    resolved_naive = _native_resolve_imaginary(dt.replace(tzinfo=None), tzinfo)
-    return resolved_naive.replace(tzinfo=tzinfo)
+        resolved_naive = _native_resolve_imaginary(naive, dt.tzinfo)
+        return resolved_naive.replace(tzinfo=dt.tzinfo)
+    if datetime_exists(dt):
+        return dt
+    # Generic tzinfo fallback: offsets 24h before and after bracket the gap.
+    day = datetime.timedelta(hours=24)
+    off_before = (dt - day).utcoffset()
+    off_after = (dt + day).utcoffset()
+    if off_before is None or off_after is None:
+        return dt
+    return dt + (off_after - off_before)
 
 
 _NOT_IMPL = (
