@@ -68,7 +68,10 @@ def datetime_exists(dt: datetime.datetime, tz: datetime.tzinfo | None = None) ->
         return _native_datetime_exists(dt.replace(tzinfo=None), resolved)
 
     wall = dt.replace(tzinfo=resolved)
-    utc_equiv = (wall - wall.utcoffset()).replace(tzinfo=resolved)
+    offset = wall.utcoffset()
+    if offset is None:
+        return True
+    utc_equiv = (wall - offset).replace(tzinfo=resolved)
     return wall == utc_equiv
 
 

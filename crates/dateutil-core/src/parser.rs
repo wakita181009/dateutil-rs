@@ -681,6 +681,23 @@ fn try_parse_compact<'a>(
                 0
             }
         }
+        4 if ymd.count == 3 && res.hour.is_none() => {
+            // HHMM after date is already parsed (e.g., "20030925T1049")
+            let Some(hour) = fast_parse_int(&token[0..2]) else {
+                return 0;
+            };
+            let Some(minute) = fast_parse_int(&token[2..4]) else {
+                return 0;
+            };
+
+            if hour <= 23 && minute <= 59 {
+                res.hour = Some(hour as u32);
+                res.minute = Some(minute as u32);
+                1
+            } else {
+                0
+            }
+        }
         10 if ymd.count == 0 => {
             // YYYYMMDDHH — optionally followed by :MM(:SS)?
             let Some(year) = fast_parse_int(&token[0..4]) else {
@@ -752,6 +769,15 @@ fn try_parse_token<'a>(
         return 1;
     }
 
+    // Handle compact all-digit tokens first so 12/14-digit forms (which overflow
+    // i32) like "199709020908" and "19970902090807" still reach try_parse_compact.
+    if !token.is_empty() && token.as_bytes().iter().all(|b| b.is_ascii_digit()) {
+        let compact = try_parse_compact(tokens, i, len, res, ymd, token);
+        if compact > 0 {
+            return compact;
+        }
+    }
+
     // Try as number — fast integer path first, then decimal (no f64)
     let num: Option<(i32, u32)> = if let Some(vi) = fast_parse_int(token) {
         Some((vi, 0))
@@ -759,14 +785,6 @@ fn try_parse_token<'a>(
         fast_parse_decimal(token)
     };
     if let Some((value_i, value_us)) = num {
-        // Handle compact numeric formats (YYYYMMDD, YYMMDD, HHMMSS, etc.)
-        if value_us == 0 {
-            let compact = try_parse_compact(tokens, i, len, res, ymd, token);
-            if compact > 0 {
-                return compact;
-            }
-        }
-
         // Check for HH:MM:SS pattern (number followed by ":" or HMS word)
         if i + 1 < len && tokens[i + 1] == ":" {
             return try_parse_time_component(tokens, i, len, res, value_i as u32);
