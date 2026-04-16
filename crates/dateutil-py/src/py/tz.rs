@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use dateutil::tz::{self, TimeZone, TzFile, TzLocal, TzOffset, TzOps};
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDateTime, PyDelta, PyTzInfo};
 
@@ -176,9 +177,30 @@ pub struct PyTzFile {
 #[pymethods]
 impl PyTzFile {
     #[new]
-    fn new(path: &str) -> PyResult<Self> {
-        let inner = TzFile::from_path(path)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    fn new(path: &Bound<'_, PyAny>) -> PyResult<Self> {
+        // Accept either a string path or a file-like object with a read() method.
+        if let Ok(s) = path.extract::<&str>() {
+            let inner = TzFile::from_path(s).map_err(|e| PyValueError::new_err(e.to_string()))?;
+            return Ok(Self { inner });
+        }
+
+        // File-like object: read bytes and optionally pick up a name attribute.
+        let read_result = path.call_method0("read").map_err(|_| {
+            PyTypeError::new_err(format!(
+                "argument 'path': '{}' object is not an instance of 'str'",
+                path.get_type()
+                    .name()
+                    .map(|n| n.to_string())
+                    .unwrap_or_default()
+            ))
+        })?;
+        let data: Vec<u8> = read_result.extract()?;
+        let name: Option<String> = path
+            .getattr("name")
+            .ok()
+            .and_then(|n| n.extract::<String>().ok());
+        let inner = TzFile::from_bytes(&data, name.as_deref())
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self { inner })
     }
 
@@ -323,7 +345,7 @@ impl PyTzLocal {
 fn gettz_py(py: Python<'_>, name: Option<&str>) -> PyResult<Py<PyAny>> {
     let tz = py
         .detach(|| tz::gettz(name))
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     match tz {
         TimeZone::Utc(_) => {
