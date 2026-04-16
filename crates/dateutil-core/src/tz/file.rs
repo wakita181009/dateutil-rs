@@ -133,6 +133,11 @@ impl TzFile {
     pub fn filename(&self) -> Option<&str> {
         self.0.filename.as_deref()
     }
+
+    /// Whether this timezone has any DST transitions (historical or POSIX rule).
+    pub fn has_dst(&self) -> bool {
+        self.0.ttinfo_dst.is_some() || self.0.ttinfo.iter().any(|t| t.is_dst)
+    }
 }
 
 // ---------------------------------------------------------------------------

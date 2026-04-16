@@ -1,4 +1,14 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
+
+/// A stable "modern era" wall-clock datetime used to sample the current
+/// UTC offset from zones that have no DST transitions. Picking a date well
+/// inside the modern era avoids LMT (pre-first-transition) ttinfo entries.
+fn modern_naive() -> NaiveDateTime {
+    NaiveDate::from_ymd_opt(2000, 1, 1)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+}
 use dateutil::tz::{self, TimeZone, TzFile, TzLocal, TzOffset, TzOps};
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -208,32 +218,26 @@ impl PyTzFile {
         &self,
         py: Python<'py>,
         dt: Option<&Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyDelta>> {
-        let (ndt, fold) = match dt {
-            Some(d) => extract_ndt_fold(d)?,
-            None => return secs_to_pydelta(py, 0),
-        };
-        secs_to_pydelta(py, self.inner.utcoffset(ndt, fold))
+    ) -> PyResult<Option<Bound<'py, PyDelta>>> {
+        let Some(d) = dt else { return Ok(None) };
+        let (ndt, fold) = extract_ndt_fold(d)?;
+        Ok(Some(secs_to_pydelta(py, self.inner.utcoffset(ndt, fold))?))
     }
 
     fn dst<'py>(
         &self,
         py: Python<'py>,
         dt: Option<&Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyDelta>> {
-        let (ndt, fold) = match dt {
-            Some(d) => extract_ndt_fold(d)?,
-            None => return secs_to_pydelta(py, 0),
-        };
-        secs_to_pydelta(py, self.inner.dst(ndt, fold))
+    ) -> PyResult<Option<Bound<'py, PyDelta>>> {
+        let Some(d) = dt else { return Ok(None) };
+        let (ndt, fold) = extract_ndt_fold(d)?;
+        Ok(Some(secs_to_pydelta(py, self.inner.dst(ndt, fold))?))
     }
 
-    fn tzname<'py>(&self, dt: Option<&Bound<'py, PyAny>>) -> PyResult<&str> {
-        let (ndt, fold) = match dt {
-            Some(d) => extract_ndt_fold(d)?,
-            None => return Ok(""),
-        };
-        Ok(self.inner.tzname(ndt, fold))
+    fn tzname<'py>(&self, dt: Option<&Bound<'py, PyAny>>) -> PyResult<Option<&str>> {
+        let Some(d) = dt else { return Ok(None) };
+        let (ndt, fold) = extract_ndt_fold(d)?;
+        Ok(Some(self.inner.tzname(ndt, fold)))
     }
 
     fn is_ambiguous(&self, dt: &Bound<'_, PyAny>) -> PyResult<bool> {
@@ -285,32 +289,43 @@ impl PyTzLocal {
         &self,
         py: Python<'py>,
         dt: Option<&Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyDelta>> {
-        let (ndt, fold) = match dt {
-            Some(d) => extract_ndt_fold(d)?,
-            None => return secs_to_pydelta(py, 0),
+    ) -> PyResult<Option<Bound<'py, PyDelta>>> {
+        let Some(d) = dt else {
+            if self.inner.has_dst() {
+                return Ok(None);
+            }
+            // No DST: the offset is a fixed value regardless of dt.
+            let secs = self.inner.utcoffset(modern_naive(), false);
+            return Ok(Some(secs_to_pydelta(py, secs)?));
         };
-        secs_to_pydelta(py, self.inner.utcoffset(ndt, fold))
+        let (ndt, fold) = extract_ndt_fold(d)?;
+        Ok(Some(secs_to_pydelta(py, self.inner.utcoffset(ndt, fold))?))
     }
 
     fn dst<'py>(
         &self,
         py: Python<'py>,
         dt: Option<&Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyDelta>> {
-        let (ndt, fold) = match dt {
-            Some(d) => extract_ndt_fold(d)?,
-            None => return secs_to_pydelta(py, 0),
+    ) -> PyResult<Option<Bound<'py, PyDelta>>> {
+        let Some(d) = dt else {
+            if self.inner.has_dst() {
+                return Ok(None);
+            }
+            return Ok(Some(secs_to_pydelta(py, 0)?));
         };
-        secs_to_pydelta(py, self.inner.dst(ndt, fold))
+        let (ndt, fold) = extract_ndt_fold(d)?;
+        Ok(Some(secs_to_pydelta(py, self.inner.dst(ndt, fold))?))
     }
 
-    fn tzname<'py>(&self, dt: Option<&Bound<'py, PyAny>>) -> PyResult<&str> {
-        let (ndt, fold) = match dt {
-            Some(d) => extract_ndt_fold(d)?,
-            None => return Ok(""),
+    fn tzname<'py>(&self, dt: Option<&Bound<'py, PyAny>>) -> PyResult<Option<&str>> {
+        let Some(d) = dt else {
+            if self.inner.has_dst() {
+                return Ok(None);
+            }
+            return Ok(Some(self.inner.tzname(modern_naive(), false)));
         };
-        Ok(self.inner.tzname(ndt, fold))
+        let (ndt, fold) = extract_ndt_fold(d)?;
+        Ok(Some(self.inner.tzname(ndt, fold)))
     }
 
     fn is_ambiguous(&self, dt: &Bound<'_, PyAny>) -> PyResult<bool> {

@@ -15,7 +15,6 @@ _XFAIL_CLASSES = {
     ("test_tz", "TZStrTest"),  # POSIX tzstr not supported
     ("test_tz", "TzPickleFileTest"),  # Rust objects not picklable
     ("test_tz", "TzPickleTest"),  # Rust objects not picklable
-    ("test_tz", "TestEnfold"),  # enfold() not supported
     # -- parser: unimplemented features --
     ("test_parser", "TestFormat"),  # strftime round-trip not supported
     ("test_parser", "TestOutOfBounds"),  # error semantics differ
@@ -290,8 +289,6 @@ _RUST_XFAIL = {
     ("test_tz", "TzLocalTest", "testInequalityFixedOffset"),
     ("test_tz", "TzLocalTest", "testRepr"),
     # -- TZTest --
-    ("test_tz", "TZTest", "testFileEnd1"),
-    ("test_tz", "TZTest", "testFileLastTransition"),
     ("test_tz", "TZTest", "testGMTHasNoDaylight"),
     ("test_tz", "TZTest", "testGMTOffset"),
     ("test_tz", "TZTest", "testImaginaryNaiveEquality"),
@@ -335,8 +332,6 @@ _RUST_XFAIL = {
     ("test_tz", "TzLocalNixTest", "testImaginaryNegativeUTCOffset"),
     ("test_tz", "TzLocalNixTest", "testImaginaryPositiveUTCOffset"),
     ("test_tz", "TzLocalNixTest", "testInZoneFoldEquality"),
-    ("test_tz", "TzLocalNixTest", "testOffsetUTC"),
-    ("test_tz", "TzLocalNixTest", "testTzNameUTC"),
     # -- Module-level tz tests --
     ("test_tz", "", "test_gettz_badzone[Fake.Region/Abcdefghijklmnop]"),
     ("test_tz", "", "test_gettz_badzone_unicode"),

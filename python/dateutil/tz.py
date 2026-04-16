@@ -72,6 +72,11 @@ def datetime_exists(dt: datetime.datetime, tz: datetime.tzinfo | None = None) ->
     return wall == utc_equiv
 
 
+def enfold(dt: datetime.datetime, fold: int = 1) -> datetime.datetime:
+    """Return a datetime with the ``fold`` attribute set to ``fold``."""
+    return dt.replace(fold=fold)
+
+
 def resolve_imaginary(dt: datetime.datetime) -> datetime.datetime:
     """Shift a non-existent wall-clock datetime forward by the DST gap."""
     if dt.tzinfo is None or not isinstance(dt.tzinfo, _NATIVE_TZ_TYPES):
@@ -167,6 +172,7 @@ __all__ = [
     "UTC",
     "datetime_ambiguous",
     "datetime_exists",
+    "enfold",
     "gettz",
     "resolve_imaginary",
     "tzfile",

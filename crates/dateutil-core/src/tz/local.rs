@@ -12,7 +12,9 @@ use super::file::TzFile;
 /// Cached singleton for the system local timezone.
 /// Uses `RwLock` (instead of `OnceLock`) so that the cache can be
 /// invalidated when the `TZ` environment variable changes.
-static CACHED_LOCAL: RwLock<Option<TzLocal>> = RwLock::new(None);
+/// Paired with the TZ env var observed at cache-population time so
+/// that subsequent calls automatically re-detect on TZ changes.
+static CACHED_LOCAL: RwLock<Option<(Option<String>, TzLocal)>> = RwLock::new(None);
 
 /// System local timezone.
 ///
@@ -43,27 +45,51 @@ impl TzLocal {
     /// TZif file.  Subsequent calls return a cheap `clone()` of the
     /// cached result (`TzFile` is `Arc`-backed).
     pub fn new() -> Self {
-        // Fast path: cache already populated
+        let tz_env = std::env::var("TZ").ok();
+        // Fast path: cache already populated with the same TZ env var
         {
             let guard = CACHED_LOCAL.read().unwrap();
-            if let Some(cached) = guard.as_ref() {
-                return cached.clone();
+            if let Some((cached_env, cached_tz)) = guard.as_ref() {
+                if cached_env == &tz_env {
+                    return cached_tz.clone();
+                }
             }
         }
-        // Slow path: resolve and populate
+        // Slow path: resolve and (re-)populate
         let mut guard = CACHED_LOCAL.write().unwrap();
-        // Double-check after acquiring write lock
-        if let Some(cached) = guard.as_ref() {
-            return cached.clone();
+        if let Some((cached_env, cached_tz)) = guard.as_ref() {
+            if cached_env == &tz_env {
+                return cached_tz.clone();
+            }
         }
-        let name = iana_time_zone::get_timezone().unwrap_or_else(|_| "UTC".to_string());
+        let name = Self::detect_name(tz_env.as_deref());
         let inner = Self::resolve_tzfile(&name);
         let tz = Self {
             inner,
             name: name.into(),
         };
-        *guard = Some(tz.clone());
+        *guard = Some((tz_env, tz.clone()));
         tz
+    }
+
+    /// Resolve the IANA timezone name, preferring the `TZ` env var when it
+    /// names an IANA zone directly. Falls back to `iana-time-zone` detection.
+    fn detect_name(tz_env: Option<&str>) -> String {
+        if let Some(name) = tz_env {
+            let stripped = name.strip_prefix(':').unwrap_or(name);
+            // POSIX TZ strings and empty values are not IANA names; skip them.
+            if !stripped.is_empty()
+                && !stripped.contains(',')
+                && !stripped.chars().next().is_some_and(|c| c.is_ascii_digit())
+            {
+                for base in super::TZPATHS {
+                    if std::path::Path::new(&format!("{}/{}", base, stripped)).exists() {
+                        return stripped.to_string();
+                    }
+                }
+            }
+        }
+        iana_time_zone::get_timezone().unwrap_or_else(|_| "UTC".to_string())
     }
 
     /// Clear the cached timezone so the next [`TzLocal::new`] call
@@ -127,6 +153,11 @@ impl TzLocal {
     /// The detected IANA timezone name.
     pub fn iana_name(&self) -> &str {
         &self.name
+    }
+
+    /// Whether the local timezone has any DST transitions.
+    pub fn has_dst(&self) -> bool {
+        self.inner.as_ref().is_some_and(|tz| tz.has_dst())
     }
 }
 

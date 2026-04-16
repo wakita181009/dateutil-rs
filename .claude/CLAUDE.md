@@ -96,39 +96,6 @@ from dateutil.easter import easter, EASTER_WESTERN
 - **Flat imports**: All symbols are also re-exported from the top-level `dateutil` package for convenience.
 - **Cannot coexist** with `python-dateutil` — both provide the `dateutil` namespace. Uninstall `python-dateutil` before installing `python-dateutil-rs`.
 
-## Feature Scope
-
-```
-Included (covers 95%+ of real-world usage):
-  ✅ parse(timestr)        — date/time string parsing (zero-copy tokenizer)
-  ✅ isoparse(dt_str)      — ISO-8601 strict parsing
-  ✅ parse_to_dict(timestr) — returns parsed fields as dict
-  ✅ parserinfo            — customizable parser lookup tables
-  ✅ relativedelta          — relative date arithmetic
-  ✅ rrule / rruleset       — RFC 5545 recurrence rules
-  ✅ rrulestr(s)            — RFC string parsing
-  ✅ rrule __getitem__      — indexing and slicing support
-  ✅ rrule count()          — total occurrence count
-  ✅ rrule __contains__     — membership test
-  ✅ easter(year)           — Easter date calculation
-  ✅ Weekday (MO–SU)        — weekday constants with N-th occurrence
-  ✅ gettz(name)            — timezone lookup (cached)
-  ✅ tzutc / tzoffset       — UTC and fixed-offset timezones
-  ✅ tzfile                 — TZif binary timezone files
-  ✅ tzlocal                — system local timezone
-  ✅ datetime_exists / datetime_ambiguous / resolve_imaginary
-  ✅ dateutil.tz.UTC        — tzutc() singleton (freezegun compatible)
-  ✅ utils (today, default_tzinfo, within_delta) — convenience utilities (pure Python)
-
-Excluded (legacy / low usage):
-  ❌ parser fuzzy mode          — low precision, ambiguous results
-  ❌ tzrange / tzstr            — POSIX TZ strings (IANA names suffice)
-  ❌ tzical                     — iCalendar VTIMEZONE (rrulestr covers RFC 5545)
-  ❌ parser timezone resolution — Python-specific tzinfos callback
-  ❌ isoparser class            — isoparse() function suffices
-  ❌ rrule xafter/replace       — use iter/list/between instead
-```
-
 ## Key Optimizations
 
 **Parser:**
