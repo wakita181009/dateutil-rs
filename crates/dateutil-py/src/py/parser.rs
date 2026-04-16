@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::conv::{make_py_tz, make_py_utc, ndt_to_py_datetime};
@@ -6,8 +7,84 @@ use chrono::{Datelike, Timelike};
 use dateutil::parser;
 use dateutil::parser::{IsoParser, IsoTz, ParserInfo};
 use dateutil::tz::TzOffset;
+use pyo3::exceptions::{PyTypeError, PyUnicodeDecodeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDate, PyDict, PyTime, PyType, PyTzInfo};
+use pyo3::sync::PyOnceLock;
+use pyo3::types::{PyByteArray, PyBytes, PyDate, PyDict, PyTime, PyType, PyTzInfo};
+
+// ---------------------------------------------------------------------------
+// ParserError — cached lookup of dateutil.parser.ParserError
+// ---------------------------------------------------------------------------
+
+static PARSER_ERROR: PyOnceLock<Py<PyType>> = PyOnceLock::new();
+
+fn parser_error_type(py: Python<'_>) -> PyResult<&Py<PyType>> {
+    PARSER_ERROR.get_or_try_init(py, || {
+        let cls = py.import("dateutil.parser")?.getattr("ParserError")?;
+        Ok(cls.cast_into::<PyType>()?.unbind())
+    })
+}
+
+/// Build a `dateutil.parser.ParserError(msg)` PyErr.
+fn parser_error(py: Python<'_>, msg: impl Into<String>) -> PyErr {
+    match parser_error_type(py) {
+        Ok(cls) => PyErr::from_type(cls.bind(py).clone(), (msg.into(),)),
+        Err(e) => e,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Input coercion: str | bytes | bytearray | stream with .read() -> str
+// ---------------------------------------------------------------------------
+
+/// Accept ``str``, ``bytes``, ``bytearray``, or an object with a callable
+/// ``.read()`` that returns ``str`` or ``bytes``. Returns a borrowed ``&str``
+/// when possible (str, bytes) to avoid allocation on the hot path.
+fn coerce_timestr<'py>(obj: &'py Bound<'py, pyo3::PyAny>) -> PyResult<Cow<'py, str>> {
+    if let Ok(s) = obj.extract::<&str>() {
+        return Ok(Cow::Borrowed(s));
+    }
+    if let Ok(bytes) = obj.cast::<PyBytes>() {
+        let s = std::str::from_utf8(bytes.as_bytes()).map_err(|_| {
+            PyUnicodeDecodeError::new_err("parse() bytes input must be valid UTF-8")
+        })?;
+        return Ok(Cow::Borrowed(s));
+    }
+    if let Ok(bytearray) = obj.cast::<PyByteArray>() {
+        // SAFETY: we do not release the GIL or mutate the bytearray while
+        // borrowing its contents; the returned String copy is independent.
+        let copied = unsafe { bytearray.as_bytes().to_vec() };
+        let s = String::from_utf8(copied).map_err(|_| {
+            PyUnicodeDecodeError::new_err("parse() bytearray input must be valid UTF-8")
+        })?;
+        return Ok(Cow::Owned(s));
+    }
+    if let Ok(read) = obj.getattr("read") {
+        if read.is_callable() {
+            let data = read.call0()?;
+            if let Ok(s) = data.extract::<String>() {
+                return Ok(Cow::Owned(s));
+            }
+            if let Ok(b) = data.extract::<Vec<u8>>() {
+                let s = String::from_utf8(b).map_err(|_| {
+                    PyUnicodeDecodeError::new_err("parse() stream must yield valid UTF-8")
+                })?;
+                return Ok(Cow::Owned(s));
+            }
+            return Err(PyTypeError::new_err(
+                "parse() stream .read() must return str or bytes",
+            ));
+        }
+    }
+    let type_name = obj
+        .get_type()
+        .qualname()
+        .map(|n| n.to_string())
+        .unwrap_or_else(|_| "unknown".into());
+    Err(PyTypeError::new_err(format!(
+        "Parser must be called with a string, bytes, bytearray, or stream, got {type_name}",
+    )))
+}
 
 // ---------------------------------------------------------------------------
 // parserinfo — Rust pyclass (internal base)
@@ -226,7 +303,7 @@ impl PyParserInfo {
 #[allow(clippy::too_many_arguments)]
 fn parse_py<'py>(
     py: Python<'py>,
-    timestr: &str,
+    timestr: &Bound<'py, pyo3::PyAny>,
     parserinfo: Option<Bound<'py, PyParserInfo>>,
     dayfirst: Option<bool>,
     yearfirst: Option<bool>,
@@ -234,20 +311,32 @@ fn parse_py<'py>(
     ignoretz: bool,
     tzinfos: Option<Bound<'py, pyo3::PyAny>>,
 ) -> PyResult<Bound<'py, pyo3::PyAny>> {
+    let timestr = coerce_timestr(timestr)?;
     let pi_ref = parserinfo.as_ref().map(|pi| pi.borrow());
     let (info_ref, df, yf) = resolve_pi_args(&pi_ref, dayfirst, yearfirst);
 
     let res = py
-        .detach(|| parser::parse_to_result(timestr, df, yf, info_ref))
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        .detach(|| parser::parse_to_result(&timestr, df, yf, info_ref))
+        .map_err(|e| parser_error(py, e.to_string()))?;
 
     let now = chrono::Local::now().naive_local();
     let default_dt = default.unwrap_or_else(|| now.date().and_hms_opt(0, 0, 0).unwrap());
-    let ndt = parser::build_naive(&res, default_dt)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let ndt = parser::build_naive(&res, default_dt).map_err(|e| parser_error(py, e.to_string()))?;
+
+    // Remap Python-side datetime construction errors (e.g. year=0, day=32)
+    // from ValueError -> ParserError so callers can catch either consistently.
+    let to_py_dt = |tz: Option<&Bound<'py, PyTzInfo>>| -> PyResult<Bound<'py, pyo3::PyAny>> {
+        ndt_to_py_datetime(py, ndt, tz).map_err(|e| {
+            if e.is_instance_of::<PyValueError>(py) {
+                parser_error(py, e.value(py).to_string())
+            } else {
+                e
+            }
+        })
+    };
 
     if ignoretz {
-        return ndt_to_py_datetime(py, ndt, None);
+        return to_py_dt(None);
     }
 
     // tzinfos resolution
@@ -264,13 +353,13 @@ fn parse_py<'py>(
             };
 
             if tzdata.is_none() {
-                return ndt_to_py_datetime(py, ndt, None);
+                return to_py_dt(None);
             } else if let Ok(offset_secs) = tzdata.extract::<i32>() {
                 let tz = make_dateutil_offset(py, Some(tzname.as_ref()), offset_secs)?;
-                return ndt_to_py_datetime(py, ndt, Some(tz.as_super()));
+                return to_py_dt(Some(tz.as_super()));
             } else {
                 let tz = tzdata.cast::<PyTzInfo>()?;
-                return ndt_to_py_datetime(py, ndt, Some(tz));
+                return to_py_dt(Some(tz));
             }
         }
     }
@@ -279,13 +368,13 @@ fn parse_py<'py>(
     if let Some(offset) = res.tzoffset {
         if offset == 0 {
             let tz = make_py_utc(py)?;
-            return ndt_to_py_datetime(py, ndt, Some(&tz));
+            return to_py_dt(Some(&tz));
         }
         let tz = make_py_tz(py, offset)?;
-        return ndt_to_py_datetime(py, ndt, Some(&tz));
+        return to_py_dt(Some(&tz));
     }
 
-    ndt_to_py_datetime(py, ndt, None)
+    to_py_dt(None)
 }
 
 // ---------------------------------------------------------------------------
@@ -296,17 +385,18 @@ fn parse_py<'py>(
 #[pyo3(name = "parse_to_dict", signature = (timestr, *, parserinfo=None, dayfirst=None, yearfirst=None))]
 fn parse_to_dict_py<'py>(
     py: Python<'py>,
-    timestr: &str,
+    timestr: &Bound<'py, pyo3::PyAny>,
     parserinfo: Option<Bound<'py, PyParserInfo>>,
     dayfirst: Option<bool>,
     yearfirst: Option<bool>,
 ) -> PyResult<Bound<'py, PyDict>> {
+    let timestr = coerce_timestr(timestr)?;
     let pi_ref = parserinfo.as_ref().map(|pi| pi.borrow());
     let (info_ref, df, yf) = resolve_pi_args(&pi_ref, dayfirst, yearfirst);
 
     let res = py
-        .detach(|| parser::parse_to_result(timestr, df, yf, info_ref))
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        .detach(|| parser::parse_to_result(&timestr, df, yf, info_ref))
+        .map_err(|e| parser_error(py, e.to_string()))?;
 
     let dict = PyDict::new(py);
     dict.set_item("year", res.year)?;
