@@ -117,9 +117,6 @@ _RUST_XFAIL = {
     ("test_parser", "ParserTest", "testParseUnicodeWords"),
     ("test_parser", "ParserTest", "testPertain"),
     ("test_parser", "ParserTest", "testRandomFormat26"),
-    ("test_parser", "ParserTest", "testUnspecifiedDayFallback"),
-    ("test_parser", "ParserTest", "testUnspecifiedDayFallbackFebLeapYear"),
-    ("test_parser", "ParserTest", "testUnspecifiedDayFallbackFebNoLeapYear"),
     # -- TestTZVar --
     ("test_parser", "TestTZVar", "test_parse_unambiguous_nonexistent_local"),
     ("test_parser", "TestTZVar", "test_tzlocal_parse_fold"),
