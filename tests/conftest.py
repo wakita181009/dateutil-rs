@@ -137,7 +137,6 @@ _RUST_XFAIL = {
     # -- Module-level parser tests --
     ("test_parser", "", "test_decimal_error[1: test]"),
     ("test_parser", "", "test_parse_tzinfos_fold"),
-    ("test_parser", "", "test_parse_with_tzoffset[20030925T104941.5-0300-expected4]"),
     (
         "test_parser",
         "",
@@ -171,8 +170,6 @@ _RUST_XFAIL = {
         "",
         "test_parser_default[10 h 36.5-expected_datetime14-hour with letter strip]",
     ),
-    ("test_parser", "", "test_parser_default[10am-expected_datetime21-hour am pm]"),
-    ("test_parser", "", "test_parser_default[10pm-expected_datetime22-hour am pm]"),
     ("test_parser", "", "test_parser_default[31-Dec-00-expected_datetime34-zero year]"),
     (
         "test_parser",
@@ -371,8 +368,6 @@ _RUST_XFAIL = {
     ("test_imports", "", "test_lazy_import[rrule]"),
     ("test_imports", "", "test_lazy_import[tz]"),
     ("test_imports", "", "test_lazy_import[zoneinfo]"),
-    # -- import * --
-    ("test_import_star", "", "test_imported_modules"),
     # =======================================================================
     # property tests: convertyear not implemented
     # =======================================================================
@@ -387,6 +382,10 @@ _RUST_XFAIL_NONSTRICT = {
     # parser: hypothesis-dependent year conversion edge cases
     ("test_parser_prop", "", "test_convertyear"),
     ("test_parser_prop", "", "test_convertyear_no_specified_century"),
+    # import *: our __all__ does not include submodule names (parser, tz, utils, ...);
+    # the test assertion depends on submodule import ordering, making it
+    # environment-dependent (XFAIL locally, XPASS on some CI runners).
+    ("test_import_star", "", "test_imported_modules"),
 }
 
 

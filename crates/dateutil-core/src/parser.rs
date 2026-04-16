@@ -785,6 +785,31 @@ fn try_parse_token<'a>(
         fast_parse_decimal(token)
     };
     if let Some((value_i, value_us)) = num {
+        // Compact HHMMSS.ffffff after date (e.g., "20030925T104941.5-0300")
+        if value_us > 0
+            && ymd.count == 3
+            && res.hour.is_none()
+            && token.as_bytes().iter().position(|&b| b == b'.') == Some(6)
+        {
+            let int_part = &token[..6];
+            let Some(hour) = fast_parse_int(&int_part[0..2]) else {
+                return 0;
+            };
+            let Some(minute) = fast_parse_int(&int_part[2..4]) else {
+                return 0;
+            };
+            let Some(second) = fast_parse_int(&int_part[4..6]) else {
+                return 0;
+            };
+            if hour <= 23 && minute <= 59 && second <= 59 {
+                res.hour = Some(hour as u32);
+                res.minute = Some(minute as u32);
+                res.second = Some(second as u32);
+                res.microsecond = Some(value_us);
+                return 1;
+            }
+        }
+
         // Check for HH:MM:SS pattern (number followed by ":" or HMS word)
         if i + 1 < len && tokens[i + 1] == ":" {
             return try_parse_time_component(tokens, i, len, res, value_i as u32);
@@ -795,6 +820,22 @@ fn try_parse_token<'a>(
             if let Some(hms_idx) = do_hms(&tokens[i + 1], info) {
                 assign_hms(res, hms_idx, value_i as u32, value_us);
                 return 2; // number + HMS word
+            }
+        }
+
+        // Check if next token is AM/PM (e.g., "10am", "10pm")
+        if value_us == 0 && res.hour.is_none() && (0..=24).contains(&value_i) && i + 1 < len {
+            let next_lc_buf = lowercase_buf(&tokens[i + 1]);
+            let next_lc = next_lc_buf.as_ref().map(|b| lower_str(&tokens[i + 1], b));
+            if let Some(ampm) = do_ampm_lc(next_lc, info) {
+                let mut hour = value_i as u32;
+                if ampm == 1 && hour < 12 {
+                    hour += 12;
+                } else if ampm == 0 && hour == 12 {
+                    hour = 0;
+                }
+                res.hour = Some(hour);
+                return 2;
             }
         }
 
