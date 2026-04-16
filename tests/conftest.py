@@ -1,4 +1,15 @@
+import sys
+
 import pytest
+
+# ---------------------------------------------------------------------------
+# Windows skip list: tests that exercise unsupported Windows-only features
+# (e.g. dateutil.tzwin registry-based tz lookup, which dateutil-rs does not
+# yet implement).
+# ---------------------------------------------------------------------------
+collect_ignore: list[str] = []
+if sys.platform == "win32":
+    collect_ignore.append("test_tz.py")
 
 # ---------------------------------------------------------------------------
 # xfail: tests for features dateutil-rs intentionally does not support
