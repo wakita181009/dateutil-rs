@@ -22,6 +22,9 @@ dev = [
     "freezegun>=1.5",
     "hypothesis>=6.151",
     "maturin>=1.13",
+    # IANA tz database for systems without /usr/share/zoneinfo (notably Windows).
+    # Picked up at import time via PYTHONTZPATH (see python/dateutil/__init__.py).
+    "tzdata>=2024.1 ; sys_platform == 'win32'",
 ]
 
 [build-system]

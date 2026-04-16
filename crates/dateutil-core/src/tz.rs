@@ -323,16 +323,37 @@ fn resolve_tz(name: &str) -> Result<TimeZone, TzError> {
         return Ok(TimeZone::File(tz));
     }
 
-    // Search TZPATHS for IANA name
+    // Search TZPATHS (and PYTHONTZPATH-supplied dirs) for IANA name
     let normalized = name.replace(' ', "_");
-    for base in TZPATHS {
-        let path = format!("{}/{}", base, normalized);
+    for base in extra_tzpaths()
+        .iter()
+        .map(String::as_str)
+        .chain(TZPATHS.iter().copied())
+    {
+        let path = format!("{}/{}", base.trim_end_matches('/'), normalized);
         if let Ok(tz) = TzFile::from_path(&path) {
             return Ok(TimeZone::File(tz));
         }
     }
 
     Err(TzError::NotFound(name.into()))
+}
+
+/// Extra timezone search paths supplied via the `PYTHONTZPATH` environment
+/// variable (matching CPython's `zoneinfo` convention). Used to support the
+/// `tzdata` PyPI package on platforms without a system zoneinfo (e.g. Windows).
+fn extra_tzpaths() -> &'static [String] {
+    static EXTRA: LazyLock<Vec<String>> = LazyLock::new(|| {
+        std::env::var_os("PYTHONTZPATH")
+            .map(|raw| {
+                std::env::split_paths(&raw)
+                    .filter_map(|p| p.into_os_string().into_string().ok())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default()
+    });
+    EXTRA.as_slice()
 }
 
 // ---------------------------------------------------------------------------
