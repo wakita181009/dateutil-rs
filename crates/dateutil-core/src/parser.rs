@@ -251,6 +251,8 @@ pub struct ParseResult<'a> {
     pub tzname: Option<Cow<'a, str>>,
     pub tzoffset: Option<i32>,
     century_specified: bool,
+    ampm_no_hour: bool,
+    ampm_out_of_range: bool,
 }
 
 impl ParseResult<'_> {
@@ -518,6 +520,17 @@ fn parse_to_result_with_year<'a>(
 
     if res.field_count() == 0 {
         return Err(ParseError::NoDate(timestr.into()));
+    }
+
+    if res.ampm_no_hour {
+        return Err(ParseError::ValueError(
+            "No hour specified with AM or PM flag.".into(),
+        ));
+    }
+    if res.ampm_out_of_range {
+        return Err(ParseError::ValueError(
+            "Invalid hour specified for 12-hour clock.".into(),
+        ));
     }
 
     Ok(res)
@@ -828,13 +841,17 @@ fn try_parse_token<'a>(
             let next_lc_buf = lowercase_buf(&tokens[i + 1]);
             let next_lc = next_lc_buf.as_ref().map(|b| lower_str(&tokens[i + 1], b));
             if let Some(ampm) = do_ampm_lc(next_lc, info) {
-                let mut hour = value_i as u32;
-                if ampm == 1 && hour < 12 {
-                    hour += 12;
-                } else if ampm == 0 && hour == 12 {
-                    hour = 0;
+                if value_i > 12 {
+                    res.ampm_out_of_range = true;
+                } else {
+                    let mut hour = value_i as u32;
+                    if ampm == 1 && hour < 12 {
+                        hour += 12;
+                    } else if ampm == 0 && hour == 12 {
+                        hour = 0;
+                    }
+                    res.hour = Some(hour);
                 }
-                res.hour = Some(hour);
                 return 2;
             }
         }
@@ -887,11 +904,15 @@ fn try_parse_token<'a>(
 
     // Try as AM/PM
     if let Some(ampm) = do_ampm_lc(lc, info) {
-        if let Some(h) = res.hour {
-            if ampm == 1 && h < 12 {
-                res.hour = Some(h + 12);
-            } else if ampm == 0 && h == 12 {
-                res.hour = Some(0);
+        match res.hour {
+            None => res.ampm_no_hour = true,
+            Some(h) if h > 12 => res.ampm_out_of_range = true,
+            Some(h) => {
+                if ampm == 1 && h < 12 {
+                    res.hour = Some(h + 12);
+                } else if ampm == 0 && h == 12 {
+                    res.hour = Some(0);
+                }
             }
         }
         return 1;

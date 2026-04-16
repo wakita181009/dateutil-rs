@@ -27,9 +27,7 @@ _XFAIL_CLASS_EXCEPTIONS = {
     ("test_parser", "TestParseUnimplementedCases"): {
         "test_YmdH_M_S",
         "test_first_century",
-        "test_era_trailing_year_with_dots",
         "test_four_letter_day",
-        "test_on_era",
     },
     ("test_parser", "TestOutOfBounds"): {
         "test_no_year_zero",
@@ -105,9 +103,6 @@ _RUST_XFAIL = {
     # -- ParserTest: edge cases / features not yet implemented --
     ("test_parser", "ParserTest", "test_idx_check"),
     ("test_parser", "ParserTest", "test_includes_timestr"),
-    ("test_parser", "ParserTest", "test_validate_hour"),
-    ("test_parser", "ParserTest", "testAMPMNoHour"),
-    ("test_parser", "ParserTest", "testAMPMRange"),
     ("test_parser", "ParserTest", "testCorrectErrorOnFuzzyWithTokens"),
     ("test_parser", "ParserTest", "testCustomParserInfo"),
     ("test_parser", "ParserTest", "testCustomParserShortDaynames"),
@@ -363,11 +358,6 @@ _RUST_XFAIL = {
     ("test_imports", "", "test_import_version_root"),
     ("test_imports", "", "test_import_version_str"),
     ("test_imports", "", "test_import_zone_info_star"),
-    ("test_imports", "", "test_lazy_import[easter]"),
-    ("test_imports", "", "test_lazy_import[relativedelta]"),
-    ("test_imports", "", "test_lazy_import[rrule]"),
-    ("test_imports", "", "test_lazy_import[tz]"),
-    ("test_imports", "", "test_lazy_import[zoneinfo]"),
     # =======================================================================
     # property tests: convertyear not implemented
     # =======================================================================
@@ -386,6 +376,14 @@ _RUST_XFAIL_NONSTRICT = {
     # the test assertion depends on submodule import ordering, making it
     # environment-dependent (XFAIL locally, XPASS on some CI runners).
     ("test_import_star", "", "test_imported_modules"),
+    # lazy import: depends on whether a given submodule has been imported by
+    # other tests before clean_import runs; parser/utils always pass because
+    # __init__.py imports them, others are env-dependent.
+    ("test_imports", "", "test_lazy_import[easter]"),
+    ("test_imports", "", "test_lazy_import[relativedelta]"),
+    ("test_imports", "", "test_lazy_import[rrule]"),
+    ("test_imports", "", "test_lazy_import[tz]"),
+    ("test_imports", "", "test_lazy_import[zoneinfo]"),
 }
 
 
@@ -425,9 +423,7 @@ _RUST_REMOVE_XFAIL = {
     # -- TestParseUnimplementedCases: now pass in Rust --
     ("test_parser", "TestParseUnimplementedCases", "test_YmdH_M_S"),
     ("test_parser", "TestParseUnimplementedCases", "test_first_century"),
-    ("test_parser", "TestParseUnimplementedCases", "test_era_trailing_year_with_dots"),
     ("test_parser", "TestParseUnimplementedCases", "test_four_letter_day"),
-    ("test_parser", "TestParseUnimplementedCases", "test_on_era"),
     # -- TzLocalNixTest: now pass in Rust --
     ("test_tz", "TzLocalNixTest", "testNotImaginaryFoldNegativeUTCOffset"),
     ("test_tz", "TzLocalNixTest", "testNotImaginaryFoldPositiveUTCOffset"),

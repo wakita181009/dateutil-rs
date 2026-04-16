@@ -30,7 +30,6 @@ from dateutil._native import (
     datetime_exists,
     easter,
     gettz,
-    isoparse,
     parse,
     relativedelta,
     resolve_imaginary,
@@ -41,6 +40,7 @@ from dateutil._native import (
     tzoffset,
     tzutc,
 )
+from dateutil.parser import isoparse
 
 _du = SimpleNamespace(
     name="dateutil",
