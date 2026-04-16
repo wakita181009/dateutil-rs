@@ -29,7 +29,7 @@ fn fast_parse_int(s: &str) -> Option<i32> {
         if !b.is_ascii_digit() {
             return None;
         }
-        n = n * 10 + (b - b'0') as i32;
+        n = n.checked_mul(10)?.checked_add((b - b'0') as i32)?;
     }
     Some(n)
 }
@@ -1916,6 +1916,16 @@ mod tests {
     #[test]
     fn test_fast_parse_int_empty() {
         assert_eq!(fast_parse_int(""), None);
+    }
+
+    #[test]
+    fn test_fast_parse_int_overflow() {
+        // 10-digit number exceeding i32::MAX must return None, not panic
+        assert_eq!(fast_parse_int("9999999999"), None);
+        assert_eq!(fast_parse_int("99999999999999"), None);
+        // i32::MAX boundary
+        assert_eq!(fast_parse_int("2147483647"), Some(i32::MAX));
+        assert_eq!(fast_parse_int("2147483648"), None);
     }
 
     #[test]

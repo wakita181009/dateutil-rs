@@ -1,5 +1,5 @@
 use crate::error::EasterError;
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 
 /// Easter calculation method.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -30,7 +30,7 @@ impl EasterMethod {
 /// Returns `Err` if year <= 0 or computed date is invalid.
 #[inline]
 pub fn easter(year: i32, method: EasterMethod) -> Result<NaiveDate, EasterError> {
-    if year <= 0 {
+    if year <= 0 || year > NaiveDate::MAX.year() {
         return Err(EasterError::InvalidYear(year));
     }
 
@@ -410,12 +410,27 @@ mod tests {
 
     #[test]
     fn test_i32_max_year() {
-        // i32::MAX causes arithmetic overflow in the algorithm — this is expected
-        let result = std::panic::catch_unwind(|| easter(i32::MAX, EasterMethod::Western));
-        // Either panics (overflow) or returns an error — either is acceptable
-        if let Ok(res) = result {
-            assert!(res.is_ok() || matches!(res, Err(EasterError::DateOutOfRange { .. })));
-        }
+        // Large years must return Err, not panic from arithmetic overflow
+        assert!(matches!(
+            easter(i32::MAX, EasterMethod::Western),
+            Err(EasterError::InvalidYear(i32::MAX))
+        ));
+        assert!(matches!(
+            easter(i32::MAX, EasterMethod::Orthodox),
+            Err(EasterError::InvalidYear(i32::MAX))
+        ));
+        assert!(matches!(
+            easter(i32::MAX, EasterMethod::Julian),
+            Err(EasterError::InvalidYear(i32::MAX))
+        ));
+    }
+
+    #[test]
+    fn test_year_upper_bound() {
+        // NaiveDate::MAX.year() + 1 should be rejected
+        let max_year = chrono::NaiveDate::MAX.year();
+        assert!(easter(max_year, EasterMethod::Western).is_ok());
+        assert!(easter(max_year + 1, EasterMethod::Western).is_err());
     }
 
     #[test]
