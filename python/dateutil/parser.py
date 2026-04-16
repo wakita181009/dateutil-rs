@@ -15,4 +15,25 @@ class parserinfo(_ParserInfoBase):
         self._build(type(self))
 
 
-__all__ = ["isoparse", "parse", "parse_to_dict", "parserinfo"]
+class ParserError(ValueError):
+    """Exception raised when a string cannot be parsed as a date/time."""
+
+    def __str__(self) -> str:
+        try:
+            return self.args[0] % self.args[1:]
+        except (TypeError, IndexError):
+            return super().__str__()
+
+
+class UnknownTimezoneWarning(RuntimeWarning):
+    """Warning raised when an unknown timezone string is found during parsing."""
+
+
+__all__ = [
+    "ParserError",
+    "UnknownTimezoneWarning",
+    "isoparse",
+    "parse",
+    "parse_to_dict",
+    "parserinfo",
+]

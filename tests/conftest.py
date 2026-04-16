@@ -1,24 +1,12 @@
-import os
-import sys
-
 import pytest
 
 # ---------------------------------------------------------------------------
-# --rust flag: redirect dateutil.* → dateutil.* for Rust-ported modules
+# --rust flag: mark unsupported features as xfail
 # ---------------------------------------------------------------------------
-# Self-contained modules that can be redirected without breaking imports.
-#
-# NOT mapped (incompatible exports):
-#   dateutil.parser — test_parser.py imports ParserError, UnknownTimezoneWarning,
-#                     isoparser class, parser class which dateutil does not provide
-#   dateutil.tz     — tests import UTC constant, tzstr, tzrange, enfold, zoneinfo
-#                     which dateutil does not provide
-#   dateutil.utils  — excluded from dateutil scope
-_MODULE_MAP = {
-    "dateutil.easter": "dateutil",
-    "dateutil.relativedelta": "dateutil",
-    "dateutil.rrule": "dateutil",
-}
+# The package now provides the `dateutil` namespace directly (drop-in
+# replacement), so import redirection is no longer needed.  The --rust flag
+# is retained solely to xfail tests that exercise features intentionally
+# excluded from the Rust implementation.
 
 
 def pytest_addoption(parser):
@@ -26,22 +14,8 @@ def pytest_addoption(parser):
         "--rust",
         action="store_true",
         default=False,
-        help="Test against dateutil (Rust + python-dateutil hybrid)",
+        help="Mark unsupported python-dateutil features as xfail",
     )
-
-
-def pytest_configure(config):
-    if not config.getoption("--rust"):
-        return
-
-    try:
-        import dateutil
-    except ImportError:
-        pytest.exit("--rust requires dateutil to be installed (run: uv sync)")
-
-    for py_mod, rs_mod in _MODULE_MAP.items():
-        rust_module = __import__(rs_mod, fromlist=[""])
-        sys.modules[py_mod] = rust_module
 
 
 # ---------------------------------------------------------------------------
@@ -201,25 +175,3 @@ def pytest_collection_modifyitems(config, items):
         # the xfail mark even if they are not expected to fail
         if marker and (not marker.args or marker.args[0]):
             item.add_marker(pytest.mark.no_cover)
-
-
-def set_tzpath():
-    """
-    Sets the TZPATH variable if it's specified in an environment variable.
-    """
-    tzpath = os.environ.get("DATEUTIL_TZPATH", None)
-
-    if tzpath is None:
-        return
-
-    path_components = tzpath.split(":")
-
-    print(f"Setting TZPATH to {path_components}")
-
-    from dateutil import tz
-
-    tz.TZPATHS.clear()
-    tz.TZPATHS.extend(path_components)
-
-
-set_tzpath()

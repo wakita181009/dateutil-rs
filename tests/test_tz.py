@@ -1589,7 +1589,7 @@ def test_tzstr_weakref():
     "tz_str,expected",
     [
         # From https://www.gnu.org/software/libc/manual/html_node/TZ-Variable.html
-        ("", tz.tzrange(None)),  # type: ignore[arg-type]  # empty string → default range
+        ("", tz.tzrange(None)),  # type: ignore[misc]  # empty string → default range
         (
             "EST+5EDT,M3.2.0/2,M11.1.0/12",
             tz.tzrange(
