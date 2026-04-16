@@ -1,6 +1,38 @@
 """dateutil.parser - Date/time string parsing."""
 
-from dateutil._native import _ParserInfoBase, isoparser, parse, parse_to_dict
+from typing import Any
+
+from dateutil._native import _ParserInfoBase, isoparser, parse_to_dict
+from dateutil._native import parse as _native_parse
+
+
+def _coerce_timestr(timestr: Any) -> str:
+    """Accept str, bytes, bytearray, or a stream with ``.read()``."""
+    if isinstance(timestr, str):
+        return timestr
+    if isinstance(timestr, (bytes, bytearray)):
+        return bytes(timestr).decode("ascii")
+    read = getattr(timestr, "read", None)
+    if callable(read):
+        data = read()
+        if isinstance(data, (bytes, bytearray)):
+            return bytes(data).decode("ascii")
+        if isinstance(data, str):
+            return data
+    raise TypeError(
+        f"Parser must be called with a string, bytes, bytearray, or stream, "
+        f"got {type(timestr).__name__}"
+    )
+
+
+def parse(timestr: Any, *args: Any, **kwargs: Any) -> Any:
+    """Parse a datetime string; accepts str, bytes, bytearray, or a stream."""
+    try:
+        return _native_parse(_coerce_timestr(timestr), *args, **kwargs)
+    except ParserError:
+        raise
+    except ValueError as exc:
+        raise ParserError(*exc.args) from exc
 
 
 class parserinfo(_ParserInfoBase):

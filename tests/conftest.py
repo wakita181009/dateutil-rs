@@ -31,6 +31,11 @@ _XFAIL_CLASS_EXCEPTIONS = {
         "test_four_letter_day",
         "test_on_era",
     },
+    ("test_parser", "TestOutOfBounds"): {
+        "test_no_year_zero",
+        "test_out_of_bound_day",
+        "test_illegal_month_error",
+    },
     ("test_parser", "TestFormat"): {
         "test_strftime_formats_2003Sep25[%a %b %d %Y-Thu Sep 25 2003]",
         "test_strftime_formats_2003Sep25[%b %d %Y-Sep 25 2003]",
@@ -158,7 +163,6 @@ _RUST_XFAIL = {
     ("test_parser", "ParserTest", "testCustomParserShortDaynames"),
     ("test_parser", "ParserTest", "testDayFirst"),
     ("test_parser", "ParserTest", "testDayFirstYearFirst"),
-    ("test_parser", "ParserTest", "testErrorType01"),
     ("test_parser", "ParserTest", "testFuzzy"),
     ("test_parser", "ParserTest", "testFuzzyAMPMProblem"),
     ("test_parser", "ParserTest", "testFuzzyIgnoreAMPM"),
@@ -176,13 +180,6 @@ _RUST_XFAIL = {
     ("test_parser", "ParserTest", "testUnspecifiedDayFallback"),
     ("test_parser", "ParserTest", "testUnspecifiedDayFallbackFebLeapYear"),
     ("test_parser", "ParserTest", "testUnspecifiedDayFallbackFebNoLeapYear"),
-    # -- TestInputTypes: bytes/stream/bytearray input --
-    ("test_parser", "TestInputTypes", "test_duck_typing"),
-    ("test_parser", "TestInputTypes", "test_empty_string_invalid"),
-    ("test_parser", "TestInputTypes", "test_parse_bytearray"),
-    ("test_parser", "TestInputTypes", "test_parse_bytes"),
-    ("test_parser", "TestInputTypes", "test_parse_str"),
-    ("test_parser", "TestInputTypes", "test_parse_stream"),
     # -- TestTZVar --
     ("test_parser", "TestTZVar", "test_parse_unambiguous_nonexistent_local"),
     ("test_parser", "TestTZVar", "test_tzinfo_arg_parseerror"),
@@ -199,7 +196,6 @@ _RUST_XFAIL = {
     ("test_parser", "TestTzinfoInputTypes", "test_valid_tzinfo_int_input"),
     # -- Module-level parser tests --
     ("test_parser", "", "test_decimal_error[1: test]"),
-    ("test_parser", "", "test_decimal_error[Nan]"),
     ("test_parser", "", "test_parse_tzinfos_fold"),
     ("test_parser", "", "test_parse_with_tzoffset[20030925T104941.5-0300-expected4]"),
     (
