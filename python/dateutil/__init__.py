@@ -37,6 +37,7 @@ from dateutil._native import (
     weekday,
 )
 from dateutil.parser import parserinfo
+from dateutil.utils import default_tzinfo, today, within_delta
 
 __all__ = [
     "DAILY",
@@ -58,6 +59,7 @@ __all__ = [
     "YEARLY",
     "datetime_ambiguous",
     "datetime_exists",
+    "default_tzinfo",
     "easter",
     "gettz",
     "isoparse",
@@ -69,9 +71,11 @@ __all__ = [
     "rrule",
     "rruleset",
     "rrulestr",
+    "today",
     "tzfile",
     "tzlocal",
     "tzoffset",
     "tzutc",
     "weekday",
+    "within_delta",
 ]

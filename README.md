@@ -6,18 +6,19 @@
 [![CI](https://github.com/wakita181009/dateutil-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/wakita181009/dateutil-rs/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/wakita181009/dateutil-rs/branch/main/graph/badge.svg)](https://codecov.io/gh/wakita181009/dateutil-rs)
 
-A high-performance Rust-backed port of [python-dateutil](https://github.com/dateutil/dateutil) (v2.9.0).
+A high-performance, **drop-in replacement** for [python-dateutil](https://github.com/dateutil/dateutil) (v2.9.0), powered by Rust.
 
-> **Status:** All core modules (easter, relativedelta, parser, rrule, tz) are rewritten in Rust via PyO3/maturin. The optimized `dateutil-core` + `dateutil-py` architecture delivers **2x-897x** speedups over python-dateutil.
+> **Drop-in compatible:** Install `python-dateutil-rs` and your existing `from dateutil.parser import parse`, `from dateutil.tz import tzutc`, etc. continue to work — no code changes required, just **2x–897x faster**.
 
 ## Features
 
-- **Drop-in replacement** for `python-dateutil` — same API, same behavior
-- **Rust-accelerated:** easter, relativedelta, parser (`parse` / `isoparse`), rrule, tz, weekday
+- **True drop-in replacement** — provides `dateutil` package with the same submodule structure (`dateutil.parser`, `dateutil.tz`, `dateutil.relativedelta`, `dateutil.rrule`, `dateutil.easter`)
+- **Zero code changes** — existing imports like `from dateutil.parser import parse` work as-is
+- **Rust-accelerated:** all core modules rewritten in Rust via PyO3/maturin
 - **Optimized core:** zero-copy parser, PHF lookup tables, bitflag filters, buffer-reusing rrule
-- **Comprehensive test suite** inherited from the original project
-- **Benchmark infrastructure** for side-by-side performance comparison
-- **Python 3.10-3.14** supported on Linux and macOS
+- **freezegun compatible** — exposes `dateutil.tz.UTC` constant for seamless time mocking
+- **Comprehensive test suite** validated against python-dateutil behavior
+- **Python 3.10–3.14** supported on Linux, macOS, and Windows
 
 ## Installation
 
@@ -25,14 +26,29 @@ A high-performance Rust-backed port of [python-dateutil](https://github.com/date
 pip install python-dateutil-rs
 ```
 
+> **Note:** This package provides the `dateutil` namespace. If you have `python-dateutil` installed, uninstall it first to avoid conflicts: `pip uninstall python-dateutil`.
+
+## Drop-in Replacement
+
+Existing code that uses python-dateutil works without modification:
+
+```python
+# These imports work exactly the same as with python-dateutil
+from dateutil.parser import parse, isoparse, parserinfo
+from dateutil.tz import tzutc, tzoffset, tzlocal, gettz, UTC
+from dateutil.relativedelta import relativedelta
+from dateutil.rrule import rrule, rruleset, rrulestr, MONTHLY, WEEKLY, MO, FR
+from dateutil.easter import easter, EASTER_WESTERN
+```
+
 ## Usage
 
 ```python
-from dateutil import (
-    parse, isoparse, relativedelta, rrule, rruleset, rrulestr,
-    easter, gettz, tzutc, tzoffset,
-    MONTHLY, MO, TU, WE, TH, FR, SA, SU,
-)
+from dateutil.parser import parse, isoparse
+from dateutil.relativedelta import relativedelta
+from dateutil.rrule import rrule, MONTHLY
+from dateutil.tz import gettz, tzutc
+from dateutil.easter import easter
 
 # Parse date strings (zero-copy tokenizer)
 dt = parse("2026-01-15T10:30:00+09:00")
@@ -58,6 +74,14 @@ utc = tzutc()
 
 # Easter
 easter_date = easter(2026)
+```
+
+### Flat Import Style
+
+All symbols are also re-exported from the top-level `dateutil` package:
+
+```python
+from dateutil import parse, relativedelta, rrule, gettz, easter
 ```
 
 ## Development
@@ -111,31 +135,30 @@ cargo clippy --workspace
 
 ### Benchmarks
 
-Benchmarks compare the original `python-dateutil` (PyPI) and the Rust extension (`dateutil`) using pytest-benchmark.
+Performance measured against python-dateutil v2.9.0 (before the drop-in rename). Baseline results are preserved in [benchmarks/BASELINE.md](benchmarks/BASELINE.md).
 
 #### Summary (vs python-dateutil)
 
 | Module | Speedup |
 |--------|---------|
-| Parser (parse) | **19.5x-36.0x** |
-| Parser (isoparse) | **13.0x-38.4x** |
-| RRule | **5.9x-63.7x** |
-| Timezone | **1.0x-896.7x** |
-| RelativeDelta | **2.0x-28.1x** |
-| Easter | **5.0x-7.3x** |
+| Parser (parse) | **19.5x–36.0x** |
+| Parser (isoparse) | **13.0x–38.4x** |
+| RRule | **5.9x–63.7x** |
+| Timezone | **1.0x–896.7x** |
+| RelativeDelta | **2.0x–28.1x** |
+| Easter | **5.0x–7.3x** |
 
-> Measured on Apple Silicon (M-series), Python 3.13, release build. Full results: [benchmarks/RESULTS.md](benchmarks/RESULTS.md)
+> Measured on Apple Silicon (M-series), Python 3.13, release build.
 
 ```bash
-# Install the original python-dateutil for comparison
-uv pip install python-dateutil
-
-# Run benchmarks
+# Run benchmarks (Rust dateutil only, since the package now occupies the dateutil namespace)
 make bench
 
 # Run and save results as JSON
 make bench-save
 ```
+
+> **Note:** Since `python-dateutil-rs` provides the same `dateutil` namespace as `python-dateutil`, both cannot be installed simultaneously. The baseline comparison numbers above were captured before the namespace unification.
 
 ## Project Structure
 
@@ -161,11 +184,15 @@ dateutil-rs/
 │           ├── lib.rs         # Module registration
 │           ├── py.rs          # Binding root + #[pymodule]
 │           └── py/            # Per-module bindings (common, conv, easter, parser, relativedelta, rrule, tz)
-├── python/dateutil/        # Python package (maturin mixed layout)
+├── python/dateutil/        # Python package (drop-in replacement for python-dateutil)
 │   ├── __init__.py            # Re-exports from Rust native module
 │   ├── _native.pyi            # Type stubs for native module
 │   ├── py.typed               # PEP 561 marker
-│   └── parser.py              # parserinfo (Python subclass support)
+│   ├── parser.py              # dateutil.parser (parse, isoparse, parserinfo)
+│   ├── tz.py                  # dateutil.tz (tzutc, tzoffset, gettz, UTC, ...)
+│   ├── relativedelta.py       # dateutil.relativedelta
+│   ├── rrule.py               # dateutil.rrule (rrule, rruleset, rrulestr, freq constants)
+│   └── easter.py              # dateutil.easter (easter, calendar constants)
 ├── tests/                     # Python test suite
 ├── benchmarks/                # pytest-benchmark comparisons
 ├── .github/workflows/         # CI (ci.yml, publish.yml)

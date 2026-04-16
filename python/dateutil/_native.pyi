@@ -356,7 +356,7 @@ def rrulestr(
 # tz — Timezone types and utilities
 # ---------------------------------------------------------------------------
 
-class tzutc:
+class tzutc(datetime.tzinfo):
     """UTC timezone (zero offset, no DST)."""
 
     def __init__(self) -> None: ...

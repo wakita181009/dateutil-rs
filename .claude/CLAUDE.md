@@ -1,10 +1,10 @@
-# dateutil — The Fast Date Utility Library for Python & Rust
+# dateutil — Drop-in Replacement for python-dateutil, Powered by Rust
 
 ## Project Vision
 
-Build the **definitive date utility library** — a performance-focused alternative to python-dateutil, usable both as a native Rust crate (`dateutil-core`) and as a Python package (`python-dateutil-rs`) via PyO3/maturin.
+A **drop-in replacement** for [python-dateutil](https://github.com/dateutil/dateutil) — install `python-dateutil-rs` and existing `from dateutil.parser import parse`, `from dateutil.tz import tzutc`, etc. continue to work with **2x–897x** better performance. Also usable as a native Rust crate (`dateutil-core`).
 
-**Design philosophy**: Cover 95%+ of real-world usage with maximum performance. Intentionally excludes rarely-used features (fuzzy parsing, POSIX TZ strings, etc.) in favor of a clean, fast API.
+**Design philosophy**: Cover 95%+ of real-world usage with maximum performance. Provides the same `dateutil` namespace and submodule structure as python-dateutil for seamless migration. Intentionally excludes rarely-used features (fuzzy parsing, POSIX TZ strings, etc.) in favor of a clean, fast API.
 
 ## Directory Structure
 
@@ -54,12 +54,17 @@ dateutil-rs/                            # Repository
 │               ├── rrule.rs           # RRule/RRuleSet bindings
 │               └── tz.rs             # Timezone bindings
 │
-├── python/                             # Python package (maturin mixed layout)
-│   └── dateutil/                       # import dateutil
-│       ├── __init__.py                 # Re-exports from Rust native module
+├── python/                             # Python package (drop-in replacement)
+│   └── dateutil/                       # import dateutil (same namespace as python-dateutil)
+│       ├── __init__.py                 # Top-level re-exports from Rust native module
 │       ├── _native.pyi                # Type stubs for native module
 │       ├── py.typed                    # PEP 561 marker
-│       └── parser.py                  # parserinfo (Python subclass support)
+│       ├── parser.py                  # dateutil.parser (parse, isoparse, parserinfo)
+│       ├── tz.py                      # dateutil.tz (tzutc, tzoffset, gettz, UTC, ...)
+│       ├── relativedelta.py           # dateutil.relativedelta
+│       ├── rrule.py                   # dateutil.rrule (rrule, rruleset, rrulestr, freq constants)
+│       ├── easter.py                  # dateutil.easter (easter, calendar constants)
+│       └── utils.py                   # dateutil.utils (today, default_tzinfo, within_delta)
 │
 ├── tests/                              # Python tests
 ├── benchmarks/                         # Performance benchmarks
@@ -74,6 +79,22 @@ dateutil-rs/                            # Repository
 |-------|---------|------|------------|
 | `dateutil-core` | Pure Rust optimized core | No | crates.io |
 | `dateutil-py` | PyO3 binding layer | Yes | PyPI (`python-dateutil-rs`) |
+
+## Drop-in Compatibility
+
+The package provides the `dateutil` namespace with the same submodule structure as python-dateutil:
+
+```python
+from dateutil.parser import parse, isoparse, parserinfo
+from dateutil.tz import tzutc, tzoffset, tzlocal, gettz, UTC
+from dateutil.relativedelta import relativedelta
+from dateutil.rrule import rrule, rruleset, rrulestr, MONTHLY, MO
+from dateutil.easter import easter, EASTER_WESTERN
+```
+
+- **`dateutil.tz.UTC`**: Singleton `tzutc()` instance, compatible with freezegun and other time-mocking libraries.
+- **Flat imports**: All symbols are also re-exported from the top-level `dateutil` package for convenience.
+- **Cannot coexist** with `python-dateutil` — both provide the `dateutil` namespace. Uninstall `python-dateutil` before installing `python-dateutil-rs`.
 
 ## Feature Scope
 
@@ -96,13 +117,14 @@ Included (covers 95%+ of real-world usage):
   ✅ tzfile                 — TZif binary timezone files
   ✅ tzlocal                — system local timezone
   ✅ datetime_exists / datetime_ambiguous / resolve_imaginary
+  ✅ dateutil.tz.UTC        — tzutc() singleton (freezegun compatible)
+  ✅ utils (today, default_tzinfo, within_delta) — convenience utilities (pure Python)
 
 Excluded (legacy / low usage):
   ❌ parser fuzzy mode          — low precision, ambiguous results
   ❌ tzrange / tzstr            — POSIX TZ strings (IANA names suffice)
   ❌ tzical                     — iCalendar VTIMEZONE (rrulestr covers RFC 5545)
   ❌ parser timezone resolution — Python-specific tzinfos callback
-  ❌ utils (within_delta, today, default_tzinfo) — trivial to implement in Python
   ❌ isoparser class            — isoparse() function suffices
   ❌ rrule xafter/replace       — use iter/list/between instead
 ```
@@ -214,8 +236,10 @@ module-name = "dateutil._native"
 
 - **Rust unit tests:** `cargo test -p dateutil-core` — Tests pure Rust core.
 - **Rust benchmarks:** `cargo bench -p dateutil-core` — Criterion benchmarks.
-- **Python integration tests:** `uv run pytest tests/` — Tests against python-dateutil.
-- **Benchmarks:** `uv run pytest benchmarks/ --benchmark-enable` — Python-side comparison.
+- **Python integration tests:** `uv run pytest tests/` — Tests the Rust-backed dateutil package.
+- **Benchmarks:** `uv run pytest benchmarks/ --benchmark-enable` — Rust dateutil performance (baseline comparison with python-dateutil stored in `benchmarks/BASELINE.md`).
+
+> **Note:** Since the package now provides the `dateutil` namespace (same as python-dateutil), side-by-side Python benchmarks are no longer possible. Baseline numbers were captured before the namespace unification.
 
 ## Development Commands
 
