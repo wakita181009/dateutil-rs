@@ -28,6 +28,13 @@ dev = [
 requires = ["maturin>=1.13"]
 build-backend = "maturin"
 
+[tool.uv]
+# Prevent transitive python-dateutil (via freezegun) from installing into
+# the venv where it would shadow our drop-in dateutil/ namespace package.
+override-dependencies = [
+    "python-dateutil ; python_version<'0'",
+]
+
 [tool.maturin]
 manifest-path = "crates/dateutil-py/Cargo.toml"
 features = ["python"]
