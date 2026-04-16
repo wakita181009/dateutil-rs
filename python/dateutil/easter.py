@@ -1,6 +1,6 @@
-"""dateutil_rs.easter - Easter date calculation."""
+"""dateutil.easter - Easter date calculation."""
 
-from dateutil_rs._native import (
+from dateutil._native import (
     EASTER_JULIAN,
     EASTER_ORTHODOX,
     EASTER_WESTERN,

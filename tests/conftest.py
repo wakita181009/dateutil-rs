@@ -4,20 +4,20 @@ import sys
 import pytest
 
 # ---------------------------------------------------------------------------
-# --rust flag: redirect dateutil.* → dateutil_rs.* for Rust-ported modules
+# --rust flag: redirect dateutil.* → dateutil.* for Rust-ported modules
 # ---------------------------------------------------------------------------
 # Self-contained modules that can be redirected without breaking imports.
 #
 # NOT mapped (incompatible exports):
 #   dateutil.parser — test_parser.py imports ParserError, UnknownTimezoneWarning,
-#                     isoparser class, parser class which dateutil_rs does not provide
+#                     isoparser class, parser class which dateutil does not provide
 #   dateutil.tz     — tests import UTC constant, tzstr, tzrange, enfold, zoneinfo
-#                     which dateutil_rs does not provide
-#   dateutil.utils  — excluded from dateutil_rs scope
+#                     which dateutil does not provide
+#   dateutil.utils  — excluded from dateutil scope
 _MODULE_MAP = {
-    "dateutil.easter": "dateutil_rs",
-    "dateutil.relativedelta": "dateutil_rs",
-    "dateutil.rrule": "dateutil_rs",
+    "dateutil.easter": "dateutil",
+    "dateutil.relativedelta": "dateutil",
+    "dateutil.rrule": "dateutil",
 }
 
 
@@ -26,7 +26,7 @@ def pytest_addoption(parser):
         "--rust",
         action="store_true",
         default=False,
-        help="Test against dateutil_rs (Rust + python-dateutil hybrid)",
+        help="Test against dateutil (Rust + python-dateutil hybrid)",
     )
 
 
@@ -35,9 +35,9 @@ def pytest_configure(config):
         return
 
     try:
-        import dateutil_rs
+        import dateutil
     except ImportError:
-        pytest.exit("--rust requires dateutil_rs to be installed (run: uv sync)")
+        pytest.exit("--rust requires dateutil to be installed (run: uv sync)")
 
     for py_mod, rs_mod in _MODULE_MAP.items():
         rust_module = __import__(rs_mod, fromlist=[""])
@@ -45,10 +45,10 @@ def pytest_configure(config):
 
 
 # ---------------------------------------------------------------------------
-# --rust xfail: tests for features dateutil_rs intentionally does not support
+# --rust xfail: tests for features dateutil intentionally does not support
 # ---------------------------------------------------------------------------
 # These tests exercise python-dateutil features that are excluded from
-# dateutil_rs scope (see CLAUDE.md "Excluded" section): float relativedelta
+# dateutil scope (see CLAUDE.md "Excluded" section): float relativedelta
 # args, tzical/VTIMEZONE, rrulestr TZID, rrule.xafter/replace, etc.
 #
 # Keyed by (file_stem, class_or_empty, test_name).
@@ -181,7 +181,7 @@ def pytest_collection_modifyitems(config, items):
         if rust_mode and _make_xfail_key(item) in _RUST_XFAIL:
             item.add_marker(
                 pytest.mark.xfail(
-                    reason="not supported by dateutil_rs",
+                    reason="not supported by dateutil",
                     strict=True,
                 )
             )

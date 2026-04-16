@@ -1,6 +1,6 @@
-"""dateutil_rs.rrule - RFC 5545 recurrence rules."""
+"""dateutil.rrule - RFC 5545 recurrence rules."""
 
-from dateutil_rs._native import (
+from dateutil._native import (
     DAILY,
     HOURLY,
     MINUTELY,

@@ -1,8 +1,5 @@
 """Benchmarks for dateutil.parser module."""
 
-import datetime
-
-import pytest
 
 # --- parse() benchmarks ---
 
@@ -37,21 +34,6 @@ def test_parse_with_microseconds(benchmark, du):
     benchmark(du.parser.parse, "2024-01-15T14:30:00.123456")
 
 
-def test_parse_fuzzy(benchmark, du):
-    """Parse with fuzzy matching: 'Today is January 15, 2024 at 2:30 PM'."""
-    if du.name == "v1":
-        pytest.skip("v1 does not support fuzzy parsing")
-    benchmark(du.parser.parse, "Today is January 15, 2024 at 2:30 PM", fuzzy=True)
-
-
-def test_parse_relative_with_default(benchmark, du):
-    """Parse partial string with default: '14:30' with default date."""
-    if du.name == "v1":
-        pytest.skip("v1 does not support default parameter")
-    default = datetime.datetime(2024, 1, 15)
-    benchmark(du.parser.parse, "14:30", default=default)
-
-
 VARIOUS_FORMATS = [
     "2024-01-15",
     "2024-01-15T14:30:00",
@@ -62,21 +44,15 @@ VARIOUS_FORMATS = [
     "01/15/2024 2:30 PM",
     "2024-01-15T14:30:00.123456Z",
     "Jan 15, 2024 14:30:00 UTC",
-    "20240115T143000",
 ]
-
-
-VARIOUS_FORMATS_V1 = [s for s in VARIOUS_FORMATS if "T" not in s or "-" in s[:10]]
 
 
 def test_parse_various_formats(benchmark, du):
     """Parse various date/time string formats."""
     parse = du.parser.parse
-    # v1 parse() does not handle compact ISO without separators (e.g. 20240115T143000)
-    formats = VARIOUS_FORMATS_V1 if du.name == "v1" else VARIOUS_FORMATS
 
     def compute():
-        return [parse(s) for s in formats]
+        return [parse(s) for s in VARIOUS_FORMATS]
 
     benchmark(compute)
 

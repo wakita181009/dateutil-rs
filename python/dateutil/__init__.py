@@ -1,6 +1,6 @@
-"""dateutil_rs - Fast date utility library for Python, powered by Rust."""
+"""dateutil - Fast date utility library for Python, powered by Rust."""
 
-from dateutil_rs._native import (
+from dateutil._native import (
     DAILY,
     EASTER_JULIAN,
     EASTER_ORTHODOX,
@@ -36,7 +36,7 @@ from dateutil_rs._native import (
     tzutc,
     weekday,
 )
-from dateutil_rs.parser import parserinfo
+from dateutil.parser import parserinfo
 
 __all__ = [
     "DAILY",

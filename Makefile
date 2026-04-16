@@ -15,7 +15,7 @@ build-v1-standalone: ## Build standalone v1 cdylib for isolated benchmarks
 	PYO3_PYTHON=$$(uv run python -c "import sys; print(sys.executable)") \
 	cargo rustc -p dateutil-py -F python,standalone --release --crate-type cdylib \
 		-- -C link-arg=-undefined -C link-arg=dynamic_lookup
-	cp target/release/libdateutil_py.dylib python/dateutil_rs/v1/$(SO_EXT)
+	cp target/release/libdateutil_py.dylib python/dateutil/$(SO_EXT)
 
 # ---------------------------------------------------------------------------
 # Benchmarks
@@ -40,11 +40,9 @@ bench-help: ## Show benchmark usage
 
 BENCH_FILE ?=
 
-bench: ## Run 3-way benchmarks (python-dateutil vs v0 vs v1)
-	uv run pytest $(BENCH_DIR)/$(BENCH_FILE) $(BENCH_ARGS) \
-		--benchmark-group-by=func
+bench: ## Run benchmarks (dateutil Rust implementation)
+	uv run pytest $(BENCH_DIR)/$(BENCH_FILE) $(BENCH_ARGS)
 
 bench-save: ## Run benchmarks and save results as JSON
 	uv run pytest $(BENCH_DIR)/$(BENCH_FILE) $(BENCH_ARGS) \
-		--benchmark-group-by=func \
 		--benchmark-save=comparison

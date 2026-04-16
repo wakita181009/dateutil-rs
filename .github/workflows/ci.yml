@@ -38,7 +38,7 @@ jobs:
       - name: Ruff format
         run: uv run ruff format --check python/ tests/ benchmarks/
       - name: Mypy
-        run: uv run mypy python/dateutil_rs/ tests/ --ignore-missing-imports
+        run: uv run mypy python/dateutil/ tests/ --ignore-missing-imports
 
   test:
     runs-on: ${{ matrix.os }}
@@ -61,15 +61,6 @@ jobs:
       - name: Build Rust extension
         run: uv run maturin develop --release
 
-      - name: Verify imports
-        run: |
-          uv run python -c "
-          from dateutil_rs import easter, parse, isoparse, relativedelta, rrule, rruleset, rrulestr
-          from dateutil_rs import gettz, tzutc, tzoffset, tzfile, tzlocal
-          from dateutil_rs import MO, TU, WE, TH, FR, SA, SU
-          print('All imports OK')
-          "
-
-      - name: Run tests via dateutil_rs
+      - name: Run tests via dateutil
         run: >
-          uv run pytest tests/ --rust -x -q -k "not testInheritance"
+          uv run pytest tests/ -x -q -k "not testInheritance"

@@ -1,6 +1,6 @@
-"""dateutil_rs.parser - Date/time string parsing."""
+"""dateutil.parser - Date/time string parsing."""
 
-from dateutil_rs._native import _ParserInfoBase, isoparse, parse, parse_to_dict
+from dateutil._native import _ParserInfoBase, isoparse, parse, parse_to_dict
 
 
 class parserinfo(_ParserInfoBase):

@@ -28,7 +28,7 @@ pip install python-dateutil-rs
 ## Usage
 
 ```python
-from dateutil_rs import (
+from dateutil import (
     parse, isoparse, relativedelta, rrule, rruleset, rrulestr,
     easter, gettz, tzutc, tzoffset,
     MONTHLY, MO, TU, WE, TH, FR, SA, SU,
@@ -93,7 +93,7 @@ maturin develop -F python
 uv run pytest tests/ -x -q
 
 # Run with coverage
-uv run pytest tests/ --cov=dateutil_rs
+uv run pytest tests/ --cov=dateutil
 
 # Run Rust tests
 cargo test -p dateutil-core
@@ -111,7 +111,7 @@ cargo clippy --workspace
 
 ### Benchmarks
 
-Benchmarks compare the original `python-dateutil` (PyPI) and the Rust extension (`dateutil_rs`) using pytest-benchmark.
+Benchmarks compare the original `python-dateutil` (PyPI) and the Rust extension (`dateutil`) using pytest-benchmark.
 
 #### Summary (vs python-dateutil)
 
@@ -161,7 +161,7 @@ dateutil-rs/
 │           ├── lib.rs         # Module registration
 │           ├── py.rs          # Binding root + #[pymodule]
 │           └── py/            # Per-module bindings (common, conv, easter, parser, relativedelta, rrule, tz)
-├── python/dateutil_rs/        # Python package (maturin mixed layout)
+├── python/dateutil/        # Python package (maturin mixed layout)
 │   ├── __init__.py            # Re-exports from Rust native module
 │   ├── _native.pyi            # Type stubs for native module
 │   ├── py.typed               # PEP 561 marker

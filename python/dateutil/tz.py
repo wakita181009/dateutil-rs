@@ -1,6 +1,6 @@
-"""dateutil_rs.tz - Timezone types and utilities."""
+"""dateutil.tz - Timezone types and utilities."""
 
-from dateutil_rs._native import (
+from dateutil._native import (
     datetime_ambiguous,
     datetime_exists,
     gettz,

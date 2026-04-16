@@ -55,7 +55,7 @@ dateutil-rs/                            # Repository
 │               └── tz.rs             # Timezone bindings
 │
 ├── python/                             # Python package (maturin mixed layout)
-│   └── dateutil_rs/                    # import dateutil_rs
+│   └── dateutil/                       # import dateutil
 │       ├── __init__.py                 # Re-exports from Rust native module
 │       ├── _native.pyi                # Type stubs for native module
 │       ├── py.typed                    # PEP 561 marker
@@ -207,7 +207,7 @@ build-backend = "maturin"
 manifest-path = "crates/dateutil-py/Cargo.toml"
 features = ["python"]
 python-source = "python"
-module-name = "dateutil_rs._native"
+module-name = "dateutil._native"
 ```
 
 ## Testing Strategy

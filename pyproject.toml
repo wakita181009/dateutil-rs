@@ -16,7 +16,6 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
-    "python-dateutil>=2.9",
     "pytest>=9.0",
     "pytest-cov>=7.1",
     "pytest-benchmark>=5.2",
@@ -33,7 +32,7 @@ build-backend = "maturin"
 manifest-path = "crates/dateutil-py/Cargo.toml"
 features = ["python"]
 python-source = "python"
-module-name = "dateutil_rs._native"
+module-name = "dateutil._native"
 include = [
     { path = "LICENSE", format = "sdist" },
 ]
