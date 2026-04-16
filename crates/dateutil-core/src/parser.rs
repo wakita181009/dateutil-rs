@@ -1048,8 +1048,20 @@ fn try_parse_time_component(
 #[inline]
 fn assign_hms(res: &mut ParseResult<'_>, hms_idx: usize, int_val: u32, us: u32) {
     match hms_idx {
-        0 => res.hour = Some(int_val),
-        1 => res.minute = Some(int_val),
+        0 => {
+            res.hour = Some(int_val);
+            if us > 0 {
+                // Fractional hour → minutes (e.g., "5.6h" → hour=5, minute=36)
+                res.minute = Some((us as u64 * 60 / 1_000_000) as u32);
+            }
+        }
+        1 => {
+            res.minute = Some(int_val);
+            if us > 0 {
+                // Fractional minute → seconds (e.g., "5.6m" → minute=5, second=36)
+                res.second = Some((us as u64 * 60 / 1_000_000) as u32);
+            }
+        }
         2 => {
             res.second = Some(int_val);
             if us > 0 {

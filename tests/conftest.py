@@ -141,11 +141,6 @@ _RUST_XFAIL = {
     (
         "test_parser",
         "",
-        "test_parser[2016-12-21 04.2h-expected_datetime59-Fractional Hours]",
-    ),
-    (
-        "test_parser",
-        "",
         "test_parser[December.0031.30-expected_datetime58-BYd corner case (GH#687)]",
     ),
     ("test_parser", "", "test_parser_default[01h02-expected_datetime39-random format]"),
@@ -192,8 +187,6 @@ _RUST_XFAIL = {
         "",
         "test_parser_default[Wednesday-expected_datetime32-long weekday]",
     ),
-    ("test_parser", "", "test_rounding_floatlike_strings[5.6h-dt0]"),
-    ("test_parser", "", "test_rounding_floatlike_strings[5.6m-dt1]"),
     # =======================================================================
     # tz: unsupported tz features
     # =======================================================================
@@ -349,15 +342,8 @@ _RUST_XFAIL = {
         "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,3,0,7200-expected0]",
     ),
     # =======================================================================
-    # imports: missing exports / lazy import / __version__
+    # imports: missing exports (non-strict; see _RUST_XFAIL_NONSTRICT below)
     # =======================================================================
-    ("test_imports", "", "test_import_parser_all"),
-    ("test_imports", "", "test_import_relative_delta_all"),
-    ("test_imports", "", "test_import_rrule_all"),
-    ("test_imports", "", "test_import_tz_all"),
-    ("test_imports", "", "test_import_version_root"),
-    ("test_imports", "", "test_import_version_str"),
-    ("test_imports", "", "test_import_zone_info_star"),
     # =======================================================================
     # property tests: convertyear not implemented
     # =======================================================================
@@ -384,6 +370,15 @@ _RUST_XFAIL_NONSTRICT = {
     ("test_imports", "", "test_lazy_import[rrule]"),
     ("test_imports", "", "test_lazy_import[tz]"),
     ("test_imports", "", "test_lazy_import[zoneinfo]"),
+    # imports: missing public exports (tzrange/tzstr/tzical/tzwin, weekday
+    # re-export, parser class, gettz_db_metadata, rebuild). Some of these are
+    # stubs that exist but raise NotImplementedError at call time, so the bare
+    # import-only assertion can XPASS on some CI runners.
+    ("test_imports", "", "test_import_parser_all"),
+    ("test_imports", "", "test_import_relative_delta_all"),
+    ("test_imports", "", "test_import_rrule_all"),
+    ("test_imports", "", "test_import_tz_all"),
+    ("test_imports", "", "test_import_zone_info_star"),
 }
 
 
