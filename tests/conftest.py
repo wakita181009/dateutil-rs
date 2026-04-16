@@ -126,7 +126,6 @@ _RUST_XFAIL = {
     # tzoffset singleton/identity semantics not implemented
     ("test_parser", "TestTzinfoInputTypes", "test_valid_tzinfo_int_input"),
     # -- Module-level parser tests --
-    ("test_parser", "", "test_decimal_error[1: test]"),
     ("test_parser", "", "test_parse_tzinfos_fold"),
     (
         "test_parser",

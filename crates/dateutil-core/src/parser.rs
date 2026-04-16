@@ -253,6 +253,7 @@ pub struct ParseResult<'a> {
     century_specified: bool,
     ampm_no_hour: bool,
     ampm_out_of_range: bool,
+    malformed_time: bool,
 }
 
 impl ParseResult<'_> {
@@ -531,6 +532,9 @@ fn parse_to_result_with_year<'a>(
         return Err(ParseError::ValueError(
             "Invalid hour specified for 12-hour clock.".into(),
         ));
+    }
+    if res.malformed_time {
+        return Err(ParseError::UnknownFormat(timestr.into()));
     }
 
     Ok(res)
@@ -1038,7 +1042,7 @@ fn try_parse_time_component(
             if let Some(min) = fast_parse_int(&tokens[i + 2]) {
                 res.minute = Some(min as u32);
                 consumed = 3; // hour + ":" + minute
-                              // Look for :SS — seconds may have fractional part
+                // Look for :SS — seconds may have fractional part
                 if i + 4 < len && tokens[i + 3] == ":" {
                     if let Some(sec) = fast_parse_int(&tokens[i + 4]) {
                         // Pure integer seconds (fast path)
@@ -1053,7 +1057,13 @@ fn try_parse_time_component(
                         consumed = 5;
                     }
                 }
+            } else {
+                // Colon present but no valid minute — e.g. "1: test"
+                res.malformed_time = true;
             }
+        } else if i + 1 < len && tokens[i + 1] == ":" {
+            // Trailing colon at end of input — also malformed.
+            res.malformed_time = true;
         }
         return consumed;
     }
