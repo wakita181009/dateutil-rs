@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use super::conv::{make_py_tz, make_py_utc, ndt_to_py_datetime};
+use super::tz::{PyTzOffset, PyTzUtc};
 use chrono::{Datelike, Timelike};
 use dateutil::parser;
 use dateutil::parser::{IsoParser, IsoTz, ParserInfo};
+use dateutil::tz::TzOffset;
 use pyo3::prelude::*;
 use pyo3::types::{PyDate, PyDict, PyTime, PyType, PyTzInfo};
 
@@ -264,8 +266,8 @@ fn parse_py<'py>(
             if tzdata.is_none() {
                 return ndt_to_py_datetime(py, ndt, None);
             } else if let Ok(offset_secs) = tzdata.extract::<i32>() {
-                let tz = make_py_tz(py, offset_secs)?;
-                return ndt_to_py_datetime(py, ndt, Some(&tz));
+                let tz = make_dateutil_offset(py, Some(tzname.as_ref()), offset_secs)?;
+                return ndt_to_py_datetime(py, ndt, Some(tz.as_super()));
             } else {
                 let tz = tzdata.cast::<PyTzInfo>()?;
                 return ndt_to_py_datetime(py, ndt, Some(tz));
@@ -341,27 +343,30 @@ fn extract_iso_string(obj: &Bound<'_, pyo3::PyAny>) -> PyResult<String> {
     ))
 }
 
-/// Build a `dateutil.tz.tzutc()` instance.
-fn make_dateutil_utc<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyTzInfo>> {
-    let tz_mod = py.import("dateutil.tz")?;
-    let obj = tz_mod.getattr("tzutc")?.call0()?;
-    obj.cast_into::<PyTzInfo>()
-        .map_err(|e| pyo3::exceptions::PyTypeError::new_err(e.to_string()))
+/// Build a `dateutil.tz.tzutc()` instance directly (no Python import).
+fn make_dateutil_utc(py: Python<'_>) -> PyResult<Bound<'_, PyTzUtc>> {
+    Bound::new(py, PyTzUtc)
 }
 
-/// Build a `dateutil.tz.tzoffset(None, seconds)` instance.
-fn make_dateutil_offset<'py>(py: Python<'py>, secs: i32) -> PyResult<Bound<'py, PyTzInfo>> {
-    let tz_mod = py.import("dateutil.tz")?;
-    let obj = tz_mod.getattr("tzoffset")?.call1((py.None(), secs))?;
-    obj.cast_into::<PyTzInfo>()
-        .map_err(|e| pyo3::exceptions::PyTypeError::new_err(e.to_string()))
+/// Build a `dateutil.tz.tzoffset(name, seconds)` instance directly.
+fn make_dateutil_offset<'py>(
+    py: Python<'py>,
+    name: Option<&str>,
+    secs: i32,
+) -> PyResult<Bound<'py, PyTzOffset>> {
+    Bound::new(
+        py,
+        PyTzOffset {
+            inner: TzOffset::new(name, secs),
+        },
+    )
 }
 
 /// Convert `IsoTz` to a Python `datetime.tzinfo` subclass.
 fn isotz_to_py<'py>(py: Python<'py>, tz: IsoTz) -> PyResult<Bound<'py, PyTzInfo>> {
     match tz {
-        IsoTz::Utc => make_dateutil_utc(py),
-        IsoTz::Offset(secs) => make_dateutil_offset(py, secs),
+        IsoTz::Utc => Ok(make_dateutil_utc(py)?.into_super()),
+        IsoTz::Offset(secs) => Ok(make_dateutil_offset(py, None, secs)?.into_super()),
     }
 }
 

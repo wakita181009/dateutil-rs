@@ -85,7 +85,7 @@ impl PyTzUtc {
 #[pyclass(name = "tzoffset", extends = PyTzInfo, frozen, skip_from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyTzOffset {
-    inner: TzOffset,
+    pub(crate) inner: TzOffset,
 }
 
 #[pymethods]

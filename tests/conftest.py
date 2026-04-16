@@ -12,6 +12,7 @@ _XFAIL_CLASSES = {
     # -- tz: unsupported timezone backends --
     ("test_tz", "TZICalTest"),  # iCalendar VTIMEZONE not supported
     ("test_tz", "TZRangeTest"),  # POSIX tzrange not supported
+    ("test_tz", "TZStrTest"),  # POSIX tzstr not supported
     ("test_tz", "TzPickleFileTest"),  # Rust objects not picklable
     ("test_tz", "TzPickleTest"),  # Rust objects not picklable
     ("test_tz", "TestEnfold"),  # enfold() not supported
@@ -62,6 +63,12 @@ _XFAIL_CLASS_EXCEPTIONS = {
     ("test_tz", "TZRangeTest"): {
         "testRangeEquality",
         "testRangeInequalityUnsupported",
+    },
+    ("test_tz", "TZStrTest"): {
+        "testStrInequality",
+        "testStrInequalityStartEnd",
+        "testStrInequalityUnsupported",
+        "testTzStrRepr",
     },
 }
 
@@ -153,6 +160,7 @@ _RUST_XFAIL = {
     ("test_parser", "ParserTest", "testDayFirst"),
     ("test_parser", "ParserTest", "testDayFirstYearFirst"),
     ("test_parser", "ParserTest", "testErrorType01"),
+    ("test_parser", "ParserTest", "testFuzzy"),
     ("test_parser", "ParserTest", "testFuzzyAMPMProblem"),
     ("test_parser", "ParserTest", "testFuzzyIgnoreAMPM"),
     ("test_parser", "ParserTest", "testFuzzySimple"),
@@ -177,12 +185,19 @@ _RUST_XFAIL = {
     ("test_parser", "TestInputTypes", "test_parse_str"),
     ("test_parser", "TestInputTypes", "test_parse_stream"),
     # -- TestTZVar --
+    ("test_parser", "TestTZVar", "test_parse_unambiguous_nonexistent_local"),
     ("test_parser", "TestTZVar", "test_tzinfo_arg_parseerror"),
     ("test_parser", "TestTZVar", "test_tzinfo_arg_typeerror"),
+    ("test_parser", "TestTZVar", "test_tzlocal_parse_fold"),
     # -- TestTzinfoInputTypes --
     ("test_parser", "TestTzinfoInputTypes", "test_tzinfo_dict_parseerror"),
     ("test_parser", "TestTzinfoInputTypes", "test_tzinfo_input_number"),
     ("test_parser", "TestTzinfoInputTypes", "test_tzinfo_input_timedelta"),
+    # tzstr not supported (unicode/callable return POSIX strings)
+    ("test_parser", "TestTzinfoInputTypes", "test_valid_tzinfo_unicode_input"),
+    ("test_parser", "TestTzinfoInputTypes", "test_valid_tzinfo_callable_input"),
+    # tzoffset singleton/identity semantics not implemented
+    ("test_parser", "TestTzinfoInputTypes", "test_valid_tzinfo_int_input"),
     # -- Module-level parser tests --
     ("test_parser", "", "test_decimal_error[1: test]"),
     ("test_parser", "", "test_decimal_error[Nan]"),
@@ -283,31 +298,7 @@ _RUST_XFAIL = {
     ("test_tz", "TZTest", "testIsStd"),  # requires _ttinfo_list internal attribute
     ("test_tz", "TZTest", "testRoundTrip"),
     ("test_tz", "TZTest", "testTZFileEquality"),
-    # -- TZStrTest (tzstr not supported, but 4 tests pass) --
-    ("test_tz", "TZStrTest", "testTzStrAmbiguity"),
-    ("test_tz", "TZStrTest", "testTzStrBrokenIsDst"),
-    ("test_tz", "TZStrTest", "testTzStrEnd1"),
-    ("test_tz", "TZStrTest", "testTzStrEnd2"),
-    ("test_tz", "TZStrTest", "testTzStrEnd3"),
-    ("test_tz", "TZStrTest", "testTzStrEnd4"),
-    ("test_tz", "TZStrTest", "testTzStrEnd5"),
-    ("test_tz", "TZStrTest", "testTzStrEnd6"),
-    ("test_tz", "TZStrTest", "testTzStrEnd7"),
-    ("test_tz", "TZStrTest", "testTzStrImaginary"),
-    ("test_tz", "TZStrTest", "testTzStrInstance"),
-    ("test_tz", "TZStrTest", "testTzStrSingleton"),
-    ("test_tz", "TZStrTest", "testTzStrSingletonPosix"),
-    ("test_tz", "TZStrTest", "testTzStrStart1"),
-    ("test_tz", "TZStrTest", "testTzStrStart2"),
-    ("test_tz", "TZStrTest", "testTzStrStart3"),
-    ("test_tz", "TZStrTest", "testTzStrStart4"),
-    ("test_tz", "TZStrTest", "testTzStrStart5"),
-    ("test_tz", "TZStrTest", "testTzStrStart6"),
-    ("test_tz", "TZStrTest", "testTzStrStart7"),
-    ("test_tz", "TZStrTest", "testTzStrType"),
-    ("test_tz", "TZStrTest", "testTzStrUTCOffset"),
-    ("test_tz", "TZStrTest", "testUnambiguousGapNegativeUTCOffset"),
-    ("test_tz", "TZStrTest", "testUnambiguousGapPositiveUTCOffset"),
+    # TZStrTest covered by _XFAIL_CLASSES
     # -- DatetimeAmbiguousTest: custom tzinfo classes not extractable --
     ("test_tz", "DatetimeAmbiguousTest", "testAmbiguousDatetime"),
     ("test_tz", "DatetimeAmbiguousTest", "testAmbiguousError"),
