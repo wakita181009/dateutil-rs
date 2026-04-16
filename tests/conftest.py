@@ -181,12 +181,6 @@ _RUST_XFAIL = {
         "",
         "test_parser_default[36 m 5-expected_datetime15-hour with letters spaces]",
     ),
-    ("test_parser", "", "test_parser_default[Wed-expected_datetime31-weekday alone]"),
-    (
-        "test_parser",
-        "",
-        "test_parser_default[Wednesday-expected_datetime32-long weekday]",
-    ),
     # =======================================================================
     # tz: unsupported tz features
     # =======================================================================

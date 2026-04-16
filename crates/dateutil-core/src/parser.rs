@@ -1118,6 +1118,16 @@ pub fn build_naive(
     res: &ParseResult<'_>,
     default: NaiveDateTime,
 ) -> Result<NaiveDateTime, ParseError> {
+    // If only a weekday was given (no day), advance the default date to the
+    // next occurrence of that weekday (same day if it already matches).
+    let default = if let (Some(target_wd), None) = (res.weekday, res.day) {
+        let current_wd = default.weekday().num_days_from_monday() as i64;
+        let days = ((target_wd as i64) - current_wd).rem_euclid(7);
+        default + chrono::Duration::days(days)
+    } else {
+        default
+    };
+
     let year = res.year.unwrap_or(default.year());
     let month = res.month.unwrap_or(default.month());
     let day = res.day.unwrap_or(default.day());
