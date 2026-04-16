@@ -327,7 +327,7 @@ impl Ymd {
                 2 => {
                     let other = if mi == 0 { 1 } else { 0 };
                     let v = self.values[other];
-                    if v > 31 {
+                    if v > 31 || self.ystridx == Some(other) {
                         year = Some(v);
                     } else {
                         day = Some(v as u32);
@@ -979,13 +979,28 @@ fn try_parse_token<'a>(
         return 1;
     }
 
-    // Jump word
-    if do_jump_lc(lc, info) {
+    // Pertain word (e.g. "Sep of 03" — "03" is the year, not the day).
+    // Checked before jump because "of" is in both sets.
+    if do_pertain_lc(lc, info) {
+        if ymd.count == 1 && ymd.mstridx.is_some() {
+            // Look past intervening jump/whitespace tokens to find a number.
+            let mut j = i + 1;
+            while j < len && do_jump(&tokens[j], info) {
+                j += 1;
+            }
+            if j < len {
+                if let Some(yr) = fast_parse_int(&tokens[j]) {
+                    ymd.ystridx = Some(ymd.count);
+                    ymd.push(yr);
+                    return j + 1 - i;
+                }
+            }
+        }
         return 1;
     }
 
-    // Pertain word
-    if do_pertain_lc(lc, info) {
+    // Jump word
+    if do_jump_lc(lc, info) {
         return 1;
     }
 
