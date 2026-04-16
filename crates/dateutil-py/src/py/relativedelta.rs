@@ -3,8 +3,73 @@ use super::conv;
 use chrono::{Datelike, NaiveDateTime};
 use dateutil::common;
 use dateutil::relativedelta::{RelativeDelta, RelativeDeltaBuilder};
+use pyo3::exceptions::{PyDeprecationWarning, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDate, PyDateTime, PyDelta, PyDeltaAccess, PyTzInfoAccess};
+
+/// Split a float into (integer_part, fractional_part) where both carry
+/// the sign of the original value (same semantics as Python's ``math.modf``).
+#[inline]
+fn split_float(f: f64) -> (f64, f64) {
+    let trunc = f.trunc();
+    (trunc, f - trunc)
+}
+
+/// Redistribute fractional portions of the relative time fields into the
+/// next-smaller unit, following python-dateutil's conventions:
+/// ``days → hours → minutes → seconds → microseconds``.
+///
+/// Returns the normalized ``(days, hours, minutes, seconds, microseconds)``
+/// as integers. ``weeks`` is folded into ``days`` by the caller.
+fn distribute_fractionals(
+    days: f64,
+    hours: f64,
+    minutes: f64,
+    seconds: f64,
+    microseconds: f64,
+) -> (i32, i32, i32, i32, i64) {
+    let (days_int, day_frac) = split_float(days);
+    let (hours_int, hour_frac) = split_float(hours + day_frac * 24.0);
+    let (minutes_int, min_frac) = split_float(minutes + hour_frac * 60.0);
+    let (seconds_int, sec_frac) = split_float(seconds + min_frac * 60.0);
+    let micros_int = (microseconds + sec_frac * 1_000_000.0).round() as i64;
+    (
+        days_int as i32,
+        hours_int as i32,
+        minutes_int as i32,
+        seconds_int as i32,
+        micros_int,
+    )
+}
+
+/// Ensure an integer-only relative field (years, months) carries no
+/// fractional component. Accepts ``1.0`` silently but rejects ``1.5``.
+fn require_integer_relative(name: &str, v: f64) -> PyResult<i32> {
+    if v.fract() != 0.0 {
+        return Err(PyValueError::new_err(format!(
+            "Non-integer {name} are ambiguous and not currently supported."
+        )));
+    }
+    Ok(v as i32)
+}
+
+/// Coerce an absolute field (year, month, day, hour, minute, second,
+/// microsecond). If the caller passed a float with a fractional part,
+/// emit a DeprecationWarning matching python-dateutil, then round to int.
+fn coerce_absolute(py: Python<'_>, name: &str, v: Option<f64>) -> PyResult<Option<i32>> {
+    let Some(raw) = v else { return Ok(None) };
+    if raw.fract() != 0.0 {
+        let msg = std::ffi::CString::new(format!(
+            "Non-integer value passed as absolute {name}. \
+             This is not a well-defined condition and will raise \
+             errors in future versions."
+        ))
+        .expect("warning message never contains NUL");
+        let category = py.get_type::<PyDeprecationWarning>();
+        PyErr::warn(py, &category.into_any(), msg.as_c_str(), 1)?;
+    }
+    Ok(Some(raw.round() as i32))
+}
 
 /// Python wrapper for dateutil::relativedelta::RelativeDelta.
 #[pyclass(name = "relativedelta", from_py_object)]
@@ -18,8 +83,8 @@ impl PyRelativeDelta {
     #[new]
     #[pyo3(signature = (
         dt1=None, dt2=None,
-        years=0, months=0, days=0, weeks=0,
-        hours=0, minutes=0, seconds=0, microseconds=0,
+        years=0.0, months=0.0, days=0.0, weeks=0.0,
+        hours=0.0, minutes=0.0, seconds=0.0, microseconds=0.0,
         leapdays=0,
         year=None, month=None, day=None,
         weekday=None,
@@ -28,27 +93,28 @@ impl PyRelativeDelta {
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
+        py: Python<'_>,
         dt1: Option<&Bound<'_, PyAny>>,
         dt2: Option<&Bound<'_, PyAny>>,
-        years: i32,
-        months: i32,
-        days: i32,
-        weeks: i32,
-        hours: i32,
-        minutes: i32,
-        seconds: i32,
-        microseconds: i64,
+        years: f64,
+        months: f64,
+        days: f64,
+        weeks: f64,
+        hours: f64,
+        minutes: f64,
+        seconds: f64,
+        microseconds: f64,
         leapdays: i32,
-        year: Option<i32>,
-        month: Option<i32>,
-        day: Option<i32>,
+        year: Option<f64>,
+        month: Option<f64>,
+        day: Option<f64>,
         weekday: Option<Bound<'_, PyAny>>,
         yearday: Option<i32>,
         nlyearday: Option<i32>,
-        hour: Option<i32>,
-        minute: Option<i32>,
-        second: Option<i32>,
-        microsecond: Option<i32>,
+        hour: Option<f64>,
+        minute: Option<f64>,
+        second: Option<f64>,
+        microsecond: Option<f64>,
     ) -> PyResult<Self> {
         // If both dt1 and dt2 are provided, compute the difference
         // (matches python-dateutil's relativedelta(dt1, dt2) API)
@@ -57,7 +123,7 @@ impl PyRelativeDelta {
             let (ndt2, aware2) = py_any_to_ndt_for_diff(d2)?;
 
             if aware1 != aware2 {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
+                return Err(PyTypeError::new_err(
                     "can't compare offset-naive and offset-aware datetimes",
                 ));
             }
@@ -67,24 +133,32 @@ impl PyRelativeDelta {
             });
         }
 
+        let years_i = require_integer_relative("years", years)?;
+        let months_i = require_integer_relative("months", months)?;
+
+        // Fold weeks into days (both may be fractional) and redistribute
+        // fractional parts of days/hours/minutes/seconds into the next unit.
+        let days_total = days + weeks * 7.0;
+        let (days_int, hours_int, minutes_int, seconds_int, microseconds_int) =
+            distribute_fractionals(days_total, hours, minutes, seconds, microseconds);
+
         let mut builder = RelativeDeltaBuilder::new()
-            .years(years)
-            .months(months)
-            .days(days)
-            .weeks(weeks)
-            .hours(hours)
-            .minutes(minutes)
-            .seconds(seconds)
-            .microseconds(microseconds)
+            .years(years_i)
+            .months(months_i)
+            .days(days_int)
+            .hours(hours_int)
+            .minutes(minutes_int)
+            .seconds(seconds_int)
+            .microseconds(microseconds_int)
             .leapdays(leapdays);
 
-        if let Some(v) = year {
+        if let Some(v) = coerce_absolute(py, "year", year)? {
             builder = builder.year(v);
         }
-        if let Some(v) = month {
+        if let Some(v) = coerce_absolute(py, "month", month)? {
             builder = builder.month(v);
         }
-        if let Some(v) = day {
+        if let Some(v) = coerce_absolute(py, "day", day)? {
             builder = builder.day(v);
         }
         if let Some(ref wd) = weekday {
@@ -92,8 +166,7 @@ impl PyRelativeDelta {
                 py_wd.into()
             } else {
                 let day: u8 = wd.extract()?;
-                common::Weekday::try_from(day)
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
+                common::Weekday::try_from(day).map_err(|e| PyValueError::new_err(e.to_string()))?
             };
             builder = builder.weekday(core_wd);
         }
@@ -103,22 +176,22 @@ impl PyRelativeDelta {
         if let Some(v) = nlyearday {
             builder = builder.nlyearday(v);
         }
-        if let Some(v) = hour {
+        if let Some(v) = coerce_absolute(py, "hour", hour)? {
             builder = builder.hour(v);
         }
-        if let Some(v) = minute {
+        if let Some(v) = coerce_absolute(py, "minute", minute)? {
             builder = builder.minute(v);
         }
-        if let Some(v) = second {
+        if let Some(v) = coerce_absolute(py, "second", second)? {
             builder = builder.second(v);
         }
-        if let Some(v) = microsecond {
+        if let Some(v) = coerce_absolute(py, "microsecond", microsecond)? {
             builder = builder.microsecond(v);
         }
 
         let inner = builder
             .build()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self { inner })
     }
 
@@ -141,6 +214,14 @@ impl PyRelativeDelta {
         Ok(Self {
             inner: RelativeDelta::from_diff(ndt1, ndt2),
         })
+    }
+
+    /// Return a normalized copy where fractional components have cascaded
+    /// into integer fields. dateutil-rs normalizes at construction time, so
+    /// this is effectively ``self.clone()`` — the method exists to match
+    /// python-dateutil's API.
+    fn normalized(&self) -> Self {
+        self.clone()
     }
 
     /// Add this delta to a datetime.

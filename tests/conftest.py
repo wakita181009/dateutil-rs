@@ -80,59 +80,9 @@ _XFAIL_CLASS_EXCEPTIONS = {
 # Keyed by (file_stem, class_or_empty, test_name).
 _RUST_XFAIL = {
     # =======================================================================
-    # relativedelta: float arguments not supported
+    # relativedelta: fractional storage not supported (repr needs exact float)
     # =======================================================================
-    ("test_relativedelta", "RelativeDeltaTest", "testAdditionFloatFractionals"),
-    ("test_relativedelta", "RelativeDeltaTest", "testAdditionFloatValue"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalDays"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalHours"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalMinutes"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalMonth"),
-    (
-        "test_relativedelta",
-        "RelativeDeltaTest",
-        "testRelativeDeltaFractionalNegativeDays",
-    ),
-    (
-        "test_relativedelta",
-        "RelativeDeltaTest",
-        "testRelativeDeltaFractionalNegativeOverflow",
-    ),
-    (
-        "test_relativedelta",
-        "RelativeDeltaTest",
-        "testRelativeDeltaFractionalPositiveOverflow",
-    ),
-    (
-        "test_relativedelta",
-        "RelativeDeltaTest",
-        "testRelativeDeltaFractionalPositiveOverflow2",
-    ),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalRepr"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalSeconds"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalWeeks"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalYear"),
-    (
-        "test_relativedelta",
-        "RelativeDeltaTest",
-        "testRelativeDeltaNormalizeFractionalDays",
-    ),
-    (
-        "test_relativedelta",
-        "RelativeDeltaTest",
-        "testRelativeDeltaNormalizeFractionalDays2",
-    ),
-    (
-        "test_relativedelta",
-        "RelativeDeltaTest",
-        "testRelativeDeltaNormalizeFractionalMinutes",
-    ),
-    (
-        "test_relativedelta",
-        "RelativeDeltaTest",
-        "testRelativeDeltaNormalizeFractionalSeconds",
-    ),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalAbsolutes"),
     # -- Rust pyclass not subclassable --
     ("test_relativedelta", "RelativeDeltaTest", "testInheritance"),
     # =======================================================================
