@@ -270,7 +270,7 @@ fn bench_rrule_iter(c: &mut Criterion) {
             .build()
             .unwrap();
         b.iter(|| {
-            black_box(rule.all());
+            black_box(rule.all().unwrap());
         })
     });
 
@@ -281,7 +281,7 @@ fn bench_rrule_iter(c: &mut Criterion) {
             .build()
             .unwrap();
         b.iter(|| {
-            black_box(rule.all());
+            black_box(rule.all().unwrap());
         })
     });
 
@@ -292,7 +292,7 @@ fn bench_rrule_iter(c: &mut Criterion) {
             .build()
             .unwrap();
         b.iter(|| {
-            black_box(rule.all());
+            black_box(rule.all().unwrap());
         })
     });
 
@@ -303,7 +303,7 @@ fn bench_rrule_iter(c: &mut Criterion) {
             .build()
             .unwrap();
         b.iter(|| {
-            black_box(rule.all());
+            black_box(rule.all().unwrap());
         })
     });
 
@@ -314,7 +314,7 @@ fn bench_rrule_iter(c: &mut Criterion) {
             .build()
             .unwrap();
         b.iter(|| {
-            black_box(rule.all());
+            black_box(rule.all().unwrap());
         })
     });
 
@@ -330,7 +330,7 @@ fn bench_rrule_iter(c: &mut Criterion) {
             .build()
             .unwrap();
         b.iter(|| {
-            black_box(rule.all());
+            black_box(rule.all().unwrap());
         })
     });
 
@@ -342,7 +342,7 @@ fn bench_rrule_iter(c: &mut Criterion) {
             .build()
             .unwrap();
         b.iter(|| {
-            black_box(rule.all());
+            black_box(rule.all().unwrap());
         })
     });
 
@@ -355,7 +355,7 @@ fn bench_rrule_iter(c: &mut Criterion) {
             .build()
             .unwrap();
         b.iter(|| {
-            black_box(rule.all());
+            black_box(rule.all().unwrap());
         })
     });
 }
@@ -406,7 +406,7 @@ fn bench_rruleset(c: &mut Criterion) {
                 .unwrap();
             rset.rrule(rule1);
             rset.rrule(rule2);
-            black_box(rset.all());
+            black_box(rset.all().unwrap());
         })
     });
 
@@ -424,7 +424,7 @@ fn bench_rruleset(c: &mut Criterion) {
                 rset.exdate(dt(2020, 1, 4 + i * 7, 9, 0, 0));
                 rset.exdate(dt(2020, 1, 5 + i * 7, 9, 0, 0));
             }
-            black_box(rset.all());
+            black_box(rset.all().unwrap());
         })
     });
 
@@ -444,7 +444,7 @@ fn bench_rruleset(c: &mut Criterion) {
                 .build()
                 .unwrap();
             rset.exrule(exrule);
-            black_box(rset.all());
+            black_box(rset.all().unwrap());
         })
     });
 
@@ -454,7 +454,7 @@ fn bench_rruleset(c: &mut Criterion) {
             for i in 0..50 {
                 rset.rdate(dt(2020, 1, 1, 9, 0, 0) + chrono::Duration::days(i * 3));
             }
-            black_box(rset.all());
+            black_box(rset.all().unwrap());
         })
     });
 }
@@ -522,7 +522,7 @@ fn bench_rrulestr(c: &mut Criterion) {
                 false,
             )
             .unwrap();
-            black_box(result.all());
+            black_box(result.all().unwrap());
         })
     });
 }

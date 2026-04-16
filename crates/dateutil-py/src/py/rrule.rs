@@ -10,6 +10,7 @@ use dateutil::rrule::{
     search_after, search_before, search_between, search_xafter, signed_index, slice_sorted,
     Frequency, RRule, RRuleBuilder, Recurrence,
 };
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PyList, PySlice};
 
@@ -26,7 +27,7 @@ fn extract_byweekday_any(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Weekday>> {
     // Try as a single int (0-6)
     if let Ok(n) = obj.extract::<u8>() {
         let wd = Weekday::new(n, None)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         return Ok(vec![wd]);
     }
     // Then try as any iterable (list, tuple, etc.)
@@ -42,7 +43,7 @@ fn extract_byweekday_any(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Weekday>> {
             result.push(wd.into());
         } else if let Ok(n) = item.extract::<u8>() {
             let wd = Weekday::new(n, None)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
             result.push(wd);
         } else {
             return Err(pyo3::exceptions::PyTypeError::new_err(
@@ -83,7 +84,13 @@ impl PyRRule {
         if !self.cache_enabled {
             return None;
         }
-        Some(self.cache.get_or_init(|| Arc::new(self.inner.all())))
+        Some(self.cache.get_or_init(|| {
+            Arc::new(
+                self.inner
+                    .all()
+                    .expect("cache init: finite rrule should not fail"),
+            )
+        }))
     }
 }
 
@@ -131,7 +138,7 @@ impl PyRRule {
         cache: bool,
     ) -> PyResult<Self> {
         let f = Frequency::try_from(freq)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let mut builder = RRuleBuilder::new(f).interval(interval);
 
         if let Some(obj) = dtstart {
@@ -197,7 +204,7 @@ impl PyRRule {
 
         let inner = builder
             .build()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let cache_enabled = cache && inner.is_finite();
         Ok(Self {
             inner: Arc::new(inner),
@@ -312,12 +319,13 @@ impl PyRRule {
             return Ok(cached.to_vec());
         }
         if !self.inner.is_finite() {
-            return Err(pyo3::exceptions::PyValueError::new_err(
+            return Err(PyValueError::new_err(
                 "all() called on infinite recurrence (set count or until)",
             ));
         }
         let inner = &self.inner;
-        Ok(py.detach(|| inner.all()))
+        py.detach(|| inner.all())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     #[pyo3(signature = (dt, inc=false))]
@@ -393,7 +401,7 @@ impl PyRRule {
             return Ok(cached.len());
         }
         self.inner.len().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(
+            PyValueError::new_err(
                 "count() called on infinite recurrence (set count or until)",
             )
         })
@@ -466,7 +474,7 @@ impl PyRRule {
         if let Some(fv) = freq {
             builder = builder.freq(
                 Frequency::try_from(fv)
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?,
             );
         }
         if let Some(obj) = dtstart {
@@ -522,7 +530,7 @@ impl PyRRule {
 
         let inner = builder
             .build()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let cache_val = cache.unwrap_or(self.cache_enabled);
         let cache_enabled = cache_val && inner.is_finite();
         Ok(Self {
@@ -539,7 +547,7 @@ impl PyRRule {
             signed_index(cached, idx)
         } else {
             if idx < 0 && !self.inner.is_finite() {
-                return Err(pyo3::exceptions::PyValueError::new_err(
+                return Err(PyValueError::new_err(
                     "negative index on infinite recurrence",
                 ));
             }
@@ -562,18 +570,21 @@ impl PyRRule {
         let step_val = step.unwrap_or(1);
 
         if step_val == 0 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
+            return Err(PyValueError::new_err(
                 "slice step cannot be zero",
             ));
         }
 
         if step_val < 0 || start.is_some_and(|s| s < 0) || stop.is_some_and(|s| s < 0) {
             if !self.inner.is_finite() {
-                return Err(pyo3::exceptions::PyValueError::new_err(
+                return Err(PyValueError::new_err(
                     "negative slice index/step on infinite recurrence",
                 ));
             }
-            let all = self.inner.all();
+            let all = self
+                .inner
+                .all()
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
             let indices = slice.indices(all.len() as isize)?;
             let result = slice_sorted(&all, indices.start, indices.stop, indices.step);
             return Ok(result.into_pyobject(py)?.into_any().unbind());
@@ -615,7 +626,7 @@ impl PyRRuleIter {
             PyRRuleIterInner::Lazy(iter) => {
                 let val = iter.next();
                 if val.is_none() && iter.diverged() {
-                    return Err(pyo3::exceptions::PyValueError::new_err(
+                    return Err(PyValueError::new_err(
                         "bad combination of interval and by* filters: \
                          the recurrence rule can never produce results",
                     ));
@@ -655,7 +666,11 @@ impl PyRRuleSet {
         if !self.inner.is_finite() {
             return None;
         }
-        let result = Arc::new(self.inner.all());
+        let result = Arc::new(
+            self.inner
+                .all()
+                .expect("cache init: finite rruleset should not fail"),
+        );
         *guard = Some(Arc::clone(&result));
         Some(result)
     }
@@ -710,12 +725,13 @@ impl PyRRuleSet {
             return Ok(cached.to_vec());
         }
         if !self.inner.is_finite() {
-            return Err(pyo3::exceptions::PyValueError::new_err(
+            return Err(PyValueError::new_err(
                 "all() called on infinite recurrence (set count or until)",
             ));
         }
         let inner = &self.inner;
-        Ok(py.detach(|| inner.all()))
+        py.detach(|| inner.all())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     #[pyo3(signature = (dt, inc=false))]
@@ -782,7 +798,7 @@ impl PyRRuleSet {
             return Ok(cached.len());
         }
         self.inner.len().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(
+            PyValueError::new_err(
                 "count() called on infinite recurrence (set count or until)",
             )
         })
@@ -802,7 +818,7 @@ impl PyRRuleSet {
             signed_index(&cached, idx)
         } else {
             if idx < 0 && !self.inner.is_finite() {
-                return Err(pyo3::exceptions::PyValueError::new_err(
+                return Err(PyValueError::new_err(
                     "negative index on infinite recurrence",
                 ));
             }
@@ -825,18 +841,21 @@ impl PyRRuleSet {
         let step_val = step.unwrap_or(1);
 
         if step_val == 0 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
+            return Err(PyValueError::new_err(
                 "slice step cannot be zero",
             ));
         }
 
         if step_val < 0 || start.is_some_and(|s| s < 0) || stop.is_some_and(|s| s < 0) {
             if !self.inner.is_finite() {
-                return Err(pyo3::exceptions::PyValueError::new_err(
+                return Err(PyValueError::new_err(
                     "negative slice index/step on infinite recurrence",
                 ));
             }
-            let all = self.inner.all();
+            let all = self
+                .inner
+                .all()
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
             let indices = slice.indices(all.len() as isize)?;
             let result = slice_sorted(&all, indices.start, indices.stop, indices.step);
             return Ok(result.into_pyobject(py)?.into_any().unbind());
@@ -903,7 +922,7 @@ fn rrulestr_py(
     let dtstart = dtstart.map(py_any_to_naive_datetime).transpose()?;
     let result = py
         .detach(|| core_rrulestr(s, dtstart, forceset, compatible, unfold))
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
     match result {
         RRuleStrResult::Single(rule) => {
             let cache_enabled = cache && rule.is_finite();

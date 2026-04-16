@@ -1339,7 +1339,7 @@ mod tests {
             .count(3)
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1357,7 +1357,7 @@ mod tests {
             .count(4)
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1376,7 +1376,7 @@ mod tests {
             .count(3)
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1394,7 +1394,7 @@ mod tests {
             .count(5)
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1468,7 +1468,7 @@ mod tests {
             .bymonthday(vec![5, 10])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1487,7 +1487,7 @@ mod tests {
             .bymonth(vec![1, 3])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1549,7 +1549,7 @@ mod tests {
             .until(dt(2020, 1, 3, 0, 0, 0))
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1568,7 +1568,7 @@ mod tests {
             .count(4)
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1621,7 +1621,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 9, 0, 0),
                 dt(1997, 9, 2, 10, 0, 0),
@@ -1639,7 +1639,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 6, 0, 0),
                 dt(1997, 9, 2, 12, 0, 0),
@@ -1656,7 +1656,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 9, 0, 0),
                 dt(1997, 9, 2, 9, 1, 0),
@@ -1673,7 +1673,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 9, 0, 0),
                 dt(1997, 9, 2, 9, 0, 1),
@@ -1696,7 +1696,7 @@ mod tests {
             .byweekday(vec![FR.with_n(Some(1)), MO.with_n(Some(-1))])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1728,7 +1728,7 @@ mod tests {
             .bysetpos(vec![-1])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1751,7 +1751,7 @@ mod tests {
             .byyearday(vec![1, 100, 200, 365])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1776,7 +1776,7 @@ mod tests {
             .byeaster(vec![0])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1796,7 +1796,7 @@ mod tests {
             .byeaster(vec![-2, 1])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1823,7 +1823,7 @@ mod tests {
             .byweekday(vec![TU, TH])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1848,7 +1848,7 @@ mod tests {
             .build()
             .unwrap();
         rset.rrule(rule);
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert_eq!(results.len(), 5);
         assert_eq!(results[0], dt(2020, 1, 1, 0, 0, 0));
         assert_eq!(results[4], dt(2020, 1, 5, 0, 0, 0));
@@ -1864,7 +1864,7 @@ mod tests {
             .unwrap();
         rset.rrule(rule);
         rset.exdate(dt(2020, 1, 3, 0, 0, 0));
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1886,7 +1886,7 @@ mod tests {
             .unwrap();
         rset.rrule(rule);
         rset.rdate(dt(2020, 1, 10, 0, 0, 0));
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -1915,7 +1915,7 @@ mod tests {
             .build()
             .unwrap();
         rset.exrule(exrule);
-        let results = rset.all();
+        let results = rset.all().unwrap();
         // exrule excludes Jan 2, 4, 6, 8, 10
         assert_eq!(
             results,
@@ -1942,7 +1942,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(2000, 1, 1, 0, 0, 0),
                 dt(2004, 1, 1, 0, 0, 0),
@@ -1964,7 +1964,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(2020, 1, 15, 0, 0, 0),
                 dt(2020, 4, 15, 0, 0, 0),
@@ -1987,7 +1987,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 30, 9, 0, 0),
                 dt(1997, 10, 31, 9, 0, 0),
@@ -2008,7 +2008,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(2020, 12, 30, 0, 0, 0),
                 dt(2020, 12, 31, 0, 0, 0),
@@ -2030,7 +2030,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 22, 0, 0),
                 dt(1997, 9, 2, 23, 0, 0),
@@ -2054,7 +2054,7 @@ mod tests {
             .byweekday(vec![crate::common::MO])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2075,7 +2075,7 @@ mod tests {
             .byweekday(vec![crate::common::TU, crate::common::TH])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         // 1998 week 1: starts Dec 29, 1997. Tue=Dec 30, Thu=Jan 1
         assert_eq!(results.len(), 4);
         for r in &results {
@@ -2094,7 +2094,7 @@ mod tests {
             .byweekday(vec![crate::common::MO])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 3);
         // Each result should be a Monday in late December
         for r in &results {
@@ -2112,7 +2112,7 @@ mod tests {
             .byweekday(vec![crate::common::MO])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         // Should produce results only in years with 53 weeks
         assert!(!results.is_empty() || results.is_empty()); // no panic
         for r in &results {
@@ -2135,7 +2135,7 @@ mod tests {
             .wkst(0) // Monday
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2158,7 +2158,7 @@ mod tests {
             .wkst(6) // Sunday
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         // With SU as week start, Sun Sep 7 falls in a different week than Tue Sep 2
         assert_eq!(
             results,
@@ -2184,7 +2184,7 @@ mod tests {
             .byweekday(vec![crate::common::TU, crate::common::TH])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 6);
         for r in &results {
             let wd = r.weekday().num_days_from_monday();
@@ -2204,7 +2204,7 @@ mod tests {
             .byweekday(vec![crate::common::TU, crate::common::TH])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 4);
         for r in &results {
             let m = r.month();
@@ -2227,7 +2227,7 @@ mod tests {
             ])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 4);
         for r in &results {
             assert_eq!(r.month(), 1);
@@ -2250,7 +2250,7 @@ mod tests {
             .byyearday(vec![-1, -2])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2283,7 +2283,7 @@ mod tests {
             .bysetpos(vec![1, -1])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 4);
         // 1998 Jan: first workday = Thu Jan 1, last workday = Fri Jan 30
         assert_eq!(results[0], dt(1998, 1, 1, 9, 0, 0));
@@ -2303,7 +2303,7 @@ mod tests {
             .bymonth(vec![1, 3])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2328,7 +2328,7 @@ mod tests {
             .byweekday(vec![crate::common::TU, crate::common::TH])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2353,7 +2353,7 @@ mod tests {
             .byhour(vec![9, 17])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2375,7 +2375,7 @@ mod tests {
             .bysecond(vec![0])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2396,7 +2396,7 @@ mod tests {
             .byminute(vec![0, 15, 30, 45])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2418,7 +2418,7 @@ mod tests {
             .byhour(vec![9, 10])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 8);
         for r in &results {
             assert!(r.hour() == 9 || r.hour() == 10);
@@ -2434,7 +2434,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 9, 58, 0),
                 dt(1997, 9, 2, 9, 59, 0),
@@ -2453,7 +2453,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 9, 59, 58),
                 dt(1997, 9, 2, 9, 59, 59),
@@ -2472,7 +2472,7 @@ mod tests {
             .bysecond(vec![0, 30])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2493,7 +2493,7 @@ mod tests {
             .bymonth(vec![1])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         // Should skip Dec 31 hours and start from Jan 1
         assert_eq!(results.len(), 3);
         for r in &results {
@@ -2510,7 +2510,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 30, 22, 0, 0),
                 dt(1997, 9, 30, 23, 0, 0),
@@ -2534,7 +2534,7 @@ mod tests {
             .bymonthday(vec![29])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2554,7 +2554,7 @@ mod tests {
             .bymonthday(vec![-1])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2575,7 +2575,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(2000, 2, 27, 0, 0, 0),
                 dt(2000, 2, 28, 0, 0, 0),
@@ -2594,7 +2594,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(2001, 2, 27, 0, 0, 0),
                 dt(2001, 2, 28, 0, 0, 0),
@@ -2614,7 +2614,7 @@ mod tests {
             .count(0)
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert!(results.is_empty());
     }
 
@@ -2625,7 +2625,7 @@ mod tests {
             .count(1)
             .build()
             .unwrap();
-        assert_eq!(rule.all(), vec![dt(2020, 1, 1, 0, 0, 0)]);
+        assert_eq!(rule.all().unwrap(), vec![dt(2020, 1, 1, 0, 0, 0)]);
     }
 
     // ===================================================================
@@ -2763,7 +2763,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(2020, 12, 28, 0, 0, 0),
                 dt(2021, 1, 4, 0, 0, 0),
@@ -2780,7 +2780,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(2020, 11, 15, 0, 0, 0),
                 dt(2020, 12, 15, 0, 0, 0),
@@ -2805,7 +2805,7 @@ mod tests {
             .bysecond(vec![0])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2831,7 +2831,7 @@ mod tests {
             .bysecond(vec![0])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -2883,7 +2883,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(2000, 1, 1, 0, 0, 0),
                 dt(2100, 1, 1, 0, 0, 0),
@@ -2900,7 +2900,7 @@ mod tests {
             .count(3)
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 3);
         assert_eq!(results[0], dt(2020, 1, 6, 0, 0, 0));
         // ~1 year gap
@@ -2919,7 +2919,7 @@ mod tests {
             .count(5)
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         // Jan 31, Mar 31, May 31, Jul 31, Aug 31
         assert_eq!(
             results,
@@ -2944,8 +2944,8 @@ mod tests {
             .count(3)
             .build()
             .unwrap();
-        let results1 = rule.all();
-        let results2 = rule.all();
+        let results1 = rule.all().unwrap();
+        let results2 = rule.all().unwrap();
         assert_eq!(results1, results2);
     }
 
@@ -2964,7 +2964,7 @@ mod tests {
             .byweekday(vec![crate::common::MO])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 3);
         for r in &results {
             assert_eq!(r.month(), 1);
@@ -2986,7 +2986,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 9, 0, 0),
                 dt(1997, 9, 2, 9, 1, 30),
@@ -3008,7 +3008,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(
-            rule.all(),
+            rule.all().unwrap(),
             vec![
                 dt(1997, 9, 2, 23, 58, 0),
                 dt(1997, 9, 2, 23, 59, 0),
@@ -3029,7 +3029,7 @@ mod tests {
             .until(dt(2020, 1, 3, 9, 0, 0))
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 3);
         assert_eq!(*results.last().unwrap(), dt(2020, 1, 3, 9, 0, 0));
     }
@@ -3042,7 +3042,7 @@ mod tests {
             .until(dt(2020, 1, 3, 8, 0, 0))
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 2);
     }
 
@@ -3053,7 +3053,7 @@ mod tests {
             .until(dt(2020, 1, 1, 0, 0, 0))
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert!(results.is_empty());
     }
 
@@ -3071,7 +3071,7 @@ mod tests {
             .byminute(vec![0, 1])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -3096,7 +3096,7 @@ mod tests {
             .byhour(vec![9, 10])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -3122,7 +3122,7 @@ mod tests {
             .byminute(vec![0, 30])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -3152,7 +3152,7 @@ mod tests {
             .bysetpos(vec![1])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -3175,7 +3175,7 @@ mod tests {
             .bysetpos(vec![-1])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -3199,12 +3199,12 @@ mod tests {
             .bymonthday(vec![5, 10])
             .build()
             .unwrap();
-        let original_results = original.all();
+        let original_results = original.all().unwrap();
         let display_str = original.to_string();
 
         let reparsed =
             crate::rrule::parse::rrulestr(&display_str, None, false, false, true).unwrap();
-        let reparsed_results = reparsed.all();
+        let reparsed_results = reparsed.all().unwrap();
         assert_eq!(original_results, reparsed_results);
     }
 
@@ -3217,12 +3217,12 @@ mod tests {
             .byweekday(vec![crate::common::TU, crate::common::TH])
             .build()
             .unwrap();
-        let original_results = original.all();
+        let original_results = original.all().unwrap();
         let display_str = original.to_string();
 
         let reparsed =
             crate::rrule::parse::rrulestr(&display_str, None, false, false, true).unwrap();
-        let reparsed_results = reparsed.all();
+        let reparsed_results = reparsed.all().unwrap();
         assert_eq!(original_results, reparsed_results);
     }
 
@@ -3235,12 +3235,12 @@ mod tests {
             .byweekday(vec![MO.with_n(Some(1)), FR.with_n(Some(-1))])
             .build()
             .unwrap();
-        let original_results = original.all();
+        let original_results = original.all().unwrap();
         let display_str = original.to_string();
 
         let reparsed =
             crate::rrule::parse::rrulestr(&display_str, None, false, false, true).unwrap();
-        let reparsed_results = reparsed.all();
+        let reparsed_results = reparsed.all().unwrap();
         assert_eq!(original_results, reparsed_results);
     }
 
@@ -3254,12 +3254,12 @@ mod tests {
             .bysecond(vec![0])
             .build()
             .unwrap();
-        let original_results = original.all();
+        let original_results = original.all().unwrap();
         let display_str = original.to_string();
 
         let reparsed =
             crate::rrule::parse::rrulestr(&display_str, None, false, false, true).unwrap();
-        let reparsed_results = reparsed.all();
+        let reparsed_results = reparsed.all().unwrap();
         assert_eq!(original_results, reparsed_results);
     }
 
@@ -3540,13 +3540,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "all() called on infinite")]
-    fn test_all_panics_on_infinite() {
+    fn test_all_errors_on_infinite() {
         let rule = RRuleBuilder::new(Frequency::Daily)
             .dtstart(dt(2020, 1, 1, 0, 0, 0))
             .build()
             .unwrap();
-        let _ = rule.all();
+        assert!(rule.all().is_err());
     }
 
     // ---- Coverage: len() ----
@@ -3664,7 +3663,7 @@ mod tests {
             .byweekday(vec![MO.with_n(Some(2))])
             .build()
             .unwrap();
-        let results = rule.all();
+        let results = rule.all().unwrap();
         assert_eq!(results.len(), 3);
     }
 }

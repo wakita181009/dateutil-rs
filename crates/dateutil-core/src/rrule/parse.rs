@@ -441,7 +441,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(
             all,
             vec![
@@ -462,7 +462,7 @@ mod tests {
             true,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(
             all,
             vec![
@@ -543,7 +543,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(
             all,
             vec![
@@ -569,7 +569,7 @@ mod tests {
             true,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(
             all,
             vec![
@@ -591,7 +591,7 @@ mod tests {
             true,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(
             all,
             vec![
@@ -616,7 +616,7 @@ mod tests {
             true,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(
             all,
             vec![
@@ -638,7 +638,7 @@ mod tests {
             true,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         // Should be sorted
         assert_eq!(
             all,
@@ -660,7 +660,7 @@ mod tests {
             true,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         // Daily: 1,2,3,4,5,6; Exrule excludes 1,3,5
         assert_eq!(
             all,
@@ -688,7 +688,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(result, RRuleStrResult::Set(_)));
-        let all = result.all();
+        let all = result.all().unwrap();
         // dtstart is added as rdate, but dedup should handle it
         assert!(all.contains(&dt(2020, 1, 1, 0, 0, 0)));
     }
@@ -708,7 +708,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(result, RRuleStrResult::Set(_)));
-        let all = result.all();
+        let all = result.all().unwrap();
         // Should have results from both rules, merged and sorted
         assert!(!all.is_empty());
         // Check sorting
@@ -732,7 +732,7 @@ mod tests {
             true, // unfold enabled
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(all.len(), 3);
     }
 
@@ -750,7 +750,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(all.len(), 3);
     }
 
@@ -861,7 +861,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(all.len(), 4);
         for r in &all {
             assert!(r.month() == 1 || r.month() == 3);
@@ -879,7 +879,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(all.len(), 3);
         // Last workday of each month
     }
@@ -894,7 +894,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(
             all,
             vec![dt(1997, 9, 2, 9, 0, 0), dt(1997, 9, 2, 17, 0, 0),]
@@ -911,7 +911,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(all.len(), 3);
     }
 
@@ -925,7 +925,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(all.len(), 3);
     }
 
@@ -939,7 +939,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(all.len(), 3);
     }
 
@@ -953,7 +953,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(
             all,
             vec![
@@ -1023,7 +1023,7 @@ mod tests {
             false,
         )
         .unwrap();
-        let all = result.all();
+        let all = result.all().unwrap();
         assert_eq!(all.len(), 3);
     }
 
@@ -1042,7 +1042,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(result, RRuleStrResult::Single(_)));
-        assert_eq!(result.all().len(), 2);
+        assert_eq!(result.all().unwrap().len(), 2);
     }
 
     #[test]
@@ -1056,7 +1056,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(result, RRuleStrResult::Set(_)));
-        assert_eq!(result.all().len(), 2);
+        assert_eq!(result.all().unwrap().len(), 2);
     }
 
     // ===================================================================
@@ -1091,6 +1091,6 @@ mod tests {
         let input = "DTSTART:20200101T000000\nRRULE:FREQ=DAILY;\n COUNT=3";
         let result = rrulestr(input, None, false, false, true);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().all().len(), 3);
+        assert_eq!(result.unwrap().all().unwrap().len(), 3);
     }
 }

@@ -345,7 +345,7 @@ fn extract_iso_string(obj: &Bound<'_, pyo3::PyAny>) -> PyResult<String> {
 fn make_dateutil_utc<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyTzInfo>> {
     let tz_mod = py.import("dateutil.tz")?;
     let obj = tz_mod.getattr("tzutc")?.call0()?;
-    obj.downcast_into::<PyTzInfo>()
+    obj.cast_into::<PyTzInfo>()
         .map_err(|e| pyo3::exceptions::PyTypeError::new_err(e.to_string()))
 }
 
@@ -353,7 +353,7 @@ fn make_dateutil_utc<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyTzInfo>> {
 fn make_dateutil_offset<'py>(py: Python<'py>, secs: i32) -> PyResult<Bound<'py, PyTzInfo>> {
     let tz_mod = py.import("dateutil.tz")?;
     let obj = tz_mod.getattr("tzoffset")?.call1((py.None(), secs))?;
-    obj.downcast_into::<PyTzInfo>()
+    obj.cast_into::<PyTzInfo>()
         .map_err(|e| pyo3::exceptions::PyTypeError::new_err(e.to_string()))
 }
 

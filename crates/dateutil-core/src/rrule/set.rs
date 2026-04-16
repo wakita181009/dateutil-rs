@@ -296,7 +296,7 @@ mod tests {
             .unwrap();
         rset.rrule(rule1);
         rset.rrule(rule2);
-        let results = rset.all();
+        let results = rset.all().unwrap();
         // Merged in order, no duplicates
         assert_eq!(
             results,
@@ -330,7 +330,7 @@ mod tests {
             .unwrap();
         rset.rrule(rule1);
         rset.rrule(rule2);
-        let results = rset.all();
+        let results = rset.all().unwrap();
         // Same dates from both rules — should be deduplicated
         assert_eq!(results.len(), 3);
     }
@@ -345,7 +345,7 @@ mod tests {
         rset.rdate(dt(2020, 1, 1, 0, 0, 0));
         rset.rdate(dt(2020, 1, 2, 0, 0, 0));
         rset.exdate(dt(2020, 1, 1, 0, 0, 0));
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert_eq!(results, vec![dt(2020, 1, 2, 0, 0, 0)]);
     }
 
@@ -364,7 +364,7 @@ mod tests {
         rset.rrule(rule);
         rset.exdate(dt(2020, 1, 2, 0, 0, 0));
         rset.exdate(dt(2020, 1, 4, 0, 0, 0));
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -397,7 +397,7 @@ mod tests {
             .unwrap();
         rset.exrule(exrule); // excludes Jan 1, 3, 5, 7
         rset.exdate(dt(2020, 1, 2, 0, 0, 0)); // also exclude Jan 2
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert_eq!(
             results,
             vec![dt(2020, 1, 4, 0, 0, 0), dt(2020, 1, 6, 0, 0, 0),]
@@ -418,7 +418,7 @@ mod tests {
             .unwrap();
         rset.rrule(rule.clone());
         rset.exrule(rule);
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert!(results.is_empty());
     }
 
@@ -553,7 +553,7 @@ mod tests {
     fn test_rruleset_empty() {
         let rset = RRuleSet::new();
         assert!(rset.is_finite());
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert!(results.is_empty());
     }
 
@@ -567,7 +567,7 @@ mod tests {
         rset.rdate(dt(2020, 3, 15, 0, 0, 0));
         rset.rdate(dt(2020, 1, 1, 0, 0, 0));
         rset.rdate(dt(2020, 6, 30, 0, 0, 0));
-        let results = rset.all();
+        let results = rset.all().unwrap();
         // Should be sorted
         assert_eq!(
             results,
@@ -595,7 +595,7 @@ mod tests {
         // Add exdates in reverse order
         rset.exdate(dt(2020, 1, 4, 0, 0, 0));
         rset.exdate(dt(2020, 1, 2, 0, 0, 0));
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert_eq!(
             results,
             vec![
@@ -623,7 +623,7 @@ mod tests {
         // Add rdates on Wednesdays
         rset.rdate(dt(2020, 1, 8, 9, 0, 0));
         rset.rdate(dt(2020, 1, 15, 9, 0, 0));
-        let results = rset.all();
+        let results = rset.all().unwrap();
         assert_eq!(
             results,
             vec![
