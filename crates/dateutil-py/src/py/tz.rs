@@ -76,11 +76,20 @@ pub struct PyTzOffset {
 #[pymethods]
 impl PyTzOffset {
     #[new]
-    #[pyo3(signature = (name=None, offset=0))]
-    fn new(name: Option<&str>, offset: i32) -> Self {
-        Self {
-            inner: TzOffset::new(name, offset),
-        }
+    #[pyo3(signature = (name=None, offset=None))]
+    fn new(name: Option<&str>, offset: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let secs: i32 = match offset {
+            Some(obj) if obj.is_instance_of::<PyDelta>() => {
+                // Accept timedelta — convert to total seconds (matches python-dateutil)
+                let total: f64 = obj.call_method0("total_seconds")?.extract()?;
+                total as i32
+            }
+            Some(obj) => obj.extract::<i32>()?,
+            None => 0,
+        };
+        Ok(Self {
+            inner: TzOffset::new(name, secs),
+        })
     }
 
     fn utcoffset<'py>(
