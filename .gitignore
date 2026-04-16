@@ -26,3 +26,6 @@ benchmarks/results.json
 
 # Maturin build artifacts
 *.dSYM/
+
+# macOS
+.DS_Store

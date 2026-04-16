@@ -26,8 +26,7 @@ fn extract_byweekday_any(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Weekday>> {
     }
     // Try as a single int (0-6)
     if let Ok(n) = obj.extract::<u8>() {
-        let wd = Weekday::new(n, None)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let wd = Weekday::new(n, None).map_err(|e| PyValueError::new_err(e.to_string()))?;
         return Ok(vec![wd]);
     }
     // Then try as any iterable (list, tuple, etc.)
@@ -42,8 +41,7 @@ fn extract_byweekday_any(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Weekday>> {
         if let Ok(wd) = item.extract::<PyWeekday>() {
             result.push(wd.into());
         } else if let Ok(n) = item.extract::<u8>() {
-            let wd = Weekday::new(n, None)
-                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            let wd = Weekday::new(n, None).map_err(|e| PyValueError::new_err(e.to_string()))?;
             result.push(wd);
         } else {
             return Err(pyo3::exceptions::PyTypeError::new_err(
@@ -137,8 +135,7 @@ impl PyRRule {
         bysecond: Option<Bound<'_, PyAny>>,
         cache: bool,
     ) -> PyResult<Self> {
-        let f = Frequency::try_from(freq)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let f = Frequency::try_from(freq).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let mut builder = RRuleBuilder::new(f).interval(interval);
 
         if let Some(obj) = dtstart {
@@ -401,9 +398,7 @@ impl PyRRule {
             return Ok(cached.len());
         }
         self.inner.len().ok_or_else(|| {
-            PyValueError::new_err(
-                "count() called on infinite recurrence (set count or until)",
-            )
+            PyValueError::new_err("count() called on infinite recurrence (set count or until)")
         })
     }
 
@@ -472,10 +467,8 @@ impl PyRRule {
         let mut builder = self.inner.to_builder();
 
         if let Some(fv) = freq {
-            builder = builder.freq(
-                Frequency::try_from(fv)
-                    .map_err(|e| PyValueError::new_err(e.to_string()))?,
-            );
+            builder = builder
+                .freq(Frequency::try_from(fv).map_err(|e| PyValueError::new_err(e.to_string()))?);
         }
         if let Some(obj) = dtstart {
             builder = builder.dtstart(py_any_to_naive_datetime(obj)?);
@@ -570,9 +563,7 @@ impl PyRRule {
         let step_val = step.unwrap_or(1);
 
         if step_val == 0 {
-            return Err(PyValueError::new_err(
-                "slice step cannot be zero",
-            ));
+            return Err(PyValueError::new_err("slice step cannot be zero"));
         }
 
         if step_val < 0 || start.is_some_and(|s| s < 0) || stop.is_some_and(|s| s < 0) {
@@ -798,9 +789,7 @@ impl PyRRuleSet {
             return Ok(cached.len());
         }
         self.inner.len().ok_or_else(|| {
-            PyValueError::new_err(
-                "count() called on infinite recurrence (set count or until)",
-            )
+            PyValueError::new_err("count() called on infinite recurrence (set count or until)")
         })
     }
 
@@ -841,9 +830,7 @@ impl PyRRuleSet {
         let step_val = step.unwrap_or(1);
 
         if step_val == 0 {
-            return Err(PyValueError::new_err(
-                "slice step cannot be zero",
-            ));
+            return Err(PyValueError::new_err("slice step cannot be zero"));
         }
 
         if step_val < 0 || start.is_some_and(|s| s < 0) || stop.is_some_and(|s| s < 0) {

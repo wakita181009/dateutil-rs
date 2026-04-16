@@ -15,11 +15,30 @@ _XFAIL_CLASSES = {
     ("test_tz", "TzPickleFileTest"),  # Rust objects not picklable
     ("test_tz", "TzPickleTest"),  # Rust objects not picklable
     ("test_tz", "TestEnfold"),  # enfold() not supported
-    ("test_tz", "ImaginaryDateTest"),  # resolve_imaginary needs generic tzinfo extraction
+    (
+        "test_tz",
+        "ImaginaryDateTest",
+    ),  # resolve_imaginary needs generic tzinfo extraction
     # -- parser: unimplemented features --
     ("test_parser", "TestFormat"),  # strftime round-trip not supported
     ("test_parser", "TestOutOfBounds"),  # error semantics differ
     ("test_parser", "TestParseUnimplementedCases"),  # explicitly unimplemented
+}
+
+# Tests inside an _XFAIL_CLASSES class that actually pass in dateutil-rs.
+# These are excluded from the class-wide xfail so they do not become XPASS(strict).
+_XFAIL_CLASS_EXCEPTIONS = {
+    ("test_parser", "TestParseUnimplementedCases"): {
+        "test_YmdH_M_S",
+        "test_first_century",
+        "test_era_trailing_year_with_dots",
+        "test_four_letter_day",
+        "test_on_era",
+    },
+    ("test_tz", "TZRangeTest"): {
+        "testRangeEquality",
+        "testRangeInequalityUnsupported",
+    },
 }
 
 # Individual tests that are unsupported.
@@ -34,18 +53,50 @@ _RUST_XFAIL = {
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalHours"),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalMinutes"),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalMonth"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalNegativeDays"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalNegativeOverflow"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalPositiveOverflow"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalPositiveOverflow2"),
+    (
+        "test_relativedelta",
+        "RelativeDeltaTest",
+        "testRelativeDeltaFractionalNegativeDays",
+    ),
+    (
+        "test_relativedelta",
+        "RelativeDeltaTest",
+        "testRelativeDeltaFractionalNegativeOverflow",
+    ),
+    (
+        "test_relativedelta",
+        "RelativeDeltaTest",
+        "testRelativeDeltaFractionalPositiveOverflow",
+    ),
+    (
+        "test_relativedelta",
+        "RelativeDeltaTest",
+        "testRelativeDeltaFractionalPositiveOverflow2",
+    ),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalRepr"),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalSeconds"),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalWeeks"),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalYear"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaNormalizeFractionalDays"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaNormalizeFractionalDays2"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaNormalizeFractionalMinutes"),
-    ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaNormalizeFractionalSeconds"),
+    (
+        "test_relativedelta",
+        "RelativeDeltaTest",
+        "testRelativeDeltaNormalizeFractionalDays",
+    ),
+    (
+        "test_relativedelta",
+        "RelativeDeltaTest",
+        "testRelativeDeltaNormalizeFractionalDays2",
+    ),
+    (
+        "test_relativedelta",
+        "RelativeDeltaTest",
+        "testRelativeDeltaNormalizeFractionalMinutes",
+    ),
+    (
+        "test_relativedelta",
+        "RelativeDeltaTest",
+        "testRelativeDeltaNormalizeFractionalSeconds",
+    ),
     ("test_relativedelta", "RelativeDeltaTest", "testRelativeDeltaFractionalAbsolutes"),
     # -- Rust pyclass not subclassable --
     ("test_relativedelta", "RelativeDeltaTest", "testInheritance"),
@@ -113,27 +164,75 @@ _RUST_XFAIL = {
     ("test_parser", "", "test_decimal_error[Nan]"),
     ("test_parser", "", "test_parse_tzinfos_fold"),
     ("test_parser", "", "test_parse_with_tzoffset[20030925T104941.5-0300-expected4]"),
-    ("test_parser", "", "test_parser[0003-03-04-expected_datetime57-pre 12 year same month (See GH PR #293)]"),
+    (
+        "test_parser",
+        "",
+        "test_parser[0003-03-04-expected_datetime57-pre 12 year same month (See GH PR #293)]",
+    ),
     ("test_parser", "", "test_parser[0031-01-01T00:00:00-expected_datetime54-31 ad]"),
     ("test_parser", "", "test_parser[199709020908-expected_datetime11-no separator]"),
     ("test_parser", "", "test_parser[19970902090807-expected_datetime12-no separator]"),
-    ("test_parser", "", "test_parser[20030925T1049-expected_datetime7-iso stripped format strip]"),
-    ("test_parser", "", "test_parser[2016-12-21 04.2h-expected_datetime59-Fractional Hours]"),
-    ("test_parser", "", "test_parser[December.0031.30-expected_datetime58-BYd corner case (GH#687)]"),
+    (
+        "test_parser",
+        "",
+        "test_parser[20030925T1049-expected_datetime7-iso stripped format strip]",
+    ),
+    (
+        "test_parser",
+        "",
+        "test_parser[2016-12-21 04.2h-expected_datetime59-Fractional Hours]",
+    ),
+    (
+        "test_parser",
+        "",
+        "test_parser[December.0031.30-expected_datetime58-BYd corner case (GH#687)]",
+    ),
     ("test_parser", "", "test_parser_default[01h02-expected_datetime39-random format]"),
-    ("test_parser", "", "test_parser_default[01h02m03-expected_datetime38-random format]"),
+    (
+        "test_parser",
+        "",
+        "test_parser_default[01h02m03-expected_datetime38-random format]",
+    ),
     ("test_parser", "", "test_parser_default[01m02-expected_datetime41-random format]"),
-    ("test_parser", "", "test_parser_default[10 h 36-expected_datetime13-hour with letters strip]"),
-    ("test_parser", "", "test_parser_default[10 h 36.5-expected_datetime14-hour with letter strip]"),
+    (
+        "test_parser",
+        "",
+        "test_parser_default[10 h 36-expected_datetime13-hour with letters strip]",
+    ),
+    (
+        "test_parser",
+        "",
+        "test_parser_default[10 h 36.5-expected_datetime14-hour with letter strip]",
+    ),
     ("test_parser", "", "test_parser_default[10am-expected_datetime21-hour am pm]"),
     ("test_parser", "", "test_parser_default[10pm-expected_datetime22-hour am pm]"),
     ("test_parser", "", "test_parser_default[31-Dec-00-expected_datetime34-zero year]"),
-    ("test_parser", "", "test_parser_default[36 m 05 s-expected_datetime18-minutes with letters spaces]"),
-    ("test_parser", "", "test_parser_default[36 m 05-expected_datetime17-minute with letters spaces]"),
-    ("test_parser", "", "test_parser_default[36 m 5 s-expected_datetime16-minute with letters spaces]"),
-    ("test_parser", "", "test_parser_default[36 m 5-expected_datetime15-hour with letters spaces]"),
+    (
+        "test_parser",
+        "",
+        "test_parser_default[36 m 05 s-expected_datetime18-minutes with letters spaces]",
+    ),
+    (
+        "test_parser",
+        "",
+        "test_parser_default[36 m 05-expected_datetime17-minute with letters spaces]",
+    ),
+    (
+        "test_parser",
+        "",
+        "test_parser_default[36 m 5 s-expected_datetime16-minute with letters spaces]",
+    ),
+    (
+        "test_parser",
+        "",
+        "test_parser_default[36 m 5-expected_datetime15-hour with letters spaces]",
+    ),
     ("test_parser", "", "test_parser_default[Wed-expected_datetime31-weekday alone]"),
-    ("test_parser", "", "test_parser_default[Wednesday-expected_datetime32-long weekday]"),
+    (
+        "test_parser",
+        "",
+        "test_parser_default[Wednesday-expected_datetime32-long weekday]",
+    ),
     ("test_parser", "", "test_rounding_floatlike_strings[5.6h-dt0]"),
     ("test_parser", "", "test_rounding_floatlike_strings[5.6m-dt1]"),
     # =======================================================================
@@ -175,7 +274,6 @@ _RUST_XFAIL = {
     ("test_tz", "TZStrTest", "testTzStrEnd7"),
     ("test_tz", "TZStrTest", "testTzStrImaginary"),
     ("test_tz", "TZStrTest", "testTzStrInstance"),
-    ("test_tz", "TZStrTest", "testTzStrRepr"),
     ("test_tz", "TZStrTest", "testTzStrSingleton"),
     ("test_tz", "TZStrTest", "testTzStrSingletonPosix"),
     ("test_tz", "TZStrTest", "testTzStrStart1"),
@@ -214,16 +312,13 @@ _RUST_XFAIL = {
     # -- GettzTest --
     ("test_tz", "GettzTest", "testGetTZFromFile"),
     ("test_tz", "GettzTest", "testGetTZFromFileobj"),
-    ("test_tz", "GettzTest", "testGettz"),
     ("test_tz", "GettzTest", "testGettzCacheTzFile"),
-    ("test_tz", "GettzTest", "testGettzCacheTzLocal"),
     ("test_tz", "GettzTest", "testGettzTimeZoneName"),
     ("test_tz", "GettzTest", "testGMTNegHHMM"),
     ("test_tz", "GettzTest", "testGMTNegHHMMSS"),
     # -- TzLocalNixTest --
     ("test_tz", "TzLocalNixTest", "testAmbiguousNegativeUTCOffset"),
     ("test_tz", "TzLocalNixTest", "testAmbiguousPositiveUTCOffset"),
-    ("test_tz", "TzLocalNixTest", "testDSTUTC"),
     ("test_tz", "TzLocalNixTest", "testFoldIndependence"),
     ("test_tz", "TzLocalNixTest", "testFoldLondon"),
     ("test_tz", "TzLocalNixTest", "testFoldNegativeUTCOffset"),
@@ -248,7 +343,6 @@ _RUST_XFAIL = {
     ("test_tz", "", "test_gettz_set_cache_size"),
     ("test_tz", "", "test_gettz_weakref"),
     ("test_tz", "", "test_gettz_zone_wrong_type[bytes on Python 3]"),
-    ("test_tz", "", "test_gettz_zone_wrong_type[no startswith()]"),
     ("test_tz", "", "test_invalid_GNU_tzstr[-1:WART4WARST,J1,J365/25]"),
     ("test_tz", "", r"test_invalid_GNU_tzstr[,dfughdfuigpu87\xf1::]"),
     ("test_tz", "", r"test_invalid_GNU_tzstr[hdfiughdfuig,dfughdfuigpu87\xf1::]"),
@@ -290,8 +384,16 @@ _RUST_XFAIL = {
     ("test_tz", "", "test_tzoffset_singleton[args2]"),
     ("test_tz", "", "test_tzoffset_singleton[args3]"),
     ("test_tz", "", "test_tzoffset_weakref"),
-    ("test_tz", "", "test_tzstr_default_cmp[EST5EDT-EST5EDT4,M4.1.0/02:00:00,M10-5-0/02:00]"),
-    ("test_tz", "", "test_tzstr_default_cmp[EST5EDT4,M4.1.0/02:00:00,M10-5-0/02:00-EST5EDT]"),
+    (
+        "test_tz",
+        "",
+        "test_tzstr_default_cmp[EST5EDT-EST5EDT4,M4.1.0/02:00:00,M10-5-0/02:00]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_tzstr_default_cmp[EST5EDT4,M4.1.0/02:00:00,M10-5-0/02:00-EST5EDT]",
+    ),
     ("test_tz", "", "test_tzstr_default_end[EST5EDT4,95/02:00:00,298/02:00]"),
     ("test_tz", "", "test_tzstr_default_end[EST5EDT4,J96/02:00:00,J299/02:00]"),
     ("test_tz", "", "test_tzstr_default_end[EST5EDT4,J96/02:00:00,J299/02]"),
@@ -307,22 +409,62 @@ _RUST_XFAIL = {
     ("test_tz", "", "test_valid_GNU_tzstr[AEST-1100AEDT-expected7]"),
     ("test_tz", "", "test_valid_GNU_tzstr[AEST-11:00AEDT-expected8]"),
     ("test_tz", "", "test_valid_GNU_tzstr[EST+5EDT,M3.2.0/2,M11.1.0/12-expected1]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[EST5EDT,M3.2.0/0400,M11.1.0/0300-expected11]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[EST5EDT,M3.2.0/04:00,M11.1.0/03:00-expected10]"),
+    (
+        "test_tz",
+        "",
+        "test_valid_GNU_tzstr[EST5EDT,M3.2.0/0400,M11.1.0/0300-expected11]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_valid_GNU_tzstr[EST5EDT,M3.2.0/04:00,M11.1.0/03:00-expected10]",
+    ),
     ("test_tz", "", "test_valid_GNU_tzstr[EST5EDT,M3.2.0/4:00,M11.1.0/3:00-expected9]"),
     ("test_tz", "", "test_valid_GNU_tzstr[IST-2IDT,M3.4.4/26,M10.5.0-expected3]"),
     ("test_tz", "", "test_valid_GNU_tzstr[WART4WARST,J1/0,J365/25-expected2]"),
     ("test_tz", "", "test_valid_GNU_tzstr[WGT0300WGST-expected5]"),
     ("test_tz", "", "test_valid_GNU_tzstr[WGT03:00WGST-expected6]"),
     ("test_tz", "", "test_valid_GNU_tzstr[WGT3WGST,M3.5.0/2,M10.5.0/1-expected4]"),
-    ("test_tz", "", "test_valid_dateutil_format[EST5EDT,5,-4,0,7200,11,3,0,7200-expected1]"),
-    ("test_tz", "", "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,+3600-expected7]"),
-    ("test_tz", "", "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,+7200-expected6]"),
-    ("test_tz", "", "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,-3600-expected5]"),
-    ("test_tz", "", "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,3600-expected3]"),
-    ("test_tz", "", "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,3600-expected4]"),
-    ("test_tz", "", "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200-expected2]"),
-    ("test_tz", "", "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,3,0,7200-expected0]"),
+    (
+        "test_tz",
+        "",
+        "test_valid_dateutil_format[EST5EDT,5,-4,0,7200,11,3,0,7200-expected1]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,+3600-expected7]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,+7200-expected6]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,-3600-expected5]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,3600-expected3]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,3600-expected4]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200-expected2]",
+    ),
+    (
+        "test_tz",
+        "",
+        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,3,0,7200-expected0]",
+    ),
     # =======================================================================
     # imports: missing exports / lazy import / __version__
     # =======================================================================
@@ -359,9 +501,11 @@ def _should_xfail(item):
     """Return True if a test is known-unsupported in dateutil-rs."""
     file_stem = item.path.stem if hasattr(item, "path") else ""
     cls = item.cls.__name__ if item.cls else ""
-    # Whole-class match
+    # Whole-class match, excluding tests that actually pass
     if (file_stem, cls) in _XFAIL_CLASSES:
-        return True
+        exceptions = _XFAIL_CLASS_EXCEPTIONS.get((file_stem, cls), set())
+        if item.name not in exceptions:
+            return True
     # Individual test match
     return (file_stem, cls, item.name) in _RUST_XFAIL
 
@@ -373,6 +517,7 @@ def _should_xfail(item):
 _RUST_REMOVE_XFAIL = {
     ("test_rrule", "", "test_generated_aware_dtstart_rrulestr"),
     ("test_isoparser", "", "test_isoparser_byte_sep"),
+    ("test_tz", "", "test_gettz_zone_wrong_type[no startswith()]"),
 }
 
 
