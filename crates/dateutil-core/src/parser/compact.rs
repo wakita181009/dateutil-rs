@@ -8,7 +8,8 @@
 
 use std::borrow::Cow;
 
-use super::{fast_parse_decimal, fast_parse_int, ParseState, Ymd};
+use super::hms::consume_colon_minute_second;
+use super::{fast_parse_int, ParseState, Ymd};
 
 /// Try to parse compact numeric formats. Returns the number of tokens
 /// consumed, or 0 if the token does not match any compact pattern.
@@ -161,27 +162,7 @@ pub(super) fn try_parse_compact<'a>(
             ymd.push(day);
             res.hour = Some(hour as u32);
 
-            let mut consumed = 1;
-            if i + 2 < len && tokens[i + 1] == ":" {
-                if let Some(min) = fast_parse_int(&tokens[i + 2]) {
-                    res.minute = Some(min as u32);
-                    consumed = 3;
-                    if i + 4 < len && tokens[i + 3] == ":" {
-                        if let Some(sec) = fast_parse_int(&tokens[i + 4]) {
-                            res.second = Some(sec as u32);
-                            consumed = 5;
-                        } else if let Some((sec, us)) = fast_parse_decimal(&tokens[i + 4]) {
-                            res.second = Some(sec as u32);
-                            if us > 0 {
-                                res.microsecond = Some(us);
-                            }
-                            consumed = 5;
-                        }
-                    }
-                }
-            }
-
-            consumed
+            1 + consume_colon_minute_second(tokens, i, len, res, false)
         }
         _ => 0,
     }
