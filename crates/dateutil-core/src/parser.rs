@@ -274,11 +274,10 @@ impl ParseResult<'_> {
 #[derive(Debug, Default)]
 struct ParseState<'a> {
     result: ParseResult<'a>,
-    century_specified: bool,
     ampm_no_hour: bool,
     ampm_out_of_range: bool,
     malformed_time: bool,
-    last_hms_idx: Option<u8>,
+    last_hms_idx: hms::HmsCursor,
 }
 
 impl<'a> std::ops::Deref for ParseState<'a> {
@@ -542,10 +541,9 @@ fn parse_to_result_with_year<'a>(
     state.result.year = year;
     state.result.month = month;
     state.result.day = day;
-    state.century_specified = ymd.century_specified;
 
     if let Some(y) = state.result.year {
-        if y < 100 && !state.century_specified {
+        if y < 100 && !ymd.century_specified {
             let now_year =
                 current_year.unwrap_or_else(|| chrono::Local::now().naive_local().year());
             state.result.year = Some(convertyear(y, false, now_year));
@@ -714,9 +712,8 @@ fn try_parse_token<'a>(
         // Continuation of an HMS run: after hour/minute via HMS word, a bare
         // number means the next smaller unit ("01h02" → hour=1, minute=2,
         // "10 h 36.5" → hour=10, minute=36, second=30).
-        if let Some(prev) = res.last_hms_idx {
-            let next_idx = (prev as usize) + 1;
-            if next_idx <= 2 && (0..60).contains(&value_i) {
+        if let Some(next_idx) = res.last_hms_idx.next_idx() {
+            if (0..60).contains(&value_i) {
                 let already_set = match next_idx {
                     1 => res.minute.is_some(),
                     2 => res.second.is_some(),

@@ -207,20 +207,51 @@ dateutil-rs/
 | `dateutil-core` | Pure Rust optimized core | No | crates.io |
 | `dateutil-py` | PyO3 binding layer | Yes | PyPI (`python-dateutil-rs`) |
 
-## Implementation Status
+## Compatibility with python-dateutil
 
-| Module | Status | Notes |
-|--------|:------:|-------|
-| common (Weekday) | ✅ | MO-SU constants with N-th occurrence |
-| easter | ✅ | 5.0x-7.3x faster, 3 calendar methods |
-| relativedelta | ✅ | 2.0x-28.1x faster |
-| parser (parse) | ✅ | 19.5x-36.0x faster, zero-copy tokenizer, PHF lookups |
-| parser (isoparse) | ✅ | 13.0x-38.4x faster |
-| parser (parserinfo) | ✅ | Customizable via Python subclass |
-| rrule / rruleset | ✅ | 5.9x-63.7x faster, bitflag filters, buffer reuse |
-| rrulestr | ✅ | RFC 5545 string parsing |
-| tz (tzutc, tzoffset, tzfile, tzlocal) | ✅ | 1.0x-896.7x faster |
-| tz utilities (gettz, datetime_exists, etc.) | ✅ | gettz with caching |
+Target: **python-dateutil v2.9.0**. The goal is covering the **95%+ of real-world usage** — the symbols that actually appear in application code — while intentionally omitting a small number of rarely-used features in exchange for a smaller, faster core. If a symbol below is listed as supported, it is a drop-in for the python-dateutil equivalent in both import path and call signature.
+
+### Supported API surface
+
+| Submodule | Symbol | Status | Notes |
+|-----------|--------|:------:|-------|
+| `dateutil.parser` | `parse(timestr, ...)` | ✅ | `default`, `ignoretz`, `tzinfos`, `dayfirst`, `yearfirst`, `parserinfo` all honored |
+| `dateutil.parser` | `isoparse` / `isoparser` | ✅ | ISO-8601 strict parsing |
+| `dateutil.parser` | `parserinfo` | ✅ | Customizable via Python subclass (override `WEEKDAYS`, `MONTHS`, `HMS`, `AMPM`, `UTCZONE`, `PERTAIN`, `JUMP`, `TZOFFSET`) |
+| `dateutil.parser` | `ParserError`, `UnknownTimezoneWarning` | ✅ | Same exception hierarchy |
+| `dateutil.tz` | `tzutc`, `tzoffset`, `tzlocal`, `tzfile` | ✅ | Rust-native implementations |
+| `dateutil.tz` | `UTC` | ✅ | Singleton `tzutc()` — works with freezegun |
+| `dateutil.tz` | `gettz(name)` | ✅ | IANA lookup with caching; honors `PYTHONTZPATH`; auto-bootstraps `tzdata` PyPI package on Windows |
+| `dateutil.tz` | `enfold`, `datetime_exists`, `datetime_ambiguous`, `resolve_imaginary` | ✅ | Same semantics for DST gaps/folds |
+| `dateutil.relativedelta` | `relativedelta` | ✅ | All absolute/relative kwargs, weekday N-th occurrence, arithmetic with `date`/`datetime`/`relativedelta` |
+| `dateutil.relativedelta` | `MO`–`SU` weekday constants | ✅ | Same `MO(+1)` / `MO(-1)` API |
+| `dateutil.rrule` | `rrule`, `rruleset`, `rrulestr` | ✅ | RFC 5545 parsing; iteration, indexing, slicing, `count()`, `before`/`after`/`between`, membership |
+| `dateutil.rrule` | `YEARLY`, `MONTHLY`, `WEEKLY`, `DAILY`, `HOURLY`, `MINUTELY`, `SECONDLY` | ✅ | All `freq` constants |
+| `dateutil.rrule` | `MO`–`SU`, `weekday` | ✅ | Re-exported |
+| `dateutil.easter` | `easter(year, method=...)` | ✅ | `EASTER_WESTERN`, `EASTER_ORTHODOX`, `EASTER_JULIAN` |
+| `dateutil.utils` | `today`, `default_tzinfo`, `within_delta` | ✅ | Pure Python, identical behavior |
+
+### Intentionally not supported
+
+These features target niche use-cases (typically <1% of real-world imports) and are omitted to keep the core small and fast. If you need them, keep `python-dateutil` installed in that project.
+
+| Symbol | Reason |
+|--------|--------|
+| `parser.parse(fuzzy=True)` / `fuzzy_with_tokens=True` | Fuzzy natural-language parsing is out of scope — use strict `parse()` or `isoparse()` |
+| `dateutil.tz.tzstr`, `dateutil.tz.tzrange` | POSIX TZ string tzinfo (`EST5EDT,M3.2.0,M11.1.0`). Prefer IANA names via `gettz()` |
+| `dateutil.tz.tzical` | iCalendar `VTIMEZONE` parsing. Prefer `gettz()` |
+| `dateutil.zoneinfo` submodule | Embedded tarball zoneinfo database. The Rust `gettz()` reads the system IANA database (or the `tzdata` PyPI package via `PYTHONTZPATH`) instead |
+| `parser.DEFAULTPARSER`, `DEFAULTTZPARSER` module globals | Module-level mutable singletons; use `parser()` / `isoparser()` instances instead |
+
+### Behavior caveats
+
+- **Cannot coexist with `python-dateutil`** — both packages provide the `dateutil` top-level namespace. Uninstall one before installing the other.
+- **`tzlocal()`** reads `/etc/localtime` on each call (python-dateutil caches it). This is the only module where Rust can be slower than upstream (~1.0x). All other tz operations are 10x–897x faster.
+- **`parserinfo` subclasses**: override via class attributes (the documented API). Overriding instance methods like `validate()` is not a supported extension point.
+
+### Verification
+
+The `tests/` directory ports the upstream python-dateutil test suite and is run against the Rust implementation in CI. A test passing there means behavior matches python-dateutil for that input.
 
 ## License
 
