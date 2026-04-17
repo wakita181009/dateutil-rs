@@ -657,129 +657,168 @@ fn try_parse_token<'a>(
         }
     }
 
-    // Try as number — fast integer path first, then decimal (no f64)
+    // Try as number — fast integer path first, then decimal (no f64).
+    // Numeric tokens never fall through to the alphabetic branch; the numeric
+    // dispatcher handles every sub-case and returns 0 if none apply.
     let num: Option<(i32, u32)> = if let Some(vi) = fast_parse_int(token) {
         Some((vi, 0))
     } else {
         fast_parse_decimal(token)
     };
-    if let Some((value_i, value_us)) = num {
-        // Compact HHMMSS.ffffff after date (e.g., "20030925T104941.5-0300")
-        if value_us > 0
-            && ymd.count == 3
-            && res.hour.is_none()
-            && token.as_bytes().iter().position(|&b| b == b'.') == Some(6)
-        {
-            let int_part = &token[..6];
-            let Some(hour) = fast_parse_int(&int_part[0..2]) else {
-                return 0;
-            };
-            let Some(minute) = fast_parse_int(&int_part[2..4]) else {
-                return 0;
-            };
-            let Some(second) = fast_parse_int(&int_part[4..6]) else {
-                return 0;
-            };
-            if hour <= 23 && minute <= 59 && second <= 59 {
-                res.hour = Some(hour as u32);
-                res.minute = Some(minute as u32);
-                res.second = Some(second as u32);
-                res.microsecond = Some(value_us);
-                return 1;
-            }
-        }
+    if let Some(num) = num {
+        return try_numeric_dispatch(tokens, i, len, res, ymd, info, num);
+    }
 
-        // Check for HH:MM:SS pattern (number followed by ":" or HMS word)
-        if i + 1 < len && tokens[i + 1] == ":" {
-            return try_parse_time_component(tokens, i, len, res, value_i as u32);
-        }
+    // Alphabetic / timezone dispatch. Lower-case the token once and share the
+    // view across all downstream PHF / ParserInfo lookups. Non-ASCII / overlong
+    // tokens get `None` — none of the PHF tables or ParserInfo HashMaps will
+    // match those.
+    let lc_buf = lowercase_buf(token);
+    let lc: Option<&str> = lc_buf.as_ref().map(|b| lower_str(token, b));
+    try_alpha_dispatch(tokens, i, len, res, ymd, info, lc)
+}
 
-        // Check if next token is HMS (skip intervening jump-but-not-HMS
-        // tokens; "m"/"t" appear in both sets, so we must stop on HMS match).
-        {
-            let mut j = i + 1;
-            while j < len && do_jump(&tokens[j], info) && do_hms(&tokens[j], info).is_none() {
-                j += 1;
-            }
-            if j < len {
-                if let Some(hms_idx) = do_hms(&tokens[j], info) {
-                    assign_hms(res, hms_idx, value_i as u32, value_us);
-                    return j + 1 - i;
-                }
-            }
-        }
-
-        // Continuation of an HMS run: after hour/minute via HMS word, a bare
-        // number means the next smaller unit ("01h02" → hour=1, minute=2,
-        // "10 h 36.5" → hour=10, minute=36, second=30).
-        if let Some(next_idx) = res.last_hms_idx.next_idx() {
-            if (0..60).contains(&value_i) {
-                let already_set = match next_idx {
-                    1 => res.minute.is_some(),
-                    2 => res.second.is_some(),
-                    _ => true,
-                };
-                if !already_set {
-                    assign_hms(res, next_idx, value_i as u32, value_us);
-                    return 1;
-                }
-            }
-        }
-
-        // Check if next token is AM/PM (e.g., "10am", "10pm")
-        if value_us == 0 && res.hour.is_none() && (0..=24).contains(&value_i) && i + 1 < len {
-            let next_lc_buf = lowercase_buf(&tokens[i + 1]);
-            let next_lc = next_lc_buf.as_ref().map(|b| lower_str(&tokens[i + 1], b));
-            if let Some(ampm) = do_ampm_lc(next_lc, info) {
-                if value_i > 12 {
-                    res.ampm_out_of_range = true;
-                } else {
-                    let mut hour = value_i as u32;
-                    if ampm == 1 && hour < 12 {
-                        hour += 12;
-                    } else if ampm == 0 && hour == 12 {
-                        hour = 0;
-                    }
-                    res.hour = Some(hour);
-                }
-                return 2;
-            }
-        }
-
-        // Check for decimal seconds (only accept pure fractional values like "0.5")
-        if value_us > 0 && value_i == 0 && res.second.is_some() && res.microsecond.is_none() {
+/// Numeric-token branch of `try_parse_token`. Dispatches the parsed number
+/// through every sub-case (compact HHMMSS, colon-time, HMS word, HMS
+/// continuation, AM/PM lookahead, fractional seconds, YMD, bare hour) in
+/// priority order. Returns 0 if none apply.
+#[inline]
+fn try_numeric_dispatch<'a>(
+    tokens: &[Cow<'a, str>],
+    i: usize,
+    len: usize,
+    res: &mut ParseState<'a>,
+    ymd: &mut Ymd,
+    info: Option<&ParserInfo>,
+    num: (i32, u32),
+) -> usize {
+    let (value_i, value_us) = num;
+    let token = &tokens[i];
+    // Compact HHMMSS.ffffff after date (e.g., "20030925T104941.5-0300")
+    if value_us > 0
+        && ymd.count == 3
+        && res.hour.is_none()
+        && token.as_bytes().iter().position(|&b| b == b'.') == Some(6)
+    {
+        let int_part = &token[..6];
+        let Some(hour) = fast_parse_int(&int_part[0..2]) else {
+            return 0;
+        };
+        let Some(minute) = fast_parse_int(&int_part[2..4]) else {
+            return 0;
+        };
+        let Some(second) = fast_parse_int(&int_part[4..6]) else {
+            return 0;
+        };
+        if hour <= 23 && minute <= 59 && second <= 59 {
+            res.hour = Some(hour as u32);
+            res.minute = Some(minute as u32);
+            res.second = Some(second as u32);
             res.microsecond = Some(value_us);
             return 1;
         }
-
-        // Date component
-        let slen = token.len();
-        if ymd.count < 3 {
-            if slen == 4 || (slen >= 5 && !token.contains('.')) {
-                // Likely a year (4+ digits) or concatenated date
-                ymd.push_year(value_i);
-            } else {
-                ymd.push(value_i);
-            }
-            return 1;
-        }
-
-        // Try as hour if no hour set
-        if res.hour.is_none() && (0..24).contains(&value_i) {
-            res.hour = Some(value_i as u32);
-            return 1;
-        }
-
-        return 0;
     }
 
-    // Lower-case the token once and reuse the view across all alphabetic
-    // dispatch helpers. Non-ASCII / overlong tokens get `None` — none of the
-    // PHF tables or ParserInfo HashMaps will match those.
-    let lc_buf = lowercase_buf(token);
-    let lc: Option<&str> = lc_buf.as_ref().map(|b| lower_str(token, b));
-    let token_len = token.len();
+    // Check for HH:MM:SS pattern (number followed by ":" or HMS word)
+    if i + 1 < len && tokens[i + 1] == ":" {
+        return try_parse_time_component(tokens, i, len, res, value_i as u32);
+    }
 
+    // Check if next token is HMS (skip intervening jump-but-not-HMS
+    // tokens; "m"/"t" appear in both sets, so we must stop on HMS match).
+    {
+        let mut j = i + 1;
+        while j < len && do_jump(&tokens[j], info) && do_hms(&tokens[j], info).is_none() {
+            j += 1;
+        }
+        if j < len {
+            if let Some(hms_idx) = do_hms(&tokens[j], info) {
+                assign_hms(res, hms_idx, value_i as u32, value_us);
+                return j + 1 - i;
+            }
+        }
+    }
+
+    // Continuation of an HMS run: after hour/minute via HMS word, a bare
+    // number means the next smaller unit ("01h02" → hour=1, minute=2,
+    // "10 h 36.5" → hour=10, minute=36, second=30).
+    if let Some(next_idx) = res.last_hms_idx.next_idx() {
+        if (0..60).contains(&value_i) {
+            let already_set = match next_idx {
+                1 => res.minute.is_some(),
+                2 => res.second.is_some(),
+                _ => true,
+            };
+            if !already_set {
+                assign_hms(res, next_idx, value_i as u32, value_us);
+                return 1;
+            }
+        }
+    }
+
+    // Check if next token is AM/PM (e.g., "10am", "10pm")
+    if value_us == 0 && res.hour.is_none() && (0..=24).contains(&value_i) && i + 1 < len {
+        let next_lc_buf = lowercase_buf(&tokens[i + 1]);
+        let next_lc = next_lc_buf.as_ref().map(|b| lower_str(&tokens[i + 1], b));
+        if let Some(ampm) = do_ampm_lc(next_lc, info) {
+            if value_i > 12 {
+                res.ampm_out_of_range = true;
+            } else {
+                let mut hour = value_i as u32;
+                if ampm == 1 && hour < 12 {
+                    hour += 12;
+                } else if ampm == 0 && hour == 12 {
+                    hour = 0;
+                }
+                res.hour = Some(hour);
+            }
+            return 2;
+        }
+    }
+
+    // Check for decimal seconds (only accept pure fractional values like "0.5")
+    if value_us > 0 && value_i == 0 && res.second.is_some() && res.microsecond.is_none() {
+        res.microsecond = Some(value_us);
+        return 1;
+    }
+
+    // Date component
+    let slen = token.len();
+    if ymd.count < 3 {
+        if slen == 4 || (slen >= 5 && !token.contains('.')) {
+            // Likely a year (4+ digits) or concatenated date
+            ymd.push_year(value_i);
+        } else {
+            ymd.push(value_i);
+        }
+        return 1;
+    }
+
+    // Try as hour if no hour set
+    if res.hour.is_none() && (0..24).contains(&value_i) {
+        res.hour = Some(value_i as u32);
+        return 1;
+    }
+
+    0
+}
+
+/// Alphabetic / timezone branch of `try_parse_token`. Runs weekday, month,
+/// AM/PM, `+/-` tz offsets, named tz abbreviations, UTC zone, pertain, jump,
+/// and trailing alphabetic tz-name matching, in priority order. The caller
+/// lower-cases the current token once and passes the shared view as `lc`.
+#[inline]
+fn try_alpha_dispatch<'a>(
+    tokens: &[Cow<'a, str>],
+    i: usize,
+    len: usize,
+    res: &mut ParseState<'a>,
+    ymd: &mut Ymd,
+    info: Option<&ParserInfo>,
+    lc: Option<&str>,
+) -> usize {
+    let token = &tokens[i];
+    let token_len = token.len();
     // Try as weekday
     if let Some(wd) = do_weekday_lc(token_len, lc, info) {
         res.weekday = Some(wd);
