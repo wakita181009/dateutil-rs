@@ -336,6 +336,12 @@ impl Ymd {
                     }
                 }
                 3 => {
+                    // Python-dateutil conventions (see _parse):
+                    //   mi=0 (M X Y): default M D Y  — va=day, vb=year
+                    //   mi=1 (X M Y): default D M Y  — va=day, vb=year
+                    //                 yearfirst → Y M D — va=year, vb=day
+                    //   mi=2 (X Y M): default Y D M  — va=year, vb=day
+                    //                 vb>31         → D Y M — va=day, vb=year
                     let (a, b) = match mi {
                         0 => (1, 2),
                         1 => (0, 2),
@@ -343,19 +349,27 @@ impl Ymd {
                     };
                     let va = self.values[a];
                     let vb = self.values[b];
-                    if va > 31 {
-                        year = Some(va);
-                        day = Some(vb as u32);
-                    } else if vb > 31 {
-                        year = Some(vb);
-                        day = Some(va as u32);
-                    } else if dayfirst && a < b {
-                        day = Some(va as u32);
-                        year = Some(vb);
+                    // An explicit ystridx (e.g., "0031 Nov 03") overrides the
+                    // positional default.
+                    let va_is_year = if self.ystridx == Some(a) {
+                        true
+                    } else if self.ystridx == Some(b) {
+                        false
                     } else {
-                        day = Some(vb as u32);
+                        match mi {
+                            0 => va > 31,
+                            1 => va > 31 || (yearfirst && vb <= 31),
+                            _ => vb <= 31, // mi=2 default: va=year
+                        }
+                    };
+                    if va_is_year {
                         year = Some(va);
+                        day = Some(vb as u32);
+                    } else {
+                        day = Some(va as u32);
+                        year = Some(vb);
                     }
+                    let _ = dayfirst;
                 }
                 _ => {
                     return Ok((None, month, None));
@@ -837,10 +851,7 @@ fn try_parse_token<'a>(
         // tokens; "m"/"t" appear in both sets, so we must stop on HMS match).
         {
             let mut j = i + 1;
-            while j < len
-                && do_jump(&tokens[j], info)
-                && do_hms(&tokens[j], info).is_none()
-            {
+            while j < len && do_jump(&tokens[j], info) && do_hms(&tokens[j], info).is_none() {
                 j += 1;
             }
             if j < len {
@@ -919,6 +930,9 @@ fn try_parse_token<'a>(
             if slen == 4 || (slen >= 5 && !token.contains('.')) {
                 // Likely a year (4+ digits) or concatenated date
                 ymd.century_specified = true;
+                if ymd.ystridx.is_none() {
+                    ymd.ystridx = Some(ymd.count);
+                }
             }
             ymd.push(value_i);
             return 1;
@@ -1728,9 +1742,9 @@ mod tests {
     #[test]
     fn test_ymd_resolve_mstridx_len3_not_dayfirst() {
         let dt = parse("15 Jan 20", false, false, None, None).unwrap();
-        assert_eq!(dt.day(), 20);
+        assert_eq!(dt.day(), 15);
         assert_eq!(dt.month(), 1);
-        assert_eq!(dt.year(), 2015);
+        assert_eq!(dt.year(), 2020);
     }
 
     #[test]
