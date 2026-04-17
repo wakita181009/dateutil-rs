@@ -1,7 +1,11 @@
+mod compact;
+mod hms;
 mod isoparser;
 mod parserinfo;
 pub mod tokenizer;
 
+use compact::try_parse_compact;
+use hms::assign_hms;
 pub use isoparser::{isoparse, IsoParsed, IsoParser, IsoTimeParsed, IsoTz};
 pub use parserinfo::ParserInfo;
 use parserinfo::{
@@ -250,11 +254,6 @@ pub struct ParseResult<'a> {
     pub microsecond: Option<u32>,
     pub tzname: Option<Cow<'a, str>>,
     pub tzoffset: Option<i32>,
-    century_specified: bool,
-    ampm_no_hour: bool,
-    ampm_out_of_range: bool,
-    malformed_time: bool,
-    last_hms_idx: Option<u8>,
 }
 
 impl ParseResult<'_> {
@@ -269,6 +268,31 @@ impl ParseResult<'_> {
             + self.microsecond.is_some() as usize
             + self.tzname.is_some() as usize
             + self.tzoffset.is_some() as usize
+    }
+}
+
+#[derive(Debug, Default)]
+struct ParseState<'a> {
+    result: ParseResult<'a>,
+    century_specified: bool,
+    ampm_no_hour: bool,
+    ampm_out_of_range: bool,
+    malformed_time: bool,
+    last_hms_idx: Option<u8>,
+}
+
+impl<'a> std::ops::Deref for ParseState<'a> {
+    type Target = ParseResult<'a>;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.result
+    }
+}
+
+impl<'a> std::ops::DerefMut for ParseState<'a> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.result
     }
 }
 
@@ -499,14 +523,14 @@ fn parse_to_result_with_year<'a>(
     info: Option<&ParserInfo>,
 ) -> Result<ParseResult<'a>, ParseError> {
     let tokens = tokenizer::tokenize(timestr);
-    let mut res = ParseResult::default();
+    let mut state = ParseState::default();
     let mut ymd = Ymd::default();
 
     let len = tokens.len();
     let mut i = 0;
 
     while i < len {
-        let consumed = try_parse_token(&tokens, i, len, &mut res, &mut ymd, dayfirst, info);
+        let consumed = try_parse_token(&tokens, i, len, &mut state, &mut ymd, dayfirst, info);
 
         if consumed == 0 {
             i += 1;
@@ -517,47 +541,47 @@ fn parse_to_result_with_year<'a>(
 
     // Resolve YMD
     let (year, month, day) = ymd.resolve(dayfirst, yearfirst)?;
-    res.year = year;
-    res.month = month;
-    res.day = day;
-    res.century_specified = ymd.century_specified;
+    state.result.year = year;
+    state.result.month = month;
+    state.result.day = day;
+    state.century_specified = ymd.century_specified;
 
-    if let Some(y) = res.year {
-        if y < 100 && !res.century_specified {
+    if let Some(y) = state.result.year {
+        if y < 100 && !state.century_specified {
             let now_year =
                 current_year.unwrap_or_else(|| chrono::Local::now().naive_local().year());
-            res.year = Some(convertyear(y, false, now_year));
+            state.result.year = Some(convertyear(y, false, now_year));
         }
     }
 
     // UTC zone normalization
-    if (res.tzoffset == Some(0) && res.tzname.is_none())
-        || res.tzname.as_deref() == Some("Z")
-        || res.tzname.as_deref() == Some("z")
+    if (state.result.tzoffset == Some(0) && state.result.tzname.is_none())
+        || state.result.tzname.as_deref() == Some("Z")
+        || state.result.tzname.as_deref() == Some("z")
     {
-        res.tzname = Some("UTC".into());
-        res.tzoffset = Some(0);
+        state.result.tzname = Some("UTC".into());
+        state.result.tzoffset = Some(0);
     }
 
-    if res.field_count() == 0 {
+    if state.result.field_count() == 0 {
         return Err(ParseError::NoDate(timestr.into()));
     }
 
-    if res.ampm_no_hour {
+    if state.ampm_no_hour {
         return Err(ParseError::ValueError(
             "No hour specified with AM or PM flag.".into(),
         ));
     }
-    if res.ampm_out_of_range {
+    if state.ampm_out_of_range {
         return Err(ParseError::ValueError(
             "Invalid hour specified for 12-hour clock.".into(),
         ));
     }
-    if res.malformed_time {
+    if state.malformed_time {
         return Err(ParseError::UnknownFormat(timestr.into()));
     }
 
-    Ok(res)
+    Ok(state.result)
 }
 
 // ---------------------------------------------------------------------------
@@ -610,191 +634,13 @@ fn try_parse_dot_date(token: &str, ymd: &mut Ymd) -> bool {
     true
 }
 
-/// Try to parse compact numeric formats (YYYYMMDD, YYMMDD, YYYYMM, HHMMSS,
-/// YYYYMMDDHH, YYYYMMDDHHMM, YYYYMMDDHHMMSS).
-/// Returns number of tokens consumed, or 0 if not matched.
-#[inline]
-fn try_parse_compact<'a>(
-    tokens: &[Cow<'a, str>],
-    i: usize,
-    len: usize,
-    res: &mut ParseResult<'a>,
-    ymd: &mut Ymd,
-    token: &str,
-) -> usize {
-    let slen = token.len();
-    if !token.as_bytes().iter().all(|b| b.is_ascii_digit()) {
-        return 0;
-    }
-
-    match slen {
-        8 | 12 | 14 if ymd.count == 0 => {
-            let Some(year) = fast_parse_int(&token[0..4]) else {
-                return 0;
-            };
-            let Some(month) = fast_parse_int(&token[4..6]) else {
-                return 0;
-            };
-            let Some(day) = fast_parse_int(&token[6..8]) else {
-                return 0;
-            };
-
-            if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-                return 0;
-            }
-
-            ymd.century_specified = true;
-            ymd.ystridx = Some(0);
-            ymd.push(year);
-            ymd.push(month);
-            ymd.push(day);
-
-            if slen >= 12 {
-                res.hour = Some(fast_parse_int(&token[8..10]).unwrap_or(0) as u32);
-                res.minute = Some(fast_parse_int(&token[10..12]).unwrap_or(0) as u32);
-            }
-            if slen == 14 {
-                res.second = Some(fast_parse_int(&token[12..14]).unwrap_or(0) as u32);
-            }
-
-            1
-        }
-        6 if ymd.count == 0 => {
-            // Try YYMMDD first; fallback to YYYYMM if month invalid
-            let Some(p0) = fast_parse_int(&token[0..2]) else {
-                return 0;
-            };
-            let Some(p1) = fast_parse_int(&token[2..4]) else {
-                return 0;
-            };
-            let Some(p2) = fast_parse_int(&token[4..6]) else {
-                return 0;
-            };
-
-            if (1..=12).contains(&p1) && (1..=31).contains(&p2) {
-                // YYMMDD
-                ymd.ystridx = Some(0);
-                ymd.push(p0);
-                ymd.push(p1);
-                ymd.push(p2);
-                1
-            } else {
-                // Fallback: YYYYMM
-                let Some(year) = fast_parse_int(&token[0..4]) else {
-                    return 0;
-                };
-                let Some(month) = fast_parse_int(&token[4..6]) else {
-                    return 0;
-                };
-                if (1..=12).contains(&month) {
-                    ymd.century_specified = true;
-                    ymd.ystridx = Some(0);
-                    ymd.push(year);
-                    ymd.push(month);
-                    1
-                } else {
-                    0
-                }
-            }
-        }
-        6 if ymd.count == 3 && res.hour.is_none() => {
-            // HHMMSS after date is already parsed (e.g., after "T" separator)
-            let Some(hour) = fast_parse_int(&token[0..2]) else {
-                return 0;
-            };
-            let Some(minute) = fast_parse_int(&token[2..4]) else {
-                return 0;
-            };
-            let Some(second) = fast_parse_int(&token[4..6]) else {
-                return 0;
-            };
-
-            if hour <= 23 && minute <= 59 && second <= 59 {
-                res.hour = Some(hour as u32);
-                res.minute = Some(minute as u32);
-                res.second = Some(second as u32);
-                1
-            } else {
-                0
-            }
-        }
-        4 if ymd.count == 3 && res.hour.is_none() => {
-            // HHMM after date is already parsed (e.g., "20030925T1049")
-            let Some(hour) = fast_parse_int(&token[0..2]) else {
-                return 0;
-            };
-            let Some(minute) = fast_parse_int(&token[2..4]) else {
-                return 0;
-            };
-
-            if hour <= 23 && minute <= 59 {
-                res.hour = Some(hour as u32);
-                res.minute = Some(minute as u32);
-                1
-            } else {
-                0
-            }
-        }
-        10 if ymd.count == 0 => {
-            // YYYYMMDDHH — optionally followed by :MM(:SS)?
-            let Some(year) = fast_parse_int(&token[0..4]) else {
-                return 0;
-            };
-            let Some(month) = fast_parse_int(&token[4..6]) else {
-                return 0;
-            };
-            let Some(day) = fast_parse_int(&token[6..8]) else {
-                return 0;
-            };
-            let Some(hour) = fast_parse_int(&token[8..10]) else {
-                return 0;
-            };
-
-            if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 {
-                return 0;
-            }
-
-            ymd.century_specified = true;
-            ymd.ystridx = Some(0);
-            ymd.push(year);
-            ymd.push(month);
-            ymd.push(day);
-            res.hour = Some(hour as u32);
-
-            // Try to consume :MM(:SS(.ffffff)?)?
-            let mut consumed = 1;
-            if i + 2 < len && tokens[i + 1] == ":" {
-                if let Some(min) = fast_parse_int(&tokens[i + 2]) {
-                    res.minute = Some(min as u32);
-                    consumed = 3;
-                    if i + 4 < len && tokens[i + 3] == ":" {
-                        if let Some(sec) = fast_parse_int(&tokens[i + 4]) {
-                            res.second = Some(sec as u32);
-                            consumed = 5;
-                        } else if let Some((sec, us)) = fast_parse_decimal(&tokens[i + 4]) {
-                            res.second = Some(sec as u32);
-                            if us > 0 {
-                                res.microsecond = Some(us);
-                            }
-                            consumed = 5;
-                        }
-                    }
-                }
-            }
-
-            consumed
-        }
-        _ => 0,
-    }
-}
-
 #[inline]
 /// Returns the number of tokens consumed (0 = not matched).
 fn try_parse_token<'a>(
     tokens: &[Cow<'a, str>],
     i: usize,
     len: usize,
-    res: &mut ParseResult<'a>,
+    res: &mut ParseState<'a>,
     ymd: &mut Ymd,
     _dayfirst: bool,
     info: Option<&ParserInfo>,
@@ -1077,7 +923,7 @@ fn try_parse_time_component(
     tokens: &[Cow<'_, str>],
     i: usize,
     len: usize,
-    res: &mut ParseResult<'_>,
+    res: &mut ParseState<'_>,
     value: u32,
 ) -> usize {
     // Pattern: HH:MM or HH:MM:SS or HH:MM:SS.ffffff
@@ -1116,36 +962,6 @@ fn try_parse_time_component(
         return consumed;
     }
     0
-}
-
-#[inline]
-fn assign_hms(res: &mut ParseResult<'_>, hms_idx: usize, int_val: u32, us: u32) {
-    match hms_idx {
-        0 => {
-            res.hour = Some(int_val);
-            if us > 0 {
-                // Fractional hour → minutes (e.g., "5.6h" → hour=5, minute=36)
-                res.minute = Some((us as u64 * 60 / 1_000_000) as u32);
-            }
-        }
-        1 => {
-            res.minute = Some(int_val);
-            if us > 0 {
-                // Fractional minute → seconds (e.g., "5.6m" → minute=5, second=36)
-                res.second = Some((us as u64 * 60 / 1_000_000) as u32);
-            }
-        }
-        2 => {
-            res.second = Some(int_val);
-            if us > 0 {
-                res.microsecond = Some(us);
-            }
-        }
-        _ => {}
-    }
-    if hms_idx <= 2 {
-        res.last_hms_idx = Some(hms_idx as u8);
-    }
 }
 
 #[inline]
