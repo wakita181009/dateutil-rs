@@ -21,9 +21,6 @@ if sys.platform == "win32":
 # Classes whose *every* method is unsupported (xfail the whole class).
 _XFAIL_CLASSES = {
     # -- tz: unsupported timezone backends --
-    ("test_tz", "TZICalTest"),  # iCalendar VTIMEZONE not supported
-    ("test_tz", "TZRangeTest"),  # POSIX tzrange not supported
-    ("test_tz", "TZStrTest"),  # POSIX tzstr not supported
     ("test_tz", "TzPickleFileTest"),  # Rust objects not picklable
     ("test_tz", "TzPickleTest"),  # Rust objects not picklable
     # -- parser: unimplemented features --
@@ -72,16 +69,6 @@ _XFAIL_CLASS_EXCEPTIONS = {
         "test_strftime_formats_2003Sep25[%m %d %Y-09 25 2003]",
         "test_strftime_formats_2003Sep25[%d %m %Y-25 09 2003]",
         "test_strftime_formats_2003Sep25[%y %d %b-03 25 Sep]",
-    },
-    ("test_tz", "TZRangeTest"): {
-        "testRangeEquality",
-        "testRangeInequalityUnsupported",
-    },
-    ("test_tz", "TZStrTest"): {
-        "testStrInequality",
-        "testStrInequalityStartEnd",
-        "testStrInequalityUnsupported",
-        "testTzStrRepr",
     },
 }
 
@@ -193,12 +180,6 @@ _RUST_XFAIL = {
     ("test_tz", "", "test_gettz_set_cache_size"),
     ("test_tz", "", "test_gettz_weakref"),
     ("test_tz", "", "test_gettz_zone_wrong_type[bytes on Python 3]"),
-    ("test_tz", "", "test_invalid_GNU_tzstr[-1:WART4WARST,J1,J365/25]"),
-    ("test_tz", "", r"test_invalid_GNU_tzstr[,dfughdfuigpu87\xf1::]"),
-    ("test_tz", "", r"test_invalid_GNU_tzstr[hdfiughdfuig,dfughdfuigpu87\xf1::]"),
-    ("test_tz", "", "test_invalid_GNU_tzstr[IST-2IDT,M3,2000,1/26,M10,5,0]"),
-    ("test_tz", "", "test_invalid_GNU_tzstr[IST-2IDT,M3.4.-1/26,M10.5.0]"),
-    ("test_tz", "", "test_invalid_GNU_tzstr[WART4WARST,J1,J365/-25]"),
     ("test_tz", "", "test_tzlocal_offset_equal[EST5-tzoff0]"),
     ("test_tz", "", "test_tzlocal_offset_equal[GMT0-tzoff1]"),
     ("test_tz", "", "test_tzlocal_offset_equal[JST-9-tzoff3]"),
@@ -216,87 +197,6 @@ _RUST_XFAIL = {
     ("test_tz", "", "test_tzoffset_singleton[args2]"),
     ("test_tz", "", "test_tzoffset_singleton[args3]"),
     ("test_tz", "", "test_tzoffset_weakref"),
-    (
-        "test_tz",
-        "",
-        "test_tzstr_default_cmp[EST5EDT-EST5EDT4,M4.1.0/02:00:00,M10-5-0/02:00]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_tzstr_default_cmp[EST5EDT4,M4.1.0/02:00:00,M10-5-0/02:00-EST5EDT]",
-    ),
-    ("test_tz", "", "test_tzstr_default_end[EST5EDT4,95/02:00:00,298/02:00]"),
-    ("test_tz", "", "test_tzstr_default_end[EST5EDT4,J96/02:00:00,J299/02:00]"),
-    ("test_tz", "", "test_tzstr_default_end[EST5EDT4,J96/02:00:00,J299/02]"),
-    ("test_tz", "", "test_tzstr_default_end[EST5EDT4,M4.1.0/02:00:00,M10-5-0/02:00]"),
-    ("test_tz", "", "test_tzstr_default_end[EST5EDT]"),
-    ("test_tz", "", "test_tzstr_default_start[EST5EDT4,95/02:00:00,298/02:00]"),
-    ("test_tz", "", "test_tzstr_default_start[EST5EDT4,J96/02:00:00,J299/02:00]"),
-    ("test_tz", "", "test_tzstr_default_start[EST5EDT4,J96/02:00:00,J299/02]"),
-    ("test_tz", "", "test_tzstr_default_start[EST5EDT4,M4.1.0/02:00:00,M10-5-0/02:00]"),
-    ("test_tz", "", "test_tzstr_default_start[EST5EDT]"),
-    ("test_tz", "", "test_tzstr_weakref"),
-    ("test_tz", "", "test_valid_GNU_tzstr[-expected0]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[AEST-1100AEDT-expected7]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[AEST-11:00AEDT-expected8]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[EST+5EDT,M3.2.0/2,M11.1.0/12-expected1]"),
-    (
-        "test_tz",
-        "",
-        "test_valid_GNU_tzstr[EST5EDT,M3.2.0/0400,M11.1.0/0300-expected11]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_valid_GNU_tzstr[EST5EDT,M3.2.0/04:00,M11.1.0/03:00-expected10]",
-    ),
-    ("test_tz", "", "test_valid_GNU_tzstr[EST5EDT,M3.2.0/4:00,M11.1.0/3:00-expected9]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[IST-2IDT,M3.4.4/26,M10.5.0-expected3]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[WART4WARST,J1/0,J365/25-expected2]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[WGT0300WGST-expected5]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[WGT03:00WGST-expected6]"),
-    ("test_tz", "", "test_valid_GNU_tzstr[WGT3WGST,M3.5.0/2,M10.5.0/1-expected4]"),
-    (
-        "test_tz",
-        "",
-        "test_valid_dateutil_format[EST5EDT,5,-4,0,7200,11,3,0,7200-expected1]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,+3600-expected7]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,+7200-expected6]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,-3600-expected5]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,3600-expected3]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200,3600-expected4]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,-3,0,7200-expected2]",
-    ),
-    (
-        "test_tz",
-        "",
-        "test_valid_dateutil_format[EST5EDT,5,4,0,7200,11,3,0,7200-expected0]",
-    ),
     # =======================================================================
     # imports: missing exports (non-strict; see _RUST_XFAIL_NONSTRICT below)
     # =======================================================================
