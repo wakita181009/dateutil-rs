@@ -106,12 +106,13 @@ pub(super) fn consume_colon_minute_second(
             return consumed;
         }
         if strict {
-            res.malformed_time = true;
+            // Anchor at the `:` token that triggered the failed minute parse.
+            res.diagnostics.mark_malformed_time(i + 1);
         }
         return 0;
     }
     if strict && i + 1 < len && tokens[i + 1] == ":" {
-        res.malformed_time = true;
+        res.diagnostics.mark_malformed_time(i + 1);
     }
     0
 }

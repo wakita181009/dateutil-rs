@@ -271,12 +271,39 @@ impl ParseResult<'_> {
     }
 }
 
+/// Diagnostic flags raised during the tolerant single-pass scan. Collected
+/// here rather than short-circuited via `Result + ?` so that ill-formed
+/// fragments do not abort the rest of the parse; the main loop inspects the
+/// diagnostics after scanning to decide whether to surface an error.
+#[derive(Debug, Default)]
+struct ParseDiagnostics {
+    /// An AM/PM marker was seen but no hour was parsed.
+    ampm_no_hour: bool,
+    /// A numeric hour outside 1..=12 was paired with an AM/PM marker.
+    ampm_out_of_range: bool,
+    /// First token index at which a `:` was found without a parseable
+    /// minute/second component, or `None` if no malformed time was seen.
+    /// `Some(..)` doubles as the "malformed_time" flag and records position
+    /// for future diagnostics (e.g. pointing users at the offending token).
+    malformed_time_at: Option<usize>,
+}
+
+impl ParseDiagnostics {
+    #[inline]
+    fn mark_malformed_time(&mut self, token_index: usize) {
+        self.malformed_time_at.get_or_insert(token_index);
+    }
+
+    #[inline]
+    fn is_malformed_time(&self) -> bool {
+        self.malformed_time_at.is_some()
+    }
+}
+
 #[derive(Debug, Default)]
 struct ParseState<'a> {
     result: ParseResult<'a>,
-    ampm_no_hour: bool,
-    ampm_out_of_range: bool,
-    malformed_time: bool,
+    diagnostics: ParseDiagnostics,
     last_hms_idx: hms::HmsCursor,
 }
 
@@ -563,17 +590,17 @@ fn parse_to_result_with_year<'a>(
         return Err(ParseError::NoDate(timestr.into()));
     }
 
-    if state.ampm_no_hour {
+    if state.diagnostics.ampm_no_hour {
         return Err(ParseError::ValueError(
             "No hour specified with AM or PM flag.".into(),
         ));
     }
-    if state.ampm_out_of_range {
+    if state.diagnostics.ampm_out_of_range {
         return Err(ParseError::ValueError(
             "Invalid hour specified for 12-hour clock.".into(),
         ));
     }
-    if state.malformed_time {
+    if state.diagnostics.is_malformed_time() {
         return Err(ParseError::UnknownFormat(timestr.into()));
     }
 
@@ -762,7 +789,7 @@ fn try_numeric_dispatch<'a>(
         let next_lc = next_lc_buf.as_ref().map(|b| lower_str(&tokens[i + 1], b));
         if let Some(ampm) = do_ampm_lc(next_lc, info) {
             if value_i > 12 {
-                res.ampm_out_of_range = true;
+                res.diagnostics.ampm_out_of_range = true;
             } else {
                 let mut hour = value_i as u32;
                 if ampm == 1 && hour < 12 {
@@ -835,8 +862,8 @@ fn try_alpha_dispatch<'a>(
     // Try as AM/PM
     if let Some(ampm) = do_ampm_lc(lc, info) {
         match res.hour {
-            None => res.ampm_no_hour = true,
-            Some(h) if h > 12 => res.ampm_out_of_range = true,
+            None => res.diagnostics.ampm_no_hour = true,
+            Some(h) if h > 12 => res.diagnostics.ampm_out_of_range = true,
             Some(h) => {
                 if ampm == 1 && h < 12 {
                     res.hour = Some(h + 12);
