@@ -42,9 +42,7 @@ pub(super) fn try_parse_compact<'a>(
                 return 0;
             }
 
-            ymd.century_specified = true;
-            ymd.ystridx = Some(0);
-            ymd.push(year);
+            ymd.push_year(year);
             ymd.push(month);
             ymd.push(day);
 
@@ -93,9 +91,7 @@ pub(super) fn try_parse_compact<'a>(
                     return 0;
                 };
                 if (1..=12).contains(&month) {
-                    ymd.century_specified = true;
-                    ymd.ystridx = Some(0);
-                    ymd.push(year);
+                    ymd.push_year(year);
                     ymd.push(month);
                     1
                 } else {
@@ -160,9 +156,7 @@ pub(super) fn try_parse_compact<'a>(
                 return 0;
             }
 
-            ymd.century_specified = true;
-            ymd.ystridx = Some(0);
-            ymd.push(year);
+            ymd.push_year(year);
             ymd.push(month);
             ymd.push(day);
             res.hour = Some(hour as u32);

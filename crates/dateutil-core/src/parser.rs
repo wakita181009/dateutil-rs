@@ -307,8 +307,6 @@ struct Ymd {
     century_specified: bool,
     ystridx: Option<usize>,
     mstridx: Option<usize>,
-    #[allow(dead_code)]
-    dstridx: Option<usize>,
 }
 
 impl Ymd {
@@ -324,12 +322,12 @@ impl Ymd {
         }
     }
 
-    #[allow(dead_code)]
-    fn could_be_day(&self, value: i32) -> bool {
-        if self.dstridx.is_some() {
-            return false;
+    fn push_year(&mut self, val: i32) {
+        self.century_specified = true;
+        if self.ystridx.is_none() {
+            self.ystridx = Some(self.count);
         }
-        (1..=31).contains(&value)
+        self.push(val);
     }
 
     fn resolve(
@@ -762,12 +760,10 @@ fn try_parse_token<'a>(
         if ymd.count < 3 {
             if slen == 4 || (slen >= 5 && !token.contains('.')) {
                 // Likely a year (4+ digits) or concatenated date
-                ymd.century_specified = true;
-                if ymd.ystridx.is_none() {
-                    ymd.ystridx = Some(ymd.count);
-                }
+                ymd.push_year(value_i);
+            } else {
+                ymd.push(value_i);
             }
-            ymd.push(value_i);
             return 1;
         }
 
@@ -1450,17 +1446,6 @@ mod tests {
         assert!(!lookup_jump("日本語"));
         assert!(!lookup_pertain("日本語"));
         assert!(!lookup_utczone("日本語"));
-    }
-
-    #[test]
-    fn test_ymd_could_be_day_direct() {
-        let mut ymd = Ymd::default();
-        assert!(ymd.could_be_day(1));
-        assert!(ymd.could_be_day(31));
-        assert!(!ymd.could_be_day(0));
-        assert!(!ymd.could_be_day(32));
-        ymd.dstridx = Some(0);
-        assert!(!ymd.could_be_day(15));
     }
 
     #[test]
