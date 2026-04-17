@@ -336,12 +336,20 @@ impl Ymd {
                     }
                 }
                 3 => {
-                    // Python-dateutil conventions (see _parse):
-                    //   mi=0 (M X Y): default M D Y  — va=day, vb=year
-                    //   mi=1 (X M Y): default D M Y  — va=day, vb=year
-                    //                 yearfirst → Y M D — va=year, vb=day
-                    //   mi=2 (X Y M): default Y D M  — va=year, vb=day
-                    //                 vb>31         → D Y M — va=day, vb=year
+                    // Matches python-dateutil _parse: when a month token is
+                    // present, the remaining two positions are assigned by
+                    // month-position and value magnitude. `dayfirst` is NOT
+                    // consulted here (upstream reserves it for the all-
+                    // numeric case); `yearfirst` only affects mi=1.
+                    //
+                    //   mi=0 (M X Y): va>31 ? Y D : D Y (default M D Y)
+                    //   mi=1 (X M Y): va>31 || (yearfirst && vb<=31) ? Y D
+                    //                                                 : D Y
+                    //   mi=2 (X Y M): vb>31 ? D Y : Y D (default Y D M)
+                    //
+                    // An explicit `ystridx` set when a 4+ digit token was
+                    // consumed (e.g. "0031 Nov 03") overrides the positional
+                    // default.
                     let (a, b) = match mi {
                         0 => (1, 2),
                         1 => (0, 2),
@@ -349,8 +357,6 @@ impl Ymd {
                     };
                     let va = self.values[a];
                     let vb = self.values[b];
-                    // An explicit ystridx (e.g., "0031 Nov 03") overrides the
-                    // positional default.
                     let va_is_year = if self.ystridx == Some(a) {
                         true
                     } else if self.ystridx == Some(b) {
@@ -359,7 +365,7 @@ impl Ymd {
                         match mi {
                             0 => va > 31,
                             1 => va > 31 || (yearfirst && vb <= 31),
-                            _ => vb <= 31, // mi=2 default: va=year
+                            _ => vb <= 31,
                         }
                     };
                     if va_is_year {
@@ -369,7 +375,6 @@ impl Ymd {
                         day = Some(va as u32);
                         year = Some(vb);
                     }
-                    let _ = dayfirst;
                 }
                 _ => {
                     return Ok((None, month, None));
@@ -863,7 +868,8 @@ fn try_parse_token<'a>(
         }
 
         // Continuation of an HMS run: after hour/minute via HMS word, a bare
-        // number means the next smaller unit ("01h02" → hour=1, minute=2).
+        // number means the next smaller unit ("01h02" → hour=1, minute=2,
+        // "10 h 36.5" → hour=10, minute=36, second=30).
         if let Some(prev) = res.last_hms_idx {
             let next_idx = (prev as usize) + 1;
             if next_idx <= 2 && (0..60).contains(&value_i) {
@@ -874,25 +880,6 @@ fn try_parse_token<'a>(
                 };
                 if !already_set {
                     assign_hms(res, next_idx, value_i as u32, value_us);
-                    return 1;
-                }
-            }
-        }
-
-        // Continuation of an HMS run: after "Xh", a bare "Y" means minute;
-        // after "Xm", a bare "Y" means second. Applies to "01h02", "01m02",
-        // "01h02m03", "36 m 05", etc.
-        if value_us == 0 {
-            if let Some(prev) = res.last_hms_idx {
-                let next_idx = prev as usize + 1;
-                if next_idx == 1 && res.minute.is_none() && value_i < 60 {
-                    res.minute = Some(value_i as u32);
-                    res.last_hms_idx = Some(1);
-                    return 1;
-                }
-                if next_idx == 2 && res.second.is_none() && value_i < 60 {
-                    res.second = Some(value_i as u32);
-                    res.last_hms_idx = Some(2);
                     return 1;
                 }
             }
@@ -2192,5 +2179,294 @@ mod tests {
     fn test_fast_parse_decimal_empty_frac() {
         // "10." — dot at end, empty frac part → (10, 0)
         assert_eq!(fast_parse_decimal("10."), Some((10, 0)));
+    }
+
+    // ---- Coverage: malformed colon-time rejection ----
+
+    #[test]
+    fn test_parse_malformed_colon_time_word() {
+        // "1: test" — colon with non-numeric after must raise
+        let r = parse("1: test", false, false, None, None);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_parse_malformed_colon_time_no_space() {
+        // "1:test" — same, without the space
+        let r = parse("1:test", false, false, None, None);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_parse_trailing_colon() {
+        // "2024-01-15 10:" — bare trailing colon at end of input
+        let r = parse("2024-01-15 10:", false, false, None, None);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_parse_valid_colon_time_still_parses() {
+        // Sanity: valid colon-time still works after malformed guard
+        let res = parse_to_result("10:30", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(10));
+        assert_eq!(res.minute, Some(30));
+    }
+
+    // ---- Coverage: AM/PM validation ----
+
+    #[test]
+    fn test_parse_ampm_no_hour_alone() {
+        // Bare "AM" — NoDate (no fields at all), still raises
+        assert!(parse("AM", false, false, None, None).is_err());
+    }
+
+    #[test]
+    fn test_parse_ampm_no_hour_with_date() {
+        // "Jan 20, 2015 PM" — PM without any hour raises
+        assert!(parse("Jan 20, 2015 PM", false, false, None, None).is_err());
+    }
+
+    #[test]
+    fn test_parse_ampm_out_of_range_word() {
+        // "13:44 AM" — hour 13 is invalid for 12-hour clock
+        assert!(parse("13:44 AM", false, false, None, None).is_err());
+    }
+
+    #[test]
+    fn test_parse_ampm_out_of_range_adjacent_pm() {
+        // "23:13 PM" — hour 23 is invalid for 12-hour clock
+        assert!(parse("January 25, 1921 23:13 PM", false, false, None, None).is_err());
+    }
+
+    #[test]
+    fn test_parse_hour_only_ampm() {
+        // "10am" — AM-adjacent hour in 12-hour range
+        let res = parse_to_result("10am", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(10));
+    }
+
+    #[test]
+    fn test_parse_hour_only_pm_converts() {
+        // "10pm" → hour=22
+        let res = parse_to_result("10pm", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(22));
+    }
+
+    #[test]
+    fn test_parse_12am_converts_to_zero() {
+        let res = parse_to_result("12am", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(0));
+    }
+
+    #[test]
+    fn test_parse_ampm_adjacent_out_of_range() {
+        // "13am" — bare number adjacent to AM, hour > 12
+        assert!(parse("13am", false, false, None, None).is_err());
+    }
+
+    // ---- Coverage: HMS compound with whitespace ----
+
+    #[test]
+    fn test_parse_hms_label_with_space_hour() {
+        // "10 h 36" — space between number and HMS label
+        let res = parse_to_result("10 h 36", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(10));
+        assert_eq!(res.minute, Some(36));
+    }
+
+    #[test]
+    fn test_parse_hms_label_with_space_fractional() {
+        // "10 h 36.5" — continuation with fractional minute → carry seconds
+        let res = parse_to_result("10 h 36.5", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(10));
+        assert_eq!(res.minute, Some(36));
+        assert_eq!(res.second, Some(30));
+    }
+
+    #[test]
+    fn test_parse_hms_minute_label_continuation() {
+        // "36 m 05 s" — minute label followed by second label, both spaced
+        let res = parse_to_result("36 m 05 s", false, false, None).unwrap();
+        assert_eq!(res.minute, Some(36));
+        assert_eq!(res.second, Some(5));
+    }
+
+    #[test]
+    fn test_parse_hms_continuation_bare_number() {
+        // "01h02" — bare number after "01h" becomes minute (next unit)
+        let res = parse_to_result("01h02", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(1));
+        assert_eq!(res.minute, Some(2));
+    }
+
+    #[test]
+    fn test_parse_hms_continuation_chain() {
+        // "01h02m03" — cascade: hour via "h", minute via "m", bare 03 → second
+        let res = parse_to_result("01h02m03", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(1));
+        assert_eq!(res.minute, Some(2));
+        assert_eq!(res.second, Some(3));
+    }
+
+    #[test]
+    fn test_parse_hms_minute_continuation_to_second() {
+        // "01m02" — bare number after "01m" becomes second
+        let res = parse_to_result("01m02", false, false, None).unwrap();
+        assert_eq!(res.minute, Some(1));
+        assert_eq!(res.second, Some(2));
+    }
+
+    #[test]
+    fn test_parse_fractional_hour_carries_minutes() {
+        // "5.6h" — 0.6 h = 36 min
+        let res = parse_to_result("5.6h", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(5));
+        assert_eq!(res.minute, Some(36));
+    }
+
+    #[test]
+    fn test_parse_fractional_minute_carries_seconds() {
+        // "5.6m" — 0.6 min = 36 s
+        let res = parse_to_result("5.6m", false, false, None).unwrap();
+        assert_eq!(res.minute, Some(5));
+        assert_eq!(res.second, Some(36));
+    }
+
+    // ---- Coverage: pertain + ystridx resolver ----
+
+    #[test]
+    fn test_parse_pertain_short_year() {
+        // "Sep of 03" — "03" is year via pertain, not day
+        let res = parse_to_result("Sep of 03", false, false, None).unwrap();
+        assert_eq!(res.month, Some(9));
+        assert_eq!(res.year, Some(2003));
+        assert_eq!(res.day, None);
+    }
+
+    #[test]
+    fn test_parse_pertain_full_year() {
+        let res = parse_to_result("Sep of 2020", false, false, None).unwrap();
+        assert_eq!(res.month, Some(9));
+        assert_eq!(res.year, Some(2020));
+    }
+
+    #[test]
+    fn test_parse_ystridx_overrides_positional_default() {
+        // "0031 Nov 03" — 4-digit "0031" forces ystridx=0; year=31, day=3
+        let res = parse_to_result("0031 Nov 03", false, false, None).unwrap();
+        assert_eq!(res.year, Some(31));
+        assert_eq!(res.month, Some(11));
+        assert_eq!(res.day, Some(3));
+    }
+
+    #[test]
+    fn test_parse_zero_year_via_mi1() {
+        // "31-Dec-00" — both va=31 and vb=0 are ≤31; mi=1 default picks
+        // day=31, year=0 → convertyear → 2000.
+        let res = parse_to_result("31-Dec-00", false, false, None).unwrap();
+        assert_eq!(res.day, Some(31));
+        assert_eq!(res.month, Some(12));
+        assert_eq!(res.year, Some(2000));
+    }
+
+    #[test]
+    fn test_parse_weekday_alone_advances_default() {
+        // Default 2003-09-25 is Thursday; "Wed" advances to 2003-10-01.
+        let default = NaiveDate::from_ymd_opt(2003, 9, 25)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("Wed", false, false, Some(default), None).unwrap();
+        assert_eq!(dt.year(), 2003);
+        assert_eq!(dt.month(), 10);
+        assert_eq!(dt.day(), 1);
+    }
+
+    #[test]
+    fn test_parse_weekday_alone_same_day() {
+        // Default Thursday + "Thu" keeps the same day.
+        let default = NaiveDate::from_ymd_opt(2003, 9, 25)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("Thu", false, false, Some(default), None).unwrap();
+        assert_eq!(dt.day(), 25);
+    }
+
+    // ---- Coverage: day clamp when unspecified ----
+
+    #[test]
+    fn test_parse_unspecified_day_clamped_to_month_end() {
+        // "April 2009" with default day=31 → clamp to 30.
+        let default = NaiveDate::from_ymd_opt(2010, 1, 31)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("April 2009", false, false, Some(default), None).unwrap();
+        assert_eq!(dt.year(), 2009);
+        assert_eq!(dt.month(), 4);
+        assert_eq!(dt.day(), 30);
+    }
+
+    #[test]
+    fn test_parse_unspecified_day_feb_non_leap() {
+        let default = NaiveDate::from_ymd_opt(2010, 1, 31)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("Feb 2007", false, false, Some(default), None).unwrap();
+        assert_eq!(dt.day(), 28);
+    }
+
+    #[test]
+    fn test_parse_unspecified_day_feb_leap() {
+        let default = NaiveDate::from_ymd_opt(2010, 1, 31)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let dt = parse("Feb 2008", false, false, Some(default), None).unwrap();
+        assert_eq!(dt.day(), 29);
+    }
+
+    // ---- Coverage: compact ISO overflow (12/14 digit no-separator) ----
+
+    #[test]
+    fn test_parse_compact_12_digit() {
+        // "199709020908" — YYYYMMDDHHMM without separators (value overflows i32)
+        let res = parse_to_result("199709020908", false, false, None).unwrap();
+        assert_eq!(res.year, Some(1997));
+        assert_eq!(res.month, Some(9));
+        assert_eq!(res.day, Some(2));
+        assert_eq!(res.hour, Some(9));
+        assert_eq!(res.minute, Some(8));
+    }
+
+    #[test]
+    fn test_parse_compact_14_digit() {
+        // "19970902090807" — YYYYMMDDHHMMSS without separators
+        let res = parse_to_result("19970902090807", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(9));
+        assert_eq!(res.minute, Some(8));
+        assert_eq!(res.second, Some(7));
+    }
+
+    #[test]
+    fn test_parse_compact_iso_t_hhmm() {
+        // "20030925T1049" — 8-digit date, T, 4-digit HHMM
+        let res = parse_to_result("20030925T1049", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(10));
+        assert_eq!(res.minute, Some(49));
+        assert_eq!(res.second, None);
+    }
+
+    #[test]
+    fn test_parse_compact_iso_fractional_seconds_with_offset() {
+        // "20030925T104941.5-0300" — fractional seconds immediately before tz
+        let res = parse_to_result("20030925T104941.5-0300", false, false, None).unwrap();
+        assert_eq!(res.hour, Some(10));
+        assert_eq!(res.minute, Some(49));
+        assert_eq!(res.second, Some(41));
+        assert_eq!(res.microsecond, Some(500_000));
+        assert_eq!(res.tzoffset, Some(-10800));
     }
 }
