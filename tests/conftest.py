@@ -141,15 +141,8 @@ _RUST_XFAIL = {
     (
         "test_parser",
         "",
-        "test_parser[0003-03-04-expected_datetime57-pre 12 year same month (See GH PR #293)]",
-    ),
-    ("test_parser", "", "test_parser[0031-01-01T00:00:00-expected_datetime54-31 ad]"),
-    (
-        "test_parser",
-        "",
         "test_parser[December.0031.30-expected_datetime58-BYd corner case (GH#687)]",
     ),
-    ("test_parser", "", "test_parser_default[31-Dec-00-expected_datetime34-zero year]"),
     # =======================================================================
     # tz: unsupported tz features
     # =======================================================================
@@ -342,6 +335,12 @@ _RUST_XFAIL_NONSTRICT = {
     ("test_imports", "", "test_import_rrule_all"),
     ("test_imports", "", "test_import_tz_all"),
     ("test_imports", "", "test_import_zone_info_star"),
+    # Windows-only tzwin module: dateutil-rs ships no Windows-registry tz
+    # backend. Tests are skipped on non-Windows via @pytest.mark.skipif and
+    # fail on Windows. Non-strict so the skip on POSIX does not flip XPASS.
+    ("test_imports", "", "test_import_tz_windows_direct"),
+    ("test_imports", "", "test_import_tz_windows_from"),
+    ("test_imports", "", "test_import_tz_windows_star"),
 }
 
 
