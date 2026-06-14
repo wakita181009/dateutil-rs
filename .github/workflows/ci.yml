@@ -37,8 +37,8 @@ jobs:
         run: uv run ruff check python/ tests/ benchmarks/
       - name: Ruff format
         run: uv run ruff format --check python/ tests/ benchmarks/
-      - name: Mypy
-        run: uv run mypy python/dateutil/ tests/ --ignore-missing-imports
+      - name: Ty
+        run: uv run ty check python/dateutil/ tests/
 
   test:
     runs-on: ${{ matrix.os }}
