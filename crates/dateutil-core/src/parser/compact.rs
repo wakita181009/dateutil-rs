@@ -14,6 +14,7 @@ use super::{fast_parse_int, ParseState, Ymd};
 /// Try to parse compact numeric formats. Returns the number of tokens
 /// consumed, or 0 if the token does not match any compact pattern.
 #[inline]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn try_parse_compact<'a>(
     tokens: &[Cow<'a, str>],
     i: usize,
@@ -21,6 +22,8 @@ pub(super) fn try_parse_compact<'a>(
     res: &mut ParseState<'a>,
     ymd: &mut Ymd,
     token: &str,
+    dayfirst: bool,
+    yearfirst: bool,
 ) -> usize {
     let slen = token.len();
     if !token.as_bytes().iter().all(|b| b.is_ascii_digit()) {
@@ -67,7 +70,8 @@ pub(super) fn try_parse_compact<'a>(
             1
         }
         6 if ymd.count == 0 => {
-            // Try YYMMDD first; fallback to YYYYMM if month invalid
+            // ystridx encodes which position holds the year so resolve() can
+            // apply dayfirst to the remaining two positions correctly.
             let Some(p0) = fast_parse_int(&token[0..2]) else {
                 return 0;
             };
@@ -78,13 +82,27 @@ pub(super) fn try_parse_compact<'a>(
                 return 0;
             };
 
-            if (1..=12).contains(&p1) && (1..=31).contains(&p2) {
-                ymd.ystridx = Some(0);
+            // yearfirst=false: use the same p1-as-month/p2-as-day check regardless
+            // of dayfirst, because resolve() re-orders using both flags and the
+            // v0>31 magnitude heuristic (e.g. "950404" → year=95 even without yearfirst).
+            let valid = if yearfirst {
+                if dayfirst {
+                    (1..=31).contains(&p1) && (1..=12).contains(&p2)
+                } else {
+                    (1..=12).contains(&p1) && (1..=31).contains(&p2)
+                }
+            } else {
+                (1..=12).contains(&p1) && (1..=31).contains(&p2)
+            };
+
+            if valid {
+                ymd.ystridx = Some(if yearfirst { 0 } else { 2 });
                 ymd.push(p0);
                 ymd.push(p1);
                 ymd.push(p2);
                 1
             } else {
+                // YYYYMM fallback (e.g. "202403")
                 let Some(year) = fast_parse_int(&token[0..4]) else {
                     return 0;
                 };

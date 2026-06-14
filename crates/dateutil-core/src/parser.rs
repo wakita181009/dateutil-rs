@@ -457,8 +457,15 @@ impl Ymd {
                     let (v0, v1, v2) = (self.values[0], self.values[1], self.values[2]);
                     if v0 > 31 || self.ystridx == Some(0) || (yearfirst && v1 <= 12 && v2 <= 31) {
                         year = Some(v0);
-                        month = Some(v1 as u32);
-                        day = Some(v2 as u32);
+                        // century_specified=false distinguishes 2-digit compact years
+                        // (YYDDMM via dayfirst) from explicit 4-digit years (always YYMMDD).
+                        if self.ystridx == Some(0) && dayfirst && !self.century_specified {
+                            day = Some(v1 as u32);
+                            month = Some(v2 as u32);
+                        } else {
+                            month = Some(v1 as u32);
+                            day = Some(v2 as u32);
+                        }
                     } else if v0 > 12 || (dayfirst && v1 <= 12) {
                         day = Some(v0 as u32);
                         month = Some(v1 as u32);
@@ -554,7 +561,7 @@ fn parse_to_result_with_year<'a>(
     let mut i = 0;
 
     while i < len {
-        let consumed = try_parse_token(&tokens, i, len, &mut state, &mut ymd, dayfirst, info);
+        let consumed = try_parse_token(&tokens, i, len, &mut state, &mut ymd, dayfirst, yearfirst, info);
 
         if consumed == 0 {
             i += 1;
@@ -658,6 +665,7 @@ fn try_parse_dot_date(token: &str, ymd: &mut Ymd) -> bool {
 }
 
 #[inline]
+#[allow(clippy::too_many_arguments)]
 /// Returns the number of tokens consumed (0 = not matched).
 fn try_parse_token<'a>(
     tokens: &[Cow<'a, str>],
@@ -665,7 +673,8 @@ fn try_parse_token<'a>(
     len: usize,
     res: &mut ParseState<'a>,
     ymd: &mut Ymd,
-    _dayfirst: bool,
+    dayfirst: bool,
+    yearfirst: bool,
     info: Option<&ParserInfo>,
 ) -> usize {
     let token = &tokens[i];
@@ -678,7 +687,7 @@ fn try_parse_token<'a>(
     // Handle compact all-digit tokens first so 12/14-digit forms (which overflow
     // i32) like "199709020908" and "19970902090807" still reach try_parse_compact.
     if !token.is_empty() && token.as_bytes().iter().all(|b| b.is_ascii_digit()) {
-        let compact = try_parse_compact(tokens, i, len, res, ymd, token);
+        let compact = try_parse_compact(tokens, i, len, res, ymd, token, dayfirst, yearfirst);
         if compact > 0 {
             return compact;
         }
@@ -1850,14 +1859,56 @@ mod tests {
 
     #[test]
     fn test_parse_compact_yymmdd() {
-        let default = NaiveDate::from_ymd_opt(2024, 1, 1)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap();
-        let dt = parse("240315", false, false, Some(default), None).unwrap();
+        // yearfirst=true required for YYMMDD interpretation
+        let dt = parse("240315", false, true, None, None).unwrap();
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 3);
         assert_eq!(dt.day(), 15);
+    }
+
+    // compact 6-digit: all four dayfirst/yearfirst combinations for "090107"
+    #[test]
+    fn test_compact_6digit_default() {
+        // MMDDYY: month=09 day=01 year=07→2007
+        let dt = parse("090107", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2007);
+        assert_eq!(dt.month(), 9);
+        assert_eq!(dt.day(), 1);
+    }
+
+    #[test]
+    fn test_compact_6digit_dayfirst() {
+        // DDMMYY: day=09 month=01 year=07→2007
+        let dt = parse("090107", true, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2007);
+        assert_eq!(dt.month(), 1);
+        assert_eq!(dt.day(), 9);
+    }
+
+    #[test]
+    fn test_compact_6digit_yearfirst() {
+        // YYMMDD: year=09→2009 month=01 day=07
+        let dt = parse("090107", false, true, None, None).unwrap();
+        assert_eq!(dt.year(), 2009);
+        assert_eq!(dt.month(), 1);
+        assert_eq!(dt.day(), 7);
+    }
+
+    #[test]
+    fn test_compact_6digit_yearfirst_dayfirst() {
+        // YYDDMM: year=09→2009 day=01 month=07
+        let dt = parse("090107", true, true, None, None).unwrap();
+        assert_eq!(dt.year(), 2009);
+        assert_eq!(dt.month(), 7);
+        assert_eq!(dt.day(), 1);
+    }
+
+    #[test]
+    fn test_compact_6digit_yyyymm_fallback() {
+        // "202403": MMDDYY → month=20 invalid → YYYYMM: year=2024 month=03
+        let dt = parse("202403", false, false, None, None).unwrap();
+        assert_eq!(dt.year(), 2024);
+        assert_eq!(dt.month(), 3);
     }
 
     #[test]

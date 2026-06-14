@@ -104,13 +104,10 @@ _RUST_XFAIL = {
     ("test_parser", "ParserTest", "testCorrectErrorOnFuzzyWithTokens"),
     ("test_parser", "ParserTest", "testCustomParserInfo"),
     ("test_parser", "ParserTest", "testCustomParserShortDaynames"),
-    ("test_parser", "ParserTest", "testDayFirst"),
-    ("test_parser", "ParserTest", "testDayFirstYearFirst"),
     ("test_parser", "ParserTest", "testFuzzy"),
     ("test_parser", "ParserTest", "testFuzzyAMPMProblem"),
     ("test_parser", "ParserTest", "testFuzzyIgnoreAMPM"),
     ("test_parser", "ParserTest", "testFuzzyWithTokens"),
-    ("test_parser", "ParserTest", "testNoYearFirstNoDayFirst"),
     ("test_parser", "ParserTest", "testParserParseStr"),
     ("test_parser", "ParserTest", "testParseUnicodeWords"),
     ("test_parser", "ParserTest", "testRandomFormat26"),
@@ -209,8 +206,6 @@ _RUST_XFAIL = {
 # Using strict=True would flip to XPASS when hypothesis picks a non-falsifying
 # seed; mark these non-strict instead.
 _RUST_XFAIL_NONSTRICT = {
-    # isoparse: tzfile vs tzoffset round-trip identity not preserved
-    ("test_isoparse_prop", "", "test_timespec_auto"),
     # parser: hypothesis-dependent year conversion edge cases
     ("test_parser_prop", "", "test_convertyear"),
     ("test_parser_prop", "", "test_convertyear_no_specified_century"),
