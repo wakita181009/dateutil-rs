@@ -14,6 +14,7 @@ use super::{fast_parse_int, ParseState, Ymd};
 /// Try to parse compact numeric formats. Returns the number of tokens
 /// consumed, or 0 if the token does not match any compact pattern.
 #[inline]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn try_parse_compact<'a>(
     tokens: &[Cow<'a, str>],
     i: usize,

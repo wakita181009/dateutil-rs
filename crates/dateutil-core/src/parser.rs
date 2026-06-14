@@ -665,6 +665,7 @@ fn try_parse_dot_date(token: &str, ymd: &mut Ymd) -> bool {
 }
 
 #[inline]
+#[allow(clippy::too_many_arguments)]
 /// Returns the number of tokens consumed (0 = not matched).
 fn try_parse_token<'a>(
     tokens: &[Cow<'a, str>],
