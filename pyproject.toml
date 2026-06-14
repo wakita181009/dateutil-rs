@@ -16,19 +16,19 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.0",
+    "pytest>=9.1.0",
     "pytest-cov>=7.1",
     "pytest-benchmark>=5.2",
     "freezegun>=1.5",
-    "hypothesis>=6.151",
-    "maturin>=1.13",
+    "hypothesis>=6.155",
+    "maturin>=1.14",
     # IANA tz database for systems without /usr/share/zoneinfo (notably Windows).
     # Picked up at import time via PYTHONTZPATH (see python/dateutil/__init__.py).
     "tzdata>=2024.1 ; sys_platform == 'win32'",
 ]
 
 [build-system]
-requires = ["maturin>=1.13"]
+requires = ["maturin>=1.14"]
 build-backend = "maturin"
 
 [tool.uv]
