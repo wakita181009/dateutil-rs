@@ -15,7 +15,7 @@ def _bootstrap_tzdata() -> None:
     lookup via PYTHONTZPATH. Required on Windows (no system /usr/share/zoneinfo)
     and helpful anywhere a packaged tz database is preferred."""
     try:
-        import tzdata  # type: ignore[import-not-found]
+        import tzdata  # type: ignore[import-not-found]  # ty: ignore[unresolved-import]
     except ImportError:
         return
     pkg_dir = _os.path.dirname(getattr(tzdata, "__file__", "") or "")
