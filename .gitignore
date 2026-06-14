@@ -29,3 +29,6 @@ benchmarks/results.json
 
 # macOS
 .DS_Store
+
+# Local Claude instructions
+CLAUDE.local.md
