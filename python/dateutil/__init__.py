@@ -70,9 +70,7 @@ from dateutil._native import (  # noqa: E402
 from dateutil.parser import isoparse, isoparser, parserinfo  # noqa: E402
 from dateutil.utils import default_tzinfo, today, within_delta  # noqa: E402
 
-_SUBMODULES = frozenset(
-    {"easter", "parser", "relativedelta", "rrule", "tz", "utils"}
-)
+_SUBMODULES = frozenset({"easter", "parser", "relativedelta", "rrule", "tz", "utils"})
 
 
 def __getattr__(name: str):
