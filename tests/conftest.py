@@ -213,13 +213,9 @@ _RUST_XFAIL_NONSTRICT = {
     # the test assertion depends on submodule import ordering, making it
     # environment-dependent (XFAIL locally, XPASS on some CI runners).
     ("test_import_star", "", "test_imported_modules"),
-    # lazy import: depends on whether a given submodule has been imported by
-    # other tests before clean_import runs; parser/utils always pass because
-    # __init__.py imports them, others are env-dependent.
-    ("test_imports", "", "test_lazy_import[easter]"),
-    ("test_imports", "", "test_lazy_import[relativedelta]"),
-    ("test_imports", "", "test_lazy_import[rrule]"),
-    ("test_imports", "", "test_lazy_import[tz]"),
+    # lazy import: easter/relativedelta/rrule/tz now resolve to their submodules
+    # via the PEP 562 __getattr__ in dateutil/__init__.py. zoneinfo remains
+    # unsupported (no zoneinfo submodule).
     ("test_imports", "", "test_lazy_import[zoneinfo]"),
     # imports: missing public exports (tzrange/tzstr/tzical/tzwin, weekday
     # re-export, parser class, gettz_db_metadata, rebuild). Some of these are
