@@ -1,6 +1,7 @@
 """dateutil - Fast date utility library for Python, powered by Rust."""
 
 import os as _os
+from importlib import import_module as _import_module
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
@@ -54,13 +55,10 @@ from dateutil._native import (  # noqa: E402
     YEARLY,
     datetime_ambiguous,
     datetime_exists,
-    easter,
     gettz,
     parse,
     parse_to_dict,
-    relativedelta,
     resolve_imaginary,
-    rrule,
     rruleset,
     rrulestr,
     tzfile,
@@ -71,6 +69,17 @@ from dateutil._native import (  # noqa: E402
 )
 from dateutil.parser import isoparse, isoparser, parserinfo  # noqa: E402
 from dateutil.utils import default_tzinfo, today, within_delta  # noqa: E402
+
+_SUBMODULES = frozenset(
+    {"easter", "parser", "relativedelta", "rrule", "tz", "utils"}
+)
+
+
+def __getattr__(name: str):
+    if name in _SUBMODULES:
+        return _import_module(f"{__name__}.{name}")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "DAILY",
