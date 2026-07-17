@@ -1006,10 +1006,9 @@ fn try_parse_time_component(
 fn parse_tzoffset(s: &str) -> Option<i32> {
     let (sign, rest) = if let Some(r) = s.strip_prefix('+') {
         (1, r)
-    } else if let Some(r) = s.strip_prefix('-') {
-        (-1, r)
     } else {
-        return None;
+        let r = s.strip_prefix('-')?;
+        (-1, r)
     };
 
     // Validate: only digits and colons allowed
