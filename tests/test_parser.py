@@ -820,6 +820,34 @@ class ParserTest(unittest.TestCase):
             pytest.fail("Failed to raise ParserError")
 
 
+class TestNonAscii:
+    @pytest.mark.parametrize(
+        "dtstr",
+        ["東京", "Здравствуйте", "😀", "\xe1", "a\u0301"],
+    )
+    def test_non_ascii_raises_parser_error(self, dtstr):
+        with pytest.raises(ParserError):
+            parse(dtstr)
+
+    def test_non_ascii_failure_is_catchable(self):
+        # Callers such as matplotlib guard parse() with `except (ValueError, TypeError)`;
+        # a Rust panic surfaces as BaseException and slips straight through.
+        with pytest.raises(ValueError):
+            parse("東京")
+
+    @pytest.mark.xfail(
+        reason="unknown tokens are silently skipped instead of failing the parse; "
+        "affects ASCII too (e.g. '2024 foobar')"
+    )
+    @pytest.mark.parametrize(
+        "dtstr",
+        ["2024年", "東京123", "2024-01-15 東京", "Ｊａｎ 1 2024", "　1月"],
+    )
+    def test_non_ascii_mixed_with_digits_raises_parser_error(self, dtstr):
+        with pytest.raises(ParserError):
+            parse(dtstr)
+
+
 class TestOutOfBounds:
     def test_no_year_zero(self):
         with pytest.raises(ParserError):

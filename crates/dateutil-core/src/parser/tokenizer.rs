@@ -1,10 +1,45 @@
 use smallvec::SmallVec;
 use std::borrow::Cow;
 
+/// Byte width of the character at `pos`, which must be a char boundary.
+#[inline]
+fn char_len_at(s: &str, pos: usize) -> usize {
+    if s.as_bytes()[pos] < 0x80 {
+        1
+    } else {
+        s[pos..].chars().next().map_or(1, char::len_utf8)
+    }
+}
+
+/// Matches `str.isalpha()`, which python-dateutil uses to delimit words — so
+/// "abc東京" is a single token there and here.
+#[inline]
+fn is_alpha_at(s: &str, pos: usize) -> bool {
+    let b = s.as_bytes()[pos];
+    if b < 0x80 {
+        b.is_ascii_alphabetic()
+    } else {
+        s[pos..].chars().next().is_some_and(char::is_alphabetic)
+    }
+}
+
+/// Matches `str.isspace()`.
+#[inline]
+fn is_space_at(s: &str, pos: usize) -> bool {
+    let b = s.as_bytes()[pos];
+    if b < 0x80 {
+        b.is_ascii_whitespace()
+    } else {
+        s[pos..].chars().next().is_some_and(char::is_whitespace)
+    }
+}
+
 /// Zero-copy tokenizer for date/time strings.
 ///
 /// Returns `SmallVec<[Cow<'_, str>; 16]>` — most tokens borrow directly from the input,
 /// only tokens requiring mutation (comma→dot decimal normalization) are owned.
+///
+/// Scans bytes for ASCII, decoding characters only past 0x80.
 pub fn tokenize(s: &str) -> SmallVec<[Cow<'_, str>; 16]> {
     let bytes = s.as_bytes();
     let len = bytes.len();
@@ -19,12 +54,12 @@ pub fn tokenize(s: &str) -> SmallVec<[Cow<'_, str>; 16]> {
             continue;
         }
 
-        if b.is_ascii_whitespace() {
+        if is_space_at(s, pos) {
             tokens.push(Cow::Borrowed(" "));
-            pos += 1;
+            pos += char_len_at(s, pos);
             // Skip consecutive whitespace
-            while pos < len && bytes[pos].is_ascii_whitespace() {
-                pos += 1;
+            while pos < len && is_space_at(s, pos) {
+                pos += char_len_at(s, pos);
             }
             continue;
         }
@@ -65,20 +100,21 @@ pub fn tokenize(s: &str) -> SmallVec<[Cow<'_, str>; 16]> {
             continue;
         }
 
-        if b.is_ascii_alphabetic() {
+        if is_alpha_at(s, pos) {
             let start = pos;
-            pos += 1;
-            while pos < len && bytes[pos].is_ascii_alphabetic() {
-                pos += 1;
+            pos += char_len_at(s, pos);
+            while pos < len && is_alpha_at(s, pos) {
+                pos += char_len_at(s, pos);
             }
             // Handle dot-separated abbreviations (e.g. "a.m.")
             if pos < len && bytes[pos] == b'.' {
                 let dot_start = pos;
                 pos += 1;
                 while pos < len {
-                    let c = bytes[pos];
-                    if c.is_ascii_alphabetic() || c == b'.' {
+                    if bytes[pos] == b'.' {
                         pos += 1;
+                    } else if is_alpha_at(s, pos) {
+                        pos += char_len_at(s, pos);
                     } else {
                         break;
                     }
@@ -86,15 +122,15 @@ pub fn tokenize(s: &str) -> SmallVec<[Cow<'_, str>; 16]> {
                 // Split dot-separated tokens: "a.m." → ["a", ".", "m", "."]
                 let full = &s[start..pos];
                 if full.contains('.') {
-                    for part in full.split('.') {
+                    // One part more than there are dots, so a dot before every part
+                    // but the first reproduces the input — including "a..b" and "a.".
+                    for (i, part) in full.split('.').enumerate() {
+                        if i > 0 {
+                            tokens.push(Cow::Borrowed("."));
+                        }
                         if !part.is_empty() {
                             tokens.push(Cow::Borrowed(part));
                         }
-                        tokens.push(Cow::Borrowed("."));
-                    }
-                    // Remove trailing dot if we added one extra
-                    if !full.ends_with('.') {
-                        tokens.pop();
                     }
                     continue;
                 } else {
@@ -106,8 +142,9 @@ pub fn tokenize(s: &str) -> SmallVec<[Cow<'_, str>; 16]> {
         }
 
         // Single character token (punctuation) — borrow directly from input
-        tokens.push(Cow::Borrowed(&s[pos..pos + 1]));
-        pos += 1;
+        let width = char_len_at(s, pos);
+        tokens.push(Cow::Borrowed(&s[pos..pos + width]));
+        pos += width;
     }
 
     tokens
@@ -218,6 +255,21 @@ mod tests {
         // Expect: "10", ":", "30", " ", "a", ".", "m", "."
         assert!(strs(&tokens).contains(&"a"));
         assert!(strs(&tokens).contains(&"m"));
+    }
+
+    #[test]
+    fn test_dot_separated_words_match_upstream() {
+        // A trailing dot used to emit one token too many.
+        assert_eq!(strs(&tokenize("a.")), vec!["a", "."]);
+        assert_eq!(strs(&tokenize("a.m.")), vec!["a", ".", "m", "."]);
+        assert_eq!(
+            strs(&tokenize("a.m.p.")),
+            vec!["a", ".", "m", ".", "p", "."]
+        );
+        assert_eq!(strs(&tokenize("a.b")), vec!["a", ".", "b"]);
+        assert_eq!(strs(&tokenize("a..b")), vec!["a", ".", ".", "b"]);
+        assert_eq!(strs(&tokenize("a...")), vec!["a", ".", ".", "."]);
+        assert_eq!(strs(&tokenize(".a.")), vec![".", "a", "."]);
     }
 
     #[test]
@@ -398,5 +450,86 @@ mod tests {
     fn test_number_immediately_after_alpha() {
         let tokens = tokenize("UTC+5");
         assert_eq!(strs(&tokens), vec!["UTC", "+", "5"]);
+    }
+
+    #[test]
+    fn test_non_ascii_word_is_one_token() {
+        assert_eq!(strs(&tokenize("東京")), vec!["東京"]);
+        assert_eq!(strs(&tokenize("Здравствуйте")), vec!["Здравствуйте"]);
+    }
+
+    #[test]
+    fn test_non_ascii_word_in_date_string() {
+        assert_eq!(
+            strs(&tokenize("2024-01-15 東京")),
+            vec!["2024", "-", "01", "-", "15", " ", "東京"]
+        );
+    }
+
+    #[test]
+    fn test_ascii_and_non_ascii_letters_form_one_word() {
+        assert_eq!(strs(&tokenize("abc東京")), vec!["abc東京"]);
+    }
+
+    #[test]
+    fn test_fullwidth_letters_are_alphabetic() {
+        assert_eq!(strs(&tokenize("Ｊａｎ")), vec!["Ｊａｎ"]);
+    }
+
+    #[test]
+    fn test_non_ascii_word_followed_by_digits() {
+        assert_eq!(strs(&tokenize("東京123")), vec!["東京", "123"]);
+    }
+
+    #[test]
+    fn test_emoji_is_single_character_token() {
+        assert_eq!(strs(&tokenize("😀")), vec!["😀"]);
+    }
+
+    #[test]
+    fn test_combining_mark_is_not_part_of_word() {
+        // U+0301 is a nonspacing mark — not alphabetic in either implementation.
+        assert_eq!(strs(&tokenize("a\u{301}")), vec!["a", "\u{301}"]);
+    }
+
+    #[test]
+    fn test_unicode_whitespace_collapses_like_ascii() {
+        // U+3000 IDEOGRAPHIC SPACE.
+        assert_eq!(strs(&tokenize("\u{3000}2024")), vec![" ", "2024"]);
+        assert_eq!(
+            strs(&tokenize("Jan\u{3000}\u{3000}15")),
+            vec!["Jan", " ", "15"]
+        );
+    }
+
+    #[test]
+    fn test_dot_between_non_ascii_words_is_split() {
+        assert_eq!(strs(&tokenize("東.京")), vec!["東", ".", "京"]);
+    }
+
+    #[test]
+    fn test_non_ascii_does_not_panic_at_any_offset() {
+        // Regression guard: the tokenizer used to slice by byte offset, which
+        // panicked whenever a multi-byte character started a token.
+        for s in [
+            "東",
+            "東京",
+            "2024年",
+            "１２３",
+            "😀🎉",
+            "a東",
+            "東a",
+            ".東.",
+            "東 ",
+            " 東",
+            "\u{301}",
+        ] {
+            let tokens = tokenize(s);
+            assert_eq!(
+                tokens.iter().map(|t| t.len()).sum::<usize>(),
+                s.len(),
+                "tokens must cover the whole input for {s:?}"
+            );
+        }
     }
 }
